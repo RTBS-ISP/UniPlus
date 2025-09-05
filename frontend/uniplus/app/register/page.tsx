@@ -26,6 +26,17 @@ function RegisterPage() {
                             <div className='bg-gray-100 border-[0.5px] border-black w-130 p-2 flex items-center mb-5 rounded-full'>
                                 <input type='email' name='email' placeholder='Enter your email' className='bg-gray-100 outline-none text-sm w-130 px-3'></input>
                             </div>
+                            <label className='flex items-start text-xs px-2 py-2'>Roles</label>
+                            <div className='flex items-start'>
+                                <select id='role' defaultValue='' className='w-50 py-2 rounded-full border-[0.5px] border-black  bg-gray-100 p-3 text-sm'>
+                                    <option value='' disabled>
+                                        Select your role
+                                    </option>
+                                    <option value='student'>Student</option>
+                                    <option value='organizer'>Organizer</option>
+
+                                </select>
+                            </div>
                             <div className="flex justify-end w-130 py-5 gap-3">
                                 <Link className='text-gray-500 hover:underline flex item-center text-xs py-3' href='/'> Cancel</Link>
                                 <a href='#' className='border-2 bg-black border-black text-white rounded-full px-4 py-1 inline-block font-semibold hover:bg-black hover:text-[#E9E9F4]'>
