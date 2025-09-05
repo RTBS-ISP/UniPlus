@@ -1,6 +1,10 @@
-const page = () => {
+import Image from "next/image";
+import Navbar from "./components/navbar";
+
+export default function page() {
   return (
-    <div>Home page</div>
-  )
+    <main>
+      <Navbar />
+    </main>
+  );
 }
-export default page
