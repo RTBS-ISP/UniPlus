@@ -10,7 +10,7 @@ function navbar() {
                     <Link href="/">NextAuth</Link>
                 </div>
                 <ul className='flex'>
-                    <li className='mx-2'><Link href="/Register">Sign Up</Link></li>
+                    <li className='mx-2'><Link href="/register">Sign Up</Link></li>
                     <li className='mx-3'><Link href="/login">Sign In</Link></li>
                 </ul>
             </div>
