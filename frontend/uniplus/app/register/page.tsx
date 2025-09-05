@@ -16,7 +16,7 @@ function RegisterPage() {
                             </div>
                             <label className='flex items-start text-xs px-2 py-2'>Password</label>
                             <div className='bg-gray-100 border-[0.5px] border-black w-130 p-2 flex items-center mb-5 rounded-full'>
-                                <input type='password' name='password' placeholder='Enter your password' className='bg-gray-100 outline-none text-smw-130 px-3'></input>
+                                <input type='password' name='password' placeholder='Enter your password' className='bg-gray-100 outline-none text-sm w-130 px-3'></input>
                             </div>
                             <label className='flex items-start text-xs px-2 py-2'>Confirm Passwowrd</label>
                             <div className='bg-gray-100 border-[0.5px] border-black w-130 p-2 flex items-center mb-5 rounded-full'>
