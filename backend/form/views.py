@@ -6,3 +6,6 @@ from django.http import HttpResponse
 def index(request):
     return HttpResponse("HELLO WORLD!")
 
+def register(request):
+    return HttpResponse("register?")
+
