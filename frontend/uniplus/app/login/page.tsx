@@ -20,7 +20,7 @@ function LoginPage() {
                             </div>
                             <div className="flex justify-end w-130 py-5 gap-3">
                                 <Link className='text-gray-500 hover:underline flex item-center text-xs py-3' href='/register'> SIGN UP?</Link>
-                                <a href='#' className='border-2 bg-black border-black text-white rounded-full px-4 py-1 inline-block font-semibold hover:bg-black hover:text-[#E9E9F4]'>
+                                <a href='/' className='border-2 bg-black border-black text-white rounded-full px-4 py-1 inline-block font-semibold hover:bg-black hover:text-[#E9E9F4]'>
                                 Login
                                 </a>
                             </div>
