@@ -3,9 +3,6 @@ from django.http import HttpResponse
 
 
 # Create your views here.
-def index(request):
-    return HttpResponse("HELLO WORLD!")
-
 def register(request):
-    return HttpResponse("register?")
+    return HttpResponse("This is the register page")
 
