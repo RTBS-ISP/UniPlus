@@ -1,0 +1,11 @@
+
+
+services:
+  backend:
+    image: isp-docker-image
+    container_name: backend-docker-container
+    ports:
+      - "8001:8000"
+    volumes:
+      - .:/app
+
