@@ -24,3 +24,23 @@ def logout_view(request):
     logout(request)
     return {"message": "Logged out"}
 
+@api.get("/user", auth=django_auth)
+def user(request):
+    secret_fact = (
+        "The moment one gives close attention to any thing, even a blade of grass",
+        "it becomes a mysterious, awesome, indescribably magnificent world in itself."
+    )
+    return {
+        "username": request.user.username,
+        "email": request.user.email,
+        "secret_fact": secret_fact
+    }
+ 
+@api.post("/register")
+def register(request, payload: schemas.SignInSchema):
+    try:
+        User.objects.create_user(username=payload.email, email=payload.email, password=payload.password)
+        return {"success": "User registered successfully"}
+    except Exception as e:
+        return {"error": str(e)}
+ 
