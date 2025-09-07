@@ -59,7 +59,7 @@ CORS_ALLOWED_ORIGINS = [
 
 CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']
  
-AUTH_USER_MODEL = 'api.CustomUser'
+# AUTH_USER_MODEL = 'api.CustomUser'
 
 ROOT_URLCONF = 'uniplus.urls'
 
@@ -86,8 +86,12 @@ WSGI_APPLICATION = 'uniplus.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'mydb',
+        'USER': 'root',
+        'PASSWORD': 'Kupassword1',
+        'HOST': '127.0.0.1',      
+        'PORT': '3306',
     }
 }
 

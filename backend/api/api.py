@@ -2,7 +2,7 @@ from ninja import NinjaAPI
 from ninja.security import django_auth
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
-from .models import CustomUser as User
+# from .models import CustomUser as User
 from . import schemas
 
 api = NinjaAPI(csrf=True)
@@ -31,11 +31,11 @@ def user(request):
         "email": request.user.email,
     }
  
-@api.post("/register")
-def register(request, payload: schemas.SignInSchema):
-    try:
-        User.objects.create_user(username=payload.email, email=payload.email, password=payload.password)
-        return {"success": "User registered successfully"}
-    except Exception as e:
-        return {"error": str(e)}
+# @api.post("/register")
+# def register(request, payload: schemas.SignInSchema):
+#     try:
+#         User.objects.create_user(username=payload.email, email=payload.email, password=payload.password)
+#         return {"success": "User registered successfully"}
+#     except Exception as e:
+#         return {"error": str(e)}
  
