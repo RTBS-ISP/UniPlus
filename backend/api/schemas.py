@@ -1,7 +1,6 @@
-# from ninja import ModelSchema
-# from .models import Item
+from pydantic import BaseModel
  
-# class ItemSchema(ModelSchema):
-#     class Config:
-#         model = Item
-#         model_fields = ['id', 'name', 'description']
+ 
+class SignInSchema(BaseModel):
+    email: str
+    password: str

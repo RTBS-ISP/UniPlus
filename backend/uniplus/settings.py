@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'api',
     'corsheaders',
+    'ninja',
 ]
 
 MIDDLEWARE = [
@@ -55,6 +56,10 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Allow requests from Next.js development server
 ]
+
+CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']
+ 
+AUTH_USER_MODEL = 'api.CustomUser'
 
 ROOT_URLCONF = 'uniplus.urls'
 
