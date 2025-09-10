@@ -27,7 +27,7 @@ function navbar() {
                         <Link href="/register" className='px-4 py-1 inline-block hover:underline text-gray-500'>Sign Up?</Link>
                     </li>
                     <li>
-                        <a href='#' className='px-4 py-1 border-2 bg-black border-black text-white rounded-full inline-block font-semibold hover:bg-black hover:text-[#E9E9F4]'>
+                        <a href='/login' className='px-4 py-1 border-2 bg-black border-black text-white rounded-full inline-block font-semibold hover:bg-black hover:text-[#E9E9F4]'>
                             Sign In
                         </a>
                     </li>
