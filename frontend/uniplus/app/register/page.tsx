@@ -12,23 +12,23 @@ function RegisterPage() {
                         <div>
                             <label className='flex items-start text-xs px-2 py-2 text-black'>Username</label>
                             <div className='bg-gray-100 border-[0.5px] border-black w-130 p-2 flex items-center mb-5 rounded-full'>   
-                                <input type='username' name='username' placeholder='Enter your username' className='bg-gray-100 text-gray-400 outline-none text-sm w-130 px-3'></input>
+                                <input type='username' name='username' placeholder='Enter your username' className='bg-gray-100 text-black outline-none text-sm w-130 px-3'></input>
                             </div>
                             <label className='flex items-start text-xs px-2 py-2 text-black'>Password</label>
                             <div className='bg-gray-100 border-[0.5px] border-black w-130 p-2 flex items-center mb-5 rounded-full'>
-                                <input type='password' name='password' placeholder='Enter your password' className='bg-gray-100 text-gray-400 outline-none text-sm w-130 px-3'></input>
+                                <input type='password' name='password' placeholder='Enter your password' className='bg-gray-100 text-black outline-none text-sm w-130 px-3'></input>
                             </div>
                             <label className='flex items-start text-xs px-2 py-2 text-black'>Confirm Passwowrd</label>
                             <div className='bg-gray-100 border-[0.5px] border-black w-130 p-2 flex items-center mb-5 rounded-full'>
-                                <input type='password' name='password' placeholder='Confirm your password' className='bg-gray-100 text-gray-400 outline-none text-sm w-130 px-3'></input>
+                                <input type='password' name='password' placeholder='Confirm your password' className='bg-gray-100 text-black outline-none text-sm w-130 px-3'></input>
                             </div>
                             <label className='flex items-start text-xs px-2 py-2 text-black'>Email</label>
                             <div className='bg-gray-100 border-[0.5px] border-black w-130 p-2 flex items-center mb-5 rounded-full'>
-                                <input type='email' name='email' placeholder='Enter your email' className='bg-gray-100 text-gray-400 outline-none text-sm w-130 px-3'></input>
+                                <input type='email' name='email' placeholder='Enter your email' className='bg-gray-100 text-black outline-none text-sm w-130 px-3'></input>
                             </div>
                             <label className='flex items-start text-xs px-2 py-2 text-black'>Roles</label>
                             <div className='flex items-start'>
-                                <select id='role' defaultValue='' className='w-50 py-2 rounded-full border-[0.5px] border-black  bg-gray-100 text-gray-400 p-3 text-sm'>
+                                <select id='role' defaultValue='' className='w-50 py-2 rounded-full border-[0.5px] border-black text-black bg-gray-100 p-3 text-sm'>
                                     <option value='' disabled>
                                         Select your role
                                     </option>
