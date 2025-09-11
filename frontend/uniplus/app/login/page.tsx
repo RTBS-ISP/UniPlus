@@ -7,7 +7,7 @@ function LoginPage() {
         <main className="flex flex-col items-center justify-center w-full flex-1 px-20 text-center">
             <div className="bg-white rounded-2xl shadow-2xl flex-col w-170 max-w-4xl">
                 <div className='py-15'>
-                    <h2 className="text-4xl font-bold mb-5"> Login </h2>
+                    <h2 className="text-4xl font-bold mb-5 text-black"> Login </h2>
                     <div className="flex flex-col items-center">
                         <div>
                             <label className='flex items-start text-xs px-2 py-2'>Username</label>
