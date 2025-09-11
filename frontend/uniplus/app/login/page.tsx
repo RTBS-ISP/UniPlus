@@ -12,11 +12,11 @@ function LoginPage() {
                         <div>
                             <label className='flex items-start text-xs px-2 py-2'>Username</label>
                             <div className='bg-gray-100 border-[0.5px] border-black w-130 p-2 flex items-center mb-5 rounded-full'>   
-                                <input type='username' name='username' placeholder='Enter your username' className='bg-gray-100 outline-none text-sm w-130 px-3'></input>
+                                <input type='username' name='username' placeholder='Enter your username' className='bg-gray-100 text-black outline-none text-sm w-130 px-3'></input>
                             </div>
                             <label className='flex items-start text-xs px-2 py-2'>Password</label>
                             <div className='bg-gray-100 border-[0.5px] border-black w-130 p-2 flex items-center mb-5 rounded-full'>
-                                <input type='password' name='password' placeholder='Enter your password' className='bg-gray-100 outline-none text-sm w-130 px-3'></input>
+                                <input type='password' name='password' placeholder='Enter your password' className='bg-gray-100 text-black outline-none text-sm w-130 px-3'></input>
                             </div>
                             <div className="flex justify-end w-130 py-5 gap-3">
                                 <Link className='text-gray-500 hover:underline flex item-center text-xs py-3' href='/register'> SIGN UP?</Link>
