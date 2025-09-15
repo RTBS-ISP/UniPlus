@@ -72,6 +72,9 @@ cd uniplus
 # Install dependencies
 npm install
 
+# Install lucide react icon library
+npm install lucide-react
+
 # Run development server
 npm run dev
 ```
