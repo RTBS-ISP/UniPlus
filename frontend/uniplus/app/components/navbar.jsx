@@ -15,7 +15,7 @@ function navbar() {
                         <Link href="/" className='hover:underline'>Home</Link>
                     </li>
                     <li>
-                        <Link href="/browse" className='hover:underline'>Events</Link>
+                        <Link href="/events" className='hover:underline'>Events</Link>
                     </li>
                     <li>
                         <Link href="/about" className='hover:underline'>Page</Link>
