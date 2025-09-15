@@ -19,6 +19,12 @@ UniPLUS is a centralized web platform that helps students and organizers manage 
 
 ---
 
+## 🗂️ Documents
+
+You can find all project documentation in our [GitHub Wiki](https://github.com/RTBS-ISP/UniPlus/wiki).
+
+---
+
 ## ⚙️ Installation Guide
 
 ### Prerequisites
