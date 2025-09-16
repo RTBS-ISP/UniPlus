@@ -1,88 +1,133 @@
+// app/components/events/Pagination.tsx
 "use client";
 
 type Props = {
   page: number;
   totalPages: number;
   onChange: (p: number) => void;
+  /** how many numbers to show on each side of the current page (default 1) */
+  siblingCount?: number;
+  /** how many numbers to always show at the start & end (default 1) */
+  boundaryCount?: number;
 };
 
-export default function Pagination({ page, totalPages, onChange }: Props) {
+const DOTS = "…";
+
+export default function Pagination({
+  page,
+  totalPages,
+  onChange,
+  siblingCount = 1,
+  boundaryCount = 1,
+}: Props) {
   if (totalPages <= 1) return null;
 
-  const goPrev = () => onChange(Math.max(1, page - 1));
-  const goNext = () => onChange(Math.min(totalPages, page + 1));
+  const clamped = (n: number) => Math.min(totalPages, Math.max(1, n));
 
-  const pages = getPages(page, totalPages);
+  const range = (start: number, end: number) =>
+    Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
+  /**
+   * Build items like: [1] … [4,5,6] … [10]
+   * Center window moves when you click a page (e.g. clicking 3 -> show 2 3 4).
+   */
+  const paginationItems = () => {
+    const leftBoundary = range(1, Math.min(boundaryCount, totalPages));
+    const rightBoundary = range(
+      Math.max(totalPages - boundaryCount + 1, 1),
+      totalPages
+    );
+
+    const leftSibling = Math.max(page - siblingCount, boundaryCount + 1);
+    const rightSibling = Math.min(page + siblingCount, totalPages - boundaryCount);
+
+    const shouldShowLeftDots = leftSibling > boundaryCount + 1;
+    const shouldShowRightDots = rightSibling < totalPages - boundaryCount;
+
+    const middle = range(leftSibling, rightSibling);
+
+    const items: (number | typeof DOTS)[] = [];
+
+    // left boundary
+    items.push(...leftBoundary);
+
+    // left dots
+    if (shouldShowLeftDots) {
+      // optional “jump” hint number (just a nicer UX)
+      const jumpLeft = Math.max(page - (siblingCount + 1), boundaryCount + 1);
+      if (jumpLeft > leftBoundary[leftBoundary.length - 1] + 1) items.push(DOTS);
+    }
+
+    // middle sliding window
+    items.push(...middle);
+
+    // right dots
+    if (shouldShowRightDots) {
+      const jumpRight = Math.min(page + (siblingCount + 1), totalPages - boundaryCount);
+      if (jumpRight < rightBoundary[0] - 1) items.push(DOTS);
+    }
+
+    // right boundary
+    // avoid duplicating numbers if windows touch
+    for (const n of rightBoundary) {
+      if (!items.includes(n)) items.push(n);
+    }
+
+    // de-dup possible overlaps
+    return items.filter((v, i, a) => a.indexOf(v) === i);
+  };
+
+  const items = paginationItems();
+
+  const baseBtn =
+    "inline-flex h-9 min-w-9 items-center justify-center rounded-lg px-3 text-sm transition";
+  const numberBtn =
+    "bg-white hover:bg-gray-50 ring-1 ring-black/10";
+  const activeBtn =
+    "bg-black text-white ring-0 hover:bg-black";
+  const arrowBtn =
+    "text-gray-700 hover:text-black";
 
   return (
-    <nav
-      aria-label="Pagination"
-      className="mt-8 flex items-center justify-center gap-4 text-sm"
-    >
-      {/* Previous */}
+    <nav className="flex items-center justify-center gap-2" aria-label="Pagination">
       <button
-        onClick={goPrev}
+        className={`${baseBtn} ${arrowBtn}`}
+        onClick={() => onChange(clamped(page - 1))}
         disabled={page === 1}
-        className="inline-flex items-center gap-1 text-gray-600 hover:underline hover:text-gray-900 disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
+        aria-label="Previous page"
       >
-        <span>←</span>
-        <span>Previous</span>
+        ← Previous
       </button>
 
-      {/* Numbers */}
-      <div className="flex items-center gap-2">
-        {pages.map((p, i) =>
-          p === "…" ? (
-            <span key={`dots-${i}`} className="px-1 text-gray-500">
-              …
-            </span>
-          ) : (
-            <button
-              key={p}
-              onClick={() => onChange(p as number)}
-              aria-current={p === page ? "page" : undefined}
-              className={`min-w-8 rounded-md border px-3 py-1.5 text-sm
-                ${
-                  p === page
-                    ? "border-gray-300 bg-white font-semibold text-gray-900"
-                    : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                }`}
-            >
-              {p}
-            </button>
-          )
-        )}
-      </div>
+      {items.map((it, idx) =>
+        it === DOTS ? (
+          <span
+            key={`dots-${idx}`}
+            className="inline-flex h-9 min-w-9 items-center justify-center px-1 text-gray-500"
+            aria-hidden
+          >
+            {DOTS}
+          </span>
+        ) : (
+          <button
+            key={it}
+            aria-current={it === page ? "page" : undefined}
+            className={`${baseBtn} ${it === page ? activeBtn : numberBtn}`}
+            onClick={() => onChange(it)}
+          >
+            {it}
+          </button>
+        )
+      )}
 
-      {/* Next */}
       <button
-        onClick={goNext}
+        className={`${baseBtn} ${arrowBtn}`}
+        onClick={() => onChange(clamped(page + 1))}
         disabled={page === totalPages}
-        className="inline-flex items-center gap-1 text-gray-600 hover:underline hover:text-gray-900 disabled:text-gray-400 disabled:no-underline disabled:cursor-not-allowed"
+        aria-label="Next page"
       >
-        <span>Next</span>
-        <span>→</span>
+        Next →
       </button>
     </nav>
   );
-}
-
-/** Build compact page list with ellipses, e.g. [1,2,3,'…',8,9] */
-function getPages(page: number, total: number): (number | "…")[] {
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, i) => i + 1);
-  }
-
-  // Near the start: 1 2 3 … (last-1) last
-  if (page <= 3) {
-    return [1, 2, 3, "…", total - 1, total];
-  }
-
-  // Near the end: 1 2 … (last-2) (last-1) last
-  if (page >= total - 2) {
-    return [1, 2, "…", total - 2, total - 1, total];
-  }
-
-  // Middle: 1 2 … (p-1) p (p+1) … last
-  return [1, 2, "…", page - 1, page, page + 1, "…", total];
 }
