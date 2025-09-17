@@ -68,7 +68,7 @@ export default function EventsPage() {
 
       {/* Header */}
       <section className="mx-auto max-w-6xl px-4 py-8">
-        <h1 className="text-3xl font-bold">Events List</h1>
+        <h1 className="text-3xl text-black font-bold">Events List</h1>
         <p className="mt-2 max-w-2xl text-sm text-gray-600">
           Discover clubs, meetups, and university events happening around campus. Use the search
           and sort options to quickly find what you’re looking for.

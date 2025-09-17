@@ -82,7 +82,7 @@ export default function Pagination({
   const baseBtn =
     "inline-flex h-9 min-w-9 items-center justify-center rounded-lg px-3 text-sm transition";
   const numberBtn =
-    "bg-white hover:bg-gray-50 ring-1 ring-black/10";
+    "bg-white hover:bg-gray-50 ring-1 ring-black/10 text-black";
   const activeBtn =
     "bg-black text-white ring-0 hover:bg-black";
   const arrowBtn =

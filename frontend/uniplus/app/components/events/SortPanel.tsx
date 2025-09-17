@@ -30,7 +30,7 @@ export default function SortPanel({
 }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h3 className="text-base font-semibold">Sort</h3>
+      <h3 className="text-base text-black font-semibold">Sort</h3>
       <div className="mt-4 space-y-2">
         <Button
           active={value === "recent"}
