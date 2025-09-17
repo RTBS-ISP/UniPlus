@@ -120,7 +120,7 @@ export default function page() {
                       Feedback System
                     </div>
                     <div className="text-base text-black">
-                      Rate and review events to help improve futre experiences and guide other students.
+                      Rate and review events to help improve future experiences and guide other students.
                     </div>
                 </div>
 
@@ -132,7 +132,7 @@ export default function page() {
                       Track History
                     </div>
                     <div className="text-base text-black">
-                      Keep track of all events you've attended and build your campus involement portfolio.
+                      Keep track of all events you've attended and build your campus involvement portfolio.
                     </div>
                 </div>
               </div>
