@@ -26,7 +26,7 @@ export default function TagPicker({
         <button
           type="button"
           onClick={() => setOpen((s) => !s)}
-          className="w-full rounded-full bg-white px-4 py-2 text-left text-sm ring-1 ring-gray-200 hover:ring-gray-300"
+          className="w-full rounded-full bg-white px-4 py-2 text-left text-sm text-black ring-1 ring-gray-200 hover:ring-gray-300"
         >
           Select Tags
         </button>

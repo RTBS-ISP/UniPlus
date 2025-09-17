@@ -49,37 +49,37 @@ export default function EventCreatePage() {
       <Navbar />
 
       <form onSubmit={submit} className="mx-auto max-w-5xl px-6 pb-20 pt-10">
-        <h1 className="mb-8 text-center text-4xl font-extrabold">Event Board Creation</h1>
+        <h1 className="mb-8 text-center text-4xl text-black font-extrabold">Event Board Creation</h1>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-medium">Event Name:</label>
+            <label className="mb-2 block text-sm text-black font-medium">Event Name:</label>
             <input
               value={data.name}
               onChange={(e) => setData({ ...data, name: e.target.value })}
               placeholder="Fill in"
-              className="w-full rounded-full bg-white px-4 py-2 outline-none ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
+              className="w-full rounded-full bg-white text-black px-4 py-2 outline-none ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">Number of students:</label>
+            <label className="mb-2 block text-sm text-black font-medium">Number of students:</label>
             <input
               type="number"
               min={0}
               value={data.students}
               onChange={(e) => setData({ ...data, students: e.target.value })}
               placeholder="Fill in"
-              className="w-full rounded-full bg-white px-4 py-2 outline-none ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
+              className="w-full rounded-full bg-white text-black px-4 py-2 outline-none ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">Faculty:</label>
+            <label className="mb-2 block text-sm text-black font-medium">Faculty:</label>
             <select
               value={data.faculty}
               onChange={(e) => setData({ ...data, faculty: e.target.value })}
-              className="w-full appearance-none rounded-full bg-white px-4 py-2 ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
+              className="w-full appearance-none rounded-full bg-white text-black px-4 py-2 ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
             >
               <option value="">Select Faculty</option>
               {FACULTIES.map((f) => (
@@ -89,11 +89,11 @@ export default function EventCreatePage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium">Years:</label>
+            <label className="mb-2 block text-sm text-black font-medium">Years:</label>
             <select
               value={data.year}
               onChange={(e) => setData({ ...data, year: e.target.value })}
-              className="w-full appearance-none rounded-full bg-white px-4 py-2 ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
+              className="w-full appearance-none rounded-full bg-white text-black px-4 py-2 ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
             >
               <option value="">Select Year</option>
               {YEARS.map((y) => (
@@ -104,19 +104,19 @@ export default function EventCreatePage() {
         </div>
 
         <div className="mt-6">
-          <label className="mb-2 block text-sm font-medium">Descriptions:</label>
+          <label className="mb-2 block text-sm text-black font-medium">Descriptions:</label>
           <textarea
             value={data.description}
             onChange={(e) => setData({ ...data, description: e.target.value })}
             placeholder="Fill in description like date, time, location and what the event is about"
             rows={8}
-            className="w-full rounded-2xl bg-white px-4 py-3 text-sm outline-none ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
+            className="w-full rounded-2xl bg-white text-black px-4 py-3 text-sm outline-none ring-1 ring-gray-200 focus:ring-2 focus:ring-black"
           />
         </div>
 
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-medium">Host:</label>
+            <label className="mb-2 block text-sm text-black font-medium">Host:</label>
             <TagPicker
               value={data.hostTags}
               onChange={(v) => setData({ ...data, hostTags: v })}
@@ -124,7 +124,7 @@ export default function EventCreatePage() {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium">Attendee</label>
+            <label className="mb-2 block text-sm text-black font-medium">Attendee</label>
             <TagPicker
               value={data.attendeeTags}
               onChange={(v) => setData({ ...data, attendeeTags: v })}
@@ -134,7 +134,7 @@ export default function EventCreatePage() {
         </div>
 
         <div className="mt-8">
-          <label className="mb-2 block text-sm font-medium">Upload Picture:</label>
+          <label className="mb-2 block text-sm text-black font-medium">Upload Picture:</label>
           <div className="flex items-center gap-4">
             <label className="inline-flex cursor-pointer select-none items-center rounded-lg bg-sky-100 px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-200">
               <input type="file" accept="image/*" className="hidden"
@@ -161,7 +161,7 @@ export default function EventCreatePage() {
           </Link>
           <button
             type="submit"
-            className="rounded-lg bg-black px-8 py-3 font-medium text-white hover:bg-gray-800"
+            className="rounded-lg bg-indigo-400 px-8 py-3 font-medium text-white hover:bg-indigo-300"
           >
             Confirm
           </button>
