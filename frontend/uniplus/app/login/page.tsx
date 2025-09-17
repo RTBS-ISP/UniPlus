@@ -1,7 +1,7 @@
 import React from 'react'
 import Link from 'next/link'
 
-function RegisterPage() {
+function LoginPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-[#E9E9F4]">
         <main className="flex flex-col items-center justify-center w-full px-4 sm:px-10 text-center">
@@ -43,4 +43,4 @@ function RegisterPage() {
     </div>
   )
 }
-export default RegisterPage
+export default LoginPage
