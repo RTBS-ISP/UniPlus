@@ -79,7 +79,7 @@ export default function EventsPage() {
       <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 pb-16 md:grid-cols-12">
         {/* Left: Sort panel (starts lower, sticks to top on scroll) */}
         <aside className="pt-[52px] md:col-span-3">
-          <div className="sticky top-20">
+          <div className="sticky top-30">
             <SortPanel
               value={sort}
               onChange={(v) => {
