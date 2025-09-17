@@ -35,7 +35,7 @@ function LoginPage() {
                     
                     <hr className="h-px my-5 bg-gray-200 border-0"/>
                     <div className='text-black text-md'>
-                        Don't have an account? <Link href="/login" className='underline text-indigo-400'>Sign Up</Link>
+                        Don't have an account? <Link href="/register" className='underline text-indigo-400'>Sign Up</Link>
                     </div>
                 </div>
             </div>
