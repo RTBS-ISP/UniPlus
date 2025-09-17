@@ -59,7 +59,7 @@ CORS_ALLOWED_ORIGINS = [
 
 CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']
  
-AUTH_USER_MODEL = 'api.CustomUser'
+AUTH_USER_MODEL = 'api.AttendeeUser'
 
 ROOT_URLCONF = 'uniplus.urls'
 
