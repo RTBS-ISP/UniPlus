@@ -12,14 +12,13 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
-  # optional, pgAdmin (web UI like phpMyAdmin)
   web:
-    build: .
+    build: ./backend  # Changed: build from backend directory
     container_name: uniplus_web
     command: >
       sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
     volumes:
-      - .:/app
+      - ./backend:/code  # Changed: map backend to /code
     ports:
       - "8000:8000"
     depends_on:
