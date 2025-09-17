@@ -1,26 +1,78 @@
-# from django.db import models
-# from django.contrib.auth.models import AbstractUser
+import requests
+import json
 
+BASE_URL = "http://localhost:8000/api"
 
-# class AttendeeUser(AbstractUser):
+def test_api():
+    print("Starting API test...")
+    
+    # Test 1: Check if server is running
+    try:
+        response = requests.get(f"{BASE_URL}/set-csrf-token", timeout=5)
+        print("✓ Server is running")
+    except requests.ConnectionError:
+        print("✗ Server is not running! Please run: python manage.py runserver")
+        return
+    except Exception as e:
+        print(f"✗ Connection error: {e}")
+        return
+    
+    session = requests.Session()
+    
+    # Get CSRF token
+    try:
+        response = session.get(f"{BASE_URL}/set-csrf-token")
+        csrf_token = response.json()['csrftoken']
+        print(f"✓ CSRF Token: {csrf_token}")
+    except Exception as e:
+        print(f"✗ CSRF token error: {e}")
+        return
+    
+    # Register
+    try:
+        register_data = {
+            "username": "testuser",
+            "email": "test@example.com",
+            "first_name": "Test",
+            "last_name": "User",
+            "phone_number": "1234567890",
+            "password": "testpass123",
+            "confirm_password": "testpass123",
+            "role": "student"
+        }
+        
+        response = session.post(
+            f"{BASE_URL}/register",
+            json=register_data,
+            headers={"X-CSRFToken": csrf_token}
+        )
+        print("✓ Register:", response.json())
+    except Exception as e:
+        print(f"✗ Register error: {e}")
+    
+    # Login
+    try:
+        login_data = {
+            "username": "testuser",
+            "password": "testpass123"
+        }
+        
+        response = session.post(
+            f"{BASE_URL}/login",
+            json=login_data,
+            headers={"X-CSRFToken": csrf_token}
+        )
+        print("✓ Login:", response.json())
+    except Exception as e:
+        print(f"✗ Login error: {e}")
+    
+    # Get user info
+    try:
+        response = session.get(f"{BASE_URL}/user")
+        print("✓ User info:", response.json())
+    except Exception as e:
+        print(f"✗ User info error: {e}")
 
-#     username = models.CharField(max_length=150, unique=True, null=True, blank=True)  # Optional field
-#     first_name = models.CharField(max_length=100, null=False, blank=False)
-#     last_name = models.CharField(max_length=100, null=False, blank=False)
-#     birth_date = models.DateField('Birth Date', null=True, blank=True)
-#     phone_number = models.CharField(max_length=50, null=True, blank=False, ) # Max number
-#     status = models.CharField(max_length=50, null=True, blank=True, default='Attendee')
-#     email = models.EmailField(unique=True, null=False, blank=False) 
-#     address = models.CharField(max_length=500, null = True, blank = True, default= " ")
-
-from django.contrib.auth.models import AbstractUser
-from django.db import models
- 
-class CustomUser(AbstractUser):
-    email = models.EmailField(unique=True)
- 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
- 
-    def __str__(self):
-        return self.email
+if __name__ == "__main__":
+    test_api()
+    print("Test completed!")
