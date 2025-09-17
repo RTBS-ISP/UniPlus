@@ -1,26 +1,20 @@
-# from django.db import models
-# from django.contrib.auth.models import AbstractUser
-
-
-# class AttendeeUser(AbstractUser):
-
-#     username = models.CharField(max_length=150, unique=True, null=True, blank=True)  # Optional field
-#     first_name = models.CharField(max_length=100, null=False, blank=False)
-#     last_name = models.CharField(max_length=100, null=False, blank=False)
-#     birth_date = models.DateField('Birth Date', null=True, blank=True)
-#     phone_number = models.CharField(max_length=50, null=True, blank=False, ) # Max number
-#     status = models.CharField(max_length=50, null=True, blank=True, default='Attendee')
-#     email = models.EmailField(unique=True, null=False, blank=False) 
-#     address = models.CharField(max_length=500, null = True, blank = True, default= " ")
-
-from django.contrib.auth.models import AbstractUser
 from django.db import models
- 
-class CustomUser(AbstractUser):
+from django.contrib.auth.models import AbstractUser
+
+
+class AttendeeUser(AbstractUser):
+    # Extend AbstractUser for authentication
     email = models.EmailField(unique=True)
- 
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
- 
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    role = models.CharField(max_length=50, blank=True, null=True, default="Attendee")
+    about_me = models.TextField(blank=True, null=True)
+    profile_picture = models.ImageField(upload_to="profiles/", blank=True, null=True)
+    verification_status = models.CharField(max_length=50, blank=True, null=True)
+    creation_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["username"]
+
     def __str__(self):
         return self.email
