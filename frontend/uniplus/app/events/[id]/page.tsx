@@ -82,13 +82,13 @@ export default function EventDetailPage({ params }: Params) {
 
           {/* right: details */}
           <div className="md:col-span-6">
-            <h1 className="text-3xl font-bold">{event.title}</h1>
+            <h1 className="text-3xl text-black font-bold">{event.title}</h1>
 
             <div className="mt-3">
               <TagAccent label={hostLabel} />
             </div>
 
-            <p className="mt-4 text-sm font-semibold">
+            <p className="mt-4 text-sm text-black font-semibold">
               Available: {available} students
             </p>
 
@@ -211,7 +211,7 @@ function RelatedCard({ item }: { item: EventWithOptionals }) {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={img} alt={item.title} className="h-40 w-full rounded-t-xl object-cover" />
       <div className="p-4">
-        <h3 className="font-medium">{item.title}</h3>
+        <h3 className="font-medium text-black">{item.title}</h3>
         <div className="mt-2">
           <TagAccent label={badge} />
         </div>
