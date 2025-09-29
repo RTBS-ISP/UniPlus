@@ -1,8 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-from user import AttendeeUser
-from event import Event
-from organizer import OrganizerUser
+from .user import AttendeeUser
+from .event import Event
+from .organizer import OrganizerUser
 
 class Rating(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="ratings")

@@ -38,4 +38,5 @@ def register(request, payload: schemas.SignInSchema):
         return {"success": "User registered successfully"}
     except Exception as e:
         return {"error": str(e)}
- 
+
+

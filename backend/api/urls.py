@@ -1,10 +1,11 @@
+from django.contrib import admin
 from django.urls import path
-from api.api import api
-from .views import views
-# URL config
+from api.views.views import register, login, home, set_csrf_token
+
 urlpatterns = [
-    path("hi", views.register),
-    path("api/", api.urls),
-    # path('events/', event_views.event_list, name='event_list'),
-    # path('events/<int:event_id>/', event_views.event_detail, name='event_detail'),
+    path('admin/', admin.site.urls),
+    path('', home, name='home'),
+    path("api/register/", register),
+    path("api/login/", login),
+    path("api/set-csrf-token/", set_csrf_token),
 ]

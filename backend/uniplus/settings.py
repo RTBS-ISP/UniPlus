@@ -58,8 +58,9 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']
- 
-AUTH_USER_MODEL = 'api.AttendeeUser'
+CORS_ALLOW_CREDENTIALS = True
+AUTH_USER_MODEL = "api.AttendeeUser"
+
 
 ROOT_URLCONF = 'uniplus.urls'
 
@@ -85,16 +86,18 @@ WSGI_APPLICATION = 'uniplus.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 import os
+# settings.py
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DJANGO_DB_NAME', 'uniplus_db'),
-        'USER': os.environ.get('DJANGO_DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DJANGO_DB_PASSWORD', 'Password'),
-        'HOST': os.environ.get('DJANGO_DB_HOST', 'db'),
-        'PORT': '5432',
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "uniplus_db",       
+        "USER": "postgres",      
+        "PASSWORD": "Password",
+        "HOST": "localhost",     
+        "PORT": "5432",          
     }
 }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

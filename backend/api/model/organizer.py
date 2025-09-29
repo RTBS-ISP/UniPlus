@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from user import AttendeeUser
+from .user import AttendeeUser
 
 class OrganizerUser(models.Model):
     user = models.OneToOneField(AttendeeUser, on_delete=models.CASCADE, related_name="organizer")

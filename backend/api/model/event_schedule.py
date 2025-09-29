@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from event import Event
+from .event import Event
 
 class EventSchedule(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="schedules")

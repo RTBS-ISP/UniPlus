@@ -11,18 +11,25 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d uniplus_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   web:
-    build: ./backend  # Changed: build from backend directory
+    build: ./backend
     container_name: uniplus_web
     command: >
-      sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
     volumes:
-      - ./backend:/code  # Changed: map backend to /code
+      - ./backend:/code
     ports:
       - "8000:8000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
 volumes:
   db_data:
