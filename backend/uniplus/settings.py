@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +26,7 @@ SECRET_KEY = 'django-insecure-b@cx7901so13k05^9@hu-*nr24vq6&c5nwaidc^!gs3&dq8&e$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']  # Allow Docker container access
 
 
 # Application definition
@@ -55,9 +56,14 @@ MIDDLEWARE = [
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Allow requests from Next.js development server
+    "http://127.0.0.1:3000",
 ]
 
-CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+]
+
 CORS_ALLOW_CREDENTIALS = True
 AUTH_USER_MODEL = "api.AttendeeUser"
 
@@ -85,16 +91,14 @@ WSGI_APPLICATION = 'uniplus.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-import os
-# settings.py
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "uniplus_db",       
-        "USER": "postgres",      
-        "PASSWORD": "Password",
-        "HOST": "localhost",     
-        "PORT": "5432",          
+        "NAME": os.environ.get("DB_NAME", "uniplus_db"),
+        "USER": os.environ.get("DB_USER", "postgres"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", "Password"),
+        "HOST": os.environ.get("DB_HOST", "db"),  # Use service name 'db' from docker-compose
+        "PORT": os.environ.get("DB_PORT", "5432"),
     }
 }
 
