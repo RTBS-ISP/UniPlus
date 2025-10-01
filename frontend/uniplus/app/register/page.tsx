@@ -2,17 +2,22 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 function RegisterPage() {
   const [form, setForm] = useState({
     username: "",
+    firstName: "",
+    lastName: "",
     email: "",
+    phone: "",
     password: "",
     confirmPassword: "",
     role: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -28,7 +33,7 @@ function RegisterPage() {
 
     // Frontend validation
     if (!form.username || !form.email || !form.password || !form.confirmPassword || !form.role) {
-      setError("All fields are required");
+      setError("Username, email, password, and role are required");
       return;
     }
 
@@ -77,7 +82,7 @@ function RegisterPage() {
 
       if (data.success) {
         alert("Registered successfully! Please login.");
-        window.location.href = "/login"; // Redirect to login page
+        router.push("/login");
       } else {
         setError(data.error || data.message || "Registration failed");
       }
@@ -91,117 +96,189 @@ function RegisterPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-[#E9E9F4]">
-      <main className="flex flex-col items-center justify-center w-full flex-1 px-20 text-center">
-        <div className="bg-white rounded-2xl shadow-2xl flex-col w-170 max-w-4xl p-10">
+      <main className="flex flex-col items-center justify-center w-full px-4 sm:px-10 text-center">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-14">
           <h2 className="text-4xl font-bold mb-5 text-black">Register</h2>
 
           {/* Error Message */}
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">
               {error}
             </div>
           )}
 
-          <form className="flex flex-col items-center" onSubmit={handleSubmit}>
-            {/* Username */}
-            <label className="flex items-start text-xs px-2 py-2 text-black">
-              Username
-            </label>
-            <input
-              type="text"
-              name="username"
-              placeholder="Enter your username"
-              value={form.username}
-              onChange={handleChange}
-              required
-              className="bg-gray-100 text-black outline-none text-sm w-130 p-2 mb-5 rounded-full"
-            />
+          <form onSubmit={handleSubmit}>
+            <div className="flex flex-col space-y-4">
+              {/* Username */}
+              <div className="flex flex-col">
+                <label className="flex items-start text-xs p-2 text-black">
+                  Username
+                </label>
+                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                  <input
+                    type="text"
+                    name="username"
+                    placeholder="Enter your username"
+                    value={form.username}
+                    onChange={handleChange}
+                    required
+                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                  />
+                </div>
+              </div>
 
-            {/* Email */}
-            <label className="flex items-start text-xs px-2 py-2 text-black">
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              placeholder="Enter your email"
-              value={form.email}
-              onChange={handleChange}
-              required
-              className="bg-gray-100 text-black outline-none text-sm w-130 p-2 mb-5 rounded-full"
-            />
+              {/* First and Last Name */}
+              <div className="flex flex-row gap-4 w-full">
+                <div className="flex flex-col w-1/2">
+                  <label className="flex items-start text-xs p-2 text-black">
+                    First Name
+                  </label>
+                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                    <input
+                      type="text"
+                      name="firstName"
+                      placeholder="Enter your first name"
+                      value={form.firstName}
+                      onChange={handleChange}
+                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col w-1/2">
+                  <label className="flex items-start text-xs p-2 text-black">
+                    Last Name
+                  </label>
+                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                    <input
+                      type="text"
+                      name="lastName"
+                      placeholder="Enter your last name"
+                      value={form.lastName}
+                      onChange={handleChange}
+                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                    />
+                  </div>
+                </div>
+              </div>
 
-            {/* Password */}
-            <label className="flex items-start text-xs px-2 py-2 text-black">
-              Password
-            </label>
-            <input
-              type="password"
-              name="password"
-              placeholder="Enter your password"
-              value={form.password}
-              onChange={handleChange}
-              required
-              minLength={8}
-              className="bg-gray-100 text-black outline-none text-sm w-130 p-2 mb-5 rounded-full"
-            />
+              {/* Email and Phone */}
+              <div className="flex flex-row gap-4 w-full">
+                <div className="flex flex-col w-1/2">
+                  <label className="flex items-start text-xs p-2 text-black">
+                    Email
+                  </label>
+                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                    <input
+                      type="email"
+                      name="email"
+                      placeholder="Enter your email"
+                      value={form.email}
+                      onChange={handleChange}
+                      required
+                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col w-1/2">
+                  <label className="flex items-start text-xs p-2 text-black">
+                    Phone Number
+                  </label>
+                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                    <input
+                      type="tel"
+                      name="phone"
+                      placeholder="Enter your phone number"
+                      value={form.phone}
+                      onChange={handleChange}
+                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                    />
+                  </div>
+                </div>
+              </div>
 
-            {/* Confirm Password */}
-            <label className="flex items-start text-xs px-2 py-2 text-black">
-              Confirm Password
-            </label>
-            <input
-              type="password"
-              name="confirmPassword"
-              placeholder="Confirm your password"
-              value={form.confirmPassword}
-              onChange={handleChange}
-              required
-              className="bg-gray-100 text-black outline-none text-sm w-130 p-2 mb-5 rounded-full"
-            />
+              {/* Password */}
+              <div className="flex flex-col">
+                <label className="flex items-start text-xs p-2 text-black">
+                  Password
+                </label>
+                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                  <input
+                    type="password"
+                    name="password"
+                    placeholder="Enter your password"
+                    value={form.password}
+                    onChange={handleChange}
+                    required
+                    minLength={8}
+                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                  />
+                </div>
+              </div>
 
-            {/* Role */}
-            <label className="flex items-start text-xs px-2 py-2 text-black">
-              Role
-            </label>
-            <select
-              name="role"
-              value={form.role}
-              onChange={handleChange}
-              required
-              className="w-50 py-2 rounded-full border-[0.5px] border-black text-black bg-gray-100 p-3 text-sm mb-5"
-            >
-              <option value="" disabled>
-                Select your role
-              </option>
-              <option value="student">Student</option>
-              <option value="organizer">Organizer</option>
-            </select>
+              {/* Confirm Password */}
+              <div className="flex flex-col">
+                <label className="flex items-start text-xs p-2 text-black">
+                  Confirm Password
+                </label>
+                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    placeholder="Confirm your password"
+                    value={form.confirmPassword}
+                    onChange={handleChange}
+                    required
+                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                  />
+                </div>
+              </div>
 
-            {/* Buttons */}
-            <div className="flex justify-end w-130 py-5 gap-3">
-              <Link
-                className="text-gray-500 hover:underline flex items-center text-xs py-3"
-                href="/"
-              >
-                Cancel
-              </Link>
-              <button
-                type="submit"
-                disabled={loading}
-                className="border-2 bg-black border-black text-white rounded-full px-4 py-1 inline-block font-semibold hover:bg-black hover:text-[#E9E9F4] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? "Registering..." : "Confirm"}
-              </button>
+              {/* Role Selector */}
+              <div className="flex flex-col">
+                <label className="flex items-start text-xs p-2 text-black">
+                  Roles
+                </label>
+                <select
+                  name="role"
+                  value={form.role}
+                  onChange={handleChange}
+                  required
+                  className="bg-gray-100 text-black text-sm w-50 p-3 rounded-full mb-5"
+                >
+                  <option value="" disabled>
+                    Select your role
+                  </option>
+                  <option value="student">Student</option>
+                  <option value="organizer">Organizer</option>
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-4 pt-3">
+                <Link
+                  href="/"
+                  className="text-gray-500 hover:underline flex item-center text-sm py-2"
+                >
+                  Cancel
+                </Link>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex items-center justify-center w-full px-4 py-1 text-base font-bold leading-6 text-white bg-indigo-400 border border-transparent rounded-full md:w-auto hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? "Registering..." : "Confirm"}
+                </button>
+              </div>
+
+              <hr className="h-px my-8 bg-gray-200 border-0" />
+              <div className="text-black text-md">
+                Already have an account?{" "}
+                <Link href="/login" className="underline text-indigo-400">
+                  Sign In
+                </Link>
+              </div>
             </div>
           </form>
-
-          <p className="mt-4 text-sm text-gray-600">
-            Already have an account?{" "}
-            <Link href="/login" className="text-blue-600 hover:underline">
-              Login here
-            </Link>
-          </p>
         </div>
       </main>
     </div>

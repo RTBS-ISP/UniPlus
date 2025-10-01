@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from .user import AttendeeUser
 
+# used for organizers table with normal AttendeeUser as its base class
 class OrganizerUser(models.Model):
     user = models.OneToOneField(AttendeeUser, on_delete=models.CASCADE, related_name="organizer")
     organization_category = models.CharField(max_length=100)

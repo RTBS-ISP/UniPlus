@@ -4,6 +4,7 @@ from .user import AttendeeUser
 from .event import Event
 from .organizer import OrganizerUser
 
+# class for making a ticket for events
 class Ticket(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="tickets")
     organizer = models.ForeignKey(OrganizerUser, on_delete=models.CASCADE, related_name="tickets")

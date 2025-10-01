@@ -4,6 +4,8 @@ from .user import AttendeeUser
 from .event import Event
 from .organizer import OrganizerUser
 
+
+# this class is used for the comment table for event feedback
 class Comment(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="comments")
     user = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="comments")

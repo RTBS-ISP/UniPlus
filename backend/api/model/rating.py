@@ -4,6 +4,7 @@ from .user import AttendeeUser
 from .event import Event
 from .organizer import OrganizerUser
 
+# class for leaving ratings like stars to events
 class Rating(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="ratings")
     organizer = models.ForeignKey(OrganizerUser, on_delete=models.CASCADE, related_name="ratings")

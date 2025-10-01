@@ -1,3 +1,4 @@
+# imports from the models
 from .user import AttendeeUser
 from .organizer import OrganizerUser
 from .admin import AdminUser
