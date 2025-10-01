@@ -54,17 +54,32 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# CORS Configuration
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Allow requests from Next.js development server
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
 
+CORS_ALLOW_CREDENTIALS = True
+
+# CSRF Configuration
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
 ]
 
-CORS_ALLOW_CREDENTIALS = True
+# Cookie settings for cross-origin requests
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_DOMAIN = None  # Important for localhost
+
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = False  # Set to True in production with HTTPS
+CSRF_COOKIE_HTTPONLY = False  # Must be False so JavaScript can read it
+CSRF_COOKIE_DOMAIN = None  # Important for localhost
+
+# Custom user model
 AUTH_USER_MODEL = "api.AttendeeUser"
 
 

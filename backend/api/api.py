@@ -35,12 +35,16 @@ def register(request, payload: schemas.RegisterSchema):
             return 400, {"error": "Username already taken"}
         
         # Create user (password is automatically hashed by create_user)
-        # Note: USERNAME_FIELD is 'email', so we pass email as the main identifier
         user = AttendeeUser.objects.create_user(
-            email=payload.email,  # This is the USERNAME_FIELD
-            username=payload.username,  # Still required
+            email=payload.email,
+            username=payload.username,
             password=payload.password
         )
+        
+        # Set role if provided (assuming your AttendeeUser model has a role field)
+        if hasattr(payload, 'role') and payload.role:
+            user.role = payload.role
+            user.save()
         
         return 200, {
             "success": True,
