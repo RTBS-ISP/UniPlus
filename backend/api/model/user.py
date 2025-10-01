@@ -1,9 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 
-
 class AttendeeUser(AbstractUser):
-    # Extend AbstractUser for authentication
     email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     role = models.CharField(max_length=50, blank=True, null=True, default="Attendee")
@@ -12,6 +10,10 @@ class AttendeeUser(AbstractUser):
     verification_status = models.CharField(max_length=50, blank=True, null=True)
     creation_date = models.DateTimeField(auto_now_add=True)
     updated_date = models.DateTimeField(auto_now=True)
+    
+    # Add default values 
+    first_name = models.CharField(max_length=30, blank=True, default="Peanut1")
+    last_name = models.CharField(max_length=150, blank=True, default="Burto")
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]

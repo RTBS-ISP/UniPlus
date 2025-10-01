@@ -34,11 +34,16 @@ def register(request, payload: schemas.RegisterSchema):
         if AttendeeUser.objects.filter(username=payload.username).exists():
             return 400, {"error": "Username already taken"}
         
+        first_name = payload.first_name if payload.first_name else "Peanut1"
+        last_name = payload.last_name if payload.last_name else "Burto"
+
         # Create user (password is automatically hashed by create_user)
         user = AttendeeUser.objects.create_user(
             email=payload.email,
             username=payload.username,
-            password=payload.password
+            password=payload.password,
+            first_name=first_name,
+            last_name=last_name
         )
         
         # Set role if provided (assuming your AttendeeUser model has a role field)
@@ -97,20 +102,33 @@ def logout_view(request):
     logout(request)
     return {"message": "Logged out successfully"}
 
-@api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
-def get_user(request):
-    """Get current authenticated user"""
-    if request.user.is_authenticated:
-        return 200, {
-            "username": request.user.username,
-            "email": request.user.email
-        }
-    return 401, {"error": "Not authenticated"}
 
 @api.get("/check-auth")
 def check_auth(request):
     """Check if user is authenticated"""
     return {
         "authenticated": request.user.is_authenticated,
-        "username": request.user.username if request.user.is_authenticated else None
+        "username": request.user.username if request.user.is_authenticated else None,
+        "first_name": request.user.first_name if request.user.is_authenticated else None,
+        "last_name": request.user.last_name if request.user.is_authenticated else None
     }
+
+
+@api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
+def get_user_profile(request):
+    """Get detailed profile of current authenticated user including first and last name"""
+    if request.user.is_authenticated:
+        return 200, {
+            "username": request.user.username,
+            "email": request.user.email,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+            "role": request.user.role,
+            "phone_number": request.user.phone_number,
+            "about_me": request.user.about_me,
+            "verification_status": request.user.verification_status,
+            "creation_date": request.user.creation_date.isoformat() if request.user.creation_date else None
+        }
+    return 401, {"error": "Not authenticated"}
+
+
