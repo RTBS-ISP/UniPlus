@@ -19,6 +19,12 @@ UniPLUS is a centralized web platform that helps students and organizers manage 
 
 ---
 
+## 🗂️ Documentation
+
+You can find all project documentation in our [GitHub Wiki](https://github.com/RTBS-ISP/UniPlus/wiki).
+
+---
+
 ## ⚙️ Installation Guide
 
 ### Prerequisites
@@ -65,6 +71,9 @@ cd uniplus
 
 # Install dependencies
 npm install
+
+# Install lucide react icon library
+npm install lucide-react
 
 # Run development server
 npm run dev

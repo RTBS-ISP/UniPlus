@@ -48,7 +48,7 @@ function LoginPage() {
       if (data.success) {
         console.log('Login successful:', data.message);
         // Redirect to dashboard
-        router.push('/dashboard');
+        router.push('/profile');
       } else {
         setError(data.error || "Login failed. Please check your credentials");
       }
