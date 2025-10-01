@@ -60,3 +60,8 @@ class EventResponseSchema(Schema):
     picture: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+class EventRegistrationSchema(Schema):
+    success: bool
+    message: str
+    event: dict = None

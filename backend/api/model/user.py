@@ -11,9 +11,6 @@ class AttendeeUser(AbstractUser):
     creation_date = models.DateTimeField(auto_now_add=True)
     updated_date = models.DateTimeField(auto_now=True)
     
-    # Add default values 
-    first_name = models.CharField(max_length=30, blank=True, default="Peanut1")
-    last_name = models.CharField(max_length=150, blank=True, default="Burto")
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]

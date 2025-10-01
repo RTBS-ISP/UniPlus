@@ -68,7 +68,7 @@ def register(request, payload: schemas.RegisterSchema):
         }
         
     except IntegrityError as e:
-        return 400, {"error": f"Database error: {str(e)}"}
+        return 400, {"error": "Registration failed. Please try again."}
     except Exception as e:
         return 400, {"error": str(e)}
 
@@ -217,7 +217,7 @@ def create_event(request, payload: schemas.EventCreateSchema):
         }
         
     except IntegrityError as e:
-        return 400, {"error": f"Database error: {str(e)}"}
+        return 400, {"error": "Registration failed. Please try again."}
     except Exception as e:
         return 400, {"error": f"Failed to create event: {str(e)}"}
     
@@ -268,3 +268,38 @@ def get_event(request, event_id: int):
     except Exception as e:
         return 404, {"error": f"Event not found: {str(e)}"}
     
+# register for an event
+@api.post("/events/{event_id}/register", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema, 401: schemas.ErrorSchema, 404: schemas.ErrorSchema})
+def register_for_event(request, event_id: int):
+    """Register current user for an event (Students only)"""
+    try:
+        if not request.user.is_authenticated:
+            return 401, {"error": "Authentication required"}
+        
+        if request.user.role != 'student':
+            return 400, {"error": "Only students can register for events"}
+        
+        event = get_object_or_404(Event, id=event_id)
+        user_email = request.user.email
+        
+        if user_email in event.attendees:
+            return 400, {"error": "You are already registered for this event"}
+        
+        if len(event.attendees) >= event.number_of_students:
+            return 400, {"error": "Event is full"}
+        
+        event.attendees.append(user_email)
+        event.save()    
+        return 200, {
+            "success": True,
+            "message": f"Successfully registered for {event.event_name}",
+            "event": {
+                "id": event.id,
+                "event_name": event.event_name,
+                "current_attendees": len(event.attendees),
+                "max_attendees": event.number_of_students
+            }
+        }
+        
+    except Exception as e:
+        return 400, {"error": f"Failed to register for event: {str(e)}"}
