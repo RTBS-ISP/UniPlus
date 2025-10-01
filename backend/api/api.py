@@ -3,8 +3,15 @@ from ninja.security import django_auth
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
 from django.db import IntegrityError
+from django.core.files.base import ContentFile
+import uuid
+import base64
+
 from api.model.user import AttendeeUser
+from api.model.event import Event  
 from api import schemas
+from django.shortcuts import get_object_or_404
+from typing import List
 
 # Create API instance with CSRF protection enabled
 api = NinjaAPI(csrf=True)
@@ -132,3 +139,132 @@ def get_user_profile(request):
     return 401, {"error": "Not authenticated"}
 
 
+# Event related endpoints 
+# Create Event
+@api.post("/events", auth=django_auth, response={201: schemas.EventResponseSchema, 400: schemas.ErrorSchema, 401: schemas.ErrorSchema})
+def create_event(request, payload: schemas.EventCreateSchema):
+    """
+    Create a new event (requires authentication)
+    Accepts picture as base64 string or file path
+    """
+    try:
+        if not request.user.is_authenticated:
+            return 401, {"error": "Authentication required"}
+        
+        if not payload.event_name:
+            return 400, {"error": "Event name is required"}
+        
+        if not payload.faculty:
+            return 400, {"error": "Faculty is required"}
+        
+        if payload.number_of_students <= 0:
+            return 400, {"error": "Number of students must be greater than 0"}
+        
+        if not payload.years:
+            return 400, {"error": "Years field is required"}
+        
+        if not payload.descriptions:
+            return 400, {"error": "Description is required"}
+        
+        if not payload.host or len(payload.host) == 0:
+            return 400, {"error": "At least one host must be specified"}
+        
+        # Handle picture if provided
+        picture_file = None
+        if payload.picture:
+            # Check if picture is base64 encoded
+            if payload.picture.startswith('data:image'):
+                try:
+                    format, imgstr = payload.picture.split(';base64,')
+                    ext = format.split('/')[-1]
+                    
+                    filename = f"event_{uuid.uuid4().hex[:10]}.{ext}"
+                    
+                    data = ContentFile(base64.b64decode(imgstr), name=filename)
+                    picture_file = data
+                except Exception as e:
+                    return 400, {"error": f"Invalid base64 image data: {str(e)}"}
+        
+        event_data = {
+            "event_name": payload.event_name,
+            "number_of_students": payload.number_of_students,
+            "faculty": payload.faculty,
+            "years": payload.years,  
+            "descriptions": payload.descriptions,
+            "host": payload.host,
+            "attendees": payload.attendees if payload.attendees else []
+        }
+        
+        event = Event(**event_data)
+        
+        if picture_file:
+            event.picture.save(picture_file.name, picture_file, save=False)
+        
+        event.save()
+        
+        return 201, {
+            "id": event.id,
+            "event_name": event.event_name,
+            "number_of_students": event.number_of_students,
+            "faculty": event.faculty,
+            "years": event.years, 
+            "descriptions": event.descriptions,
+            "host": event.host,
+            "attendees": event.attendees,
+            "picture": event.picture.url if event.picture else None,
+            "created_at": event.created_at,
+            "updated_at": event.updated_at
+        }
+        
+    except IntegrityError as e:
+        return 400, {"error": f"Database error: {str(e)}"}
+    except Exception as e:
+        return 400, {"error": f"Failed to create event: {str(e)}"}
+    
+# Get all events
+@api.get("/events", response={200: List[schemas.EventResponseSchema], 400: schemas.ErrorSchema})
+def get_events(request):
+    """Get all events"""
+    try:
+        events = Event.objects.all().order_by('-created_at')
+        return 200, [
+            {
+                "id": event.id,
+                "event_name": event.event_name,
+                "number_of_students": event.number_of_students,
+                "faculty": event.faculty,
+                "years": event.years,
+                "descriptions": event.descriptions,
+                "host": event.host,
+                "attendees": event.attendees,
+                "picture": event.picture.url if event.picture else None,
+                "created_at": event.created_at,
+                "updated_at": event.updated_at
+            }
+            for event in events
+        ]
+    except Exception as e:
+        return 400, {"error": f"Failed to fetch events: {str(e)}"}
+    
+# Get event by ID
+@api.get("/events/{event_id}", response={200: schemas.EventResponseSchema, 404: schemas.ErrorSchema})
+def get_event(request, event_id: int):
+    """Get a specific event by ID"""
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        return 200, {
+            "id": event.id,
+            "event_name": event.event_name,
+            "number_of_students": event.number_of_students,
+            "faculty": event.faculty,
+            "years": event.years,
+            "descriptions": event.descriptions,
+            "host": event.host,
+            "attendees": event.attendees,
+            "picture": event.picture.url if event.picture else None,
+            "created_at": event.created_at,
+            "updated_at": event.updated_at
+        }
+    except Exception as e:
+        return 404, {"error": f"Event not found: {str(e)}"}
+    

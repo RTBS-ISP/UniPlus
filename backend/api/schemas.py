@@ -1,6 +1,7 @@
 
 from ninja import Schema
-from typing import Optional
+from typing import Optional,List
+from datetime import datetime
 
 class RegisterSchema(Schema):
     username: str
@@ -35,3 +36,27 @@ class SuccessSchema(Schema):
     success: bool
     message: str = None
     user: UserSchema = None
+
+
+class EventCreateSchema(Schema):
+    event_name: str
+    number_of_students: int
+    faculty: str
+    years: str 
+    descriptions: str
+    host: List[str] 
+    attendees: Optional[List[str]] = None  
+    picture: Optional[str] = None
+
+class EventResponseSchema(Schema):
+    id: int
+    event_name: str
+    number_of_students: int
+    faculty: str
+    years: str
+    descriptions: str
+    host: List[str] 
+    attendees: List[str]
+    picture: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
