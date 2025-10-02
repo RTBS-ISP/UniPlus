@@ -63,8 +63,8 @@ def register(request, payload: schemas.RegisterSchema):
     Register a new user account
     
     Creates a new AttendeeUser account with the provided credentials.
-    Performs validation to ensure unique email and username, and optionally
-    sets the user's role if provided.
+    Performs validation to ensure unique email and username, and requires
+    firstName, lastName, phone, and role.
     
     Args:
         request: The Django HTTP request object
@@ -72,7 +72,10 @@ def register(request, payload: schemas.RegisterSchema):
             - username (str): Unique username for the account
             - email (str): Unique email address (used as primary login)
             - password (str): User's password (will be hashed)
-            - role (str, optional): User role (Attendee/Student/Instructor)
+            - firstName (str): User's first name
+            - lastName (str): User's last name
+            - phone (str): User's phone number
+            - role (str): User role (student/organizer)
     
     Returns:
         200: Success response with user data if registration successful
@@ -93,6 +96,15 @@ def register(request, payload: schemas.RegisterSchema):
         if not payload.username or not payload.email or not payload.password:
             return 400, {"error": "Username, email, and password are required"}
         
+        if not payload.firstName or not payload.lastName:
+            return 400, {"error": "First name and last name are required"}
+        
+        if not payload.phone:
+            return 400, {"error": "Phone number is required"}
+        
+        if not payload.role:
+            return 400, {"error": "Role is required"}
+        
         # Check if a user with this email already exists
         # Email is used as the primary authentication field
         if AttendeeUser.objects.filter(email=payload.email).exists():
@@ -105,17 +117,19 @@ def register(request, payload: schemas.RegisterSchema):
         
         # Create the new user account
         # create_user() method automatically hashes the password
+        # Note: USERNAME_FIELD is 'email', so email is the primary identifier
         user = AttendeeUser.objects.create_user(
-            email=payload.email,    # Primary authentication field
+            email=payload.email,        # Primary authentication field
             username=payload.username,  # Display name/handle
             password=payload.password   # Will be hashed automatically
         )
         
-        # Optional: Set user role if provided in the registration payload
-        # Default role is 'Attendee' if not specified
-        if hasattr(payload, 'role') and payload.role:
-            user.role = payload.role
-            user.save()
+        # Set additional required fields
+        user.first_name = payload.firstName
+        user.last_name = payload.lastName
+        user.phone_number = payload.phone
+        user.role = payload.role
+        user.save()
         
         # Return success response with basic user information
         # Note: Never return sensitive data like passwords

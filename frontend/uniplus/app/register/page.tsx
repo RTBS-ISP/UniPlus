@@ -75,6 +75,9 @@ function RegisterPage() {
           email: form.email,
           password: form.password,
           role: form.role,
+          firstName: form.firstName,
+          lastName: form.lastName,
+          phone: form.phone,
         }),
       });
 

@@ -6,6 +6,9 @@ class RegisterSchema(Schema):
     email: str
     password: str
     role: str
+    firstName: str    
+    lastName: str     
+    phone: str 
 
 # For login input
 class LoginSchema(Schema):
