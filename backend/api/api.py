@@ -41,16 +41,15 @@ def register(request, payload: schemas.RegisterSchema):
         if AttendeeUser.objects.filter(username=payload.username).exists():
             return 400, {"error": "Username already taken"}
         
-        first_name = payload.first_name if payload.first_name else "Peanut1"
-        last_name = payload.last_name if payload.last_name else "Burto"
 
-        # Create user (password is automatically hashed by create_user)
+
+        # Create user (]]
         user = AttendeeUser.objects.create_user(
             email=payload.email,
             username=payload.username,
             password=payload.password,
-            first_name=first_name,
-            last_name=last_name
+            first_name=payload.first_name,
+            last_name=payload.last_name
         )
         
         # Set role if provided (assuming your AttendeeUser model has a role field)
@@ -63,7 +62,14 @@ def register(request, payload: schemas.RegisterSchema):
             "message": "User registered successfully",
             "user": {
                 "username": user.username,
-                "email": user.email
+                "email": user.email,
+                "first_name": user.first_name, 
+                "last_name": user.last_name,
+                "role": user.role,
+                "phone_number": user.phone_number,
+                "about_me": user.about_me,
+                "verification_status": user.verification_status,
+                "creation_date": user.creation_date.isoformat() if user.creation_date else None
             }
         }
         
@@ -94,7 +100,14 @@ def login_view(request, payload: schemas.LoginSchema):
                 "message": "Logged in successfully",
                 "user": {
                     "username": user.username,
-                    "email": user.email
+                    "email": user.email,
+                    "first_name": user.first_name, 
+                    "last_name": user.last_name,
+                    "role": user.role,
+                    "phone_number": user.phone_number,
+                    "about_me": user.about_me,
+                    "verification_status": user.verification_status,
+                    "creation_date": user.creation_date.isoformat() if user.creation_date else None
                 }
             }
         else:
