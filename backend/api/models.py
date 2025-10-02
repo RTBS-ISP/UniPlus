@@ -1,2 +1,11 @@
-from api.model.user import CustomUser
-
+from .model import (
+    AttendeeUser,
+    OrganizerUser,
+    AdminUser,
+    Event,
+    Ticket,
+    Rating,
+    Comment,
+    EventSchedule,
+    Social,
+)

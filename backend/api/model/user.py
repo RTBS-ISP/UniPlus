@@ -1,32 +1,19 @@
-# from django.contrib.auth.models import AbstractUser
-# from django.db import models
- 
-# class CustomUser(AbstractUser):
-#     email = models.EmailField(unique=True)
- 
-#     USERNAME_FIELD = 'email'
-#     REQUIRED_FIELDS = ['username']
- 
-#     def __str__(self):
-#         return self.email
-    
-
-from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 
-class CustomUser(AbstractUser):
+# base class for all users 
+class AttendeeUser(AbstractUser):
     email = models.EmailField(unique=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
+    role = models.CharField(max_length=50, blank=True, null=True, default="Attendee")
+    about_me = models.TextField(blank=True, null=True)
+    profile_picture = models.ImageField(upload_to="profiles/", blank=True, null=True)
+    verification_status = models.CharField(max_length=50, blank=True, null=True)
+    creation_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)
 
-    ROLE_CHOICES = [
-    ("student", "Student"),
-    ("organizer", "Organizer"),
-    ]
-
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="student")
-
-    USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email']
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["username"]
 
     def __str__(self):
         return f"{self.username} ({self.role})"
