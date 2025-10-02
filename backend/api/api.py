@@ -5,7 +5,7 @@ It provides endpoints for user registration, login, logout, and profile manageme
 """
 
 from ninja import NinjaAPI
-# from ninja.security import django_auth
+from ninja.security import django_auth
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
 from django.db import IntegrityError
