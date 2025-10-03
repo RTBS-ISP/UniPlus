@@ -3,8 +3,10 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { MoveLeft, X } from "lucide-react";
 
-function RegisterPage() {
+export default function RegisterPage() {
+  const [step, setStep] = useState<1 | 2>(1);
   const [form, setForm] = useState({
     username: "",
     firstName: "",
@@ -14,6 +16,7 @@ function RegisterPage() {
     password: "",
     confirmPassword: "",
     role: "",
+    aboutMe: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -24,7 +27,7 @@ function RegisterPage() {
   ) => {
     const { name, value } = e.target;
     setForm({ ...form, [name]: value });
-    setError(""); // Clear error when user types
+    setError(""); // clear error when typing
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -32,7 +35,13 @@ function RegisterPage() {
     setError("");
 
     // Frontend validation
-    if (!form.username || !form.email || !form.password || !form.confirmPassword || !form.role) {
+    if (
+      !form.username ||
+      !form.email ||
+      !form.password ||
+      !form.confirmPassword ||
+      !form.role
+    ) {
       setError("Username, email, password, and role are required");
       return;
     }
@@ -50,19 +59,13 @@ function RegisterPage() {
     setLoading(true);
 
     try {
-      // Step 1: Get CSRF token
       const csrfRes = await fetch("http://localhost:8000/api/set-csrf-token", {
         method: "GET",
         credentials: "include",
       });
-
-      if (!csrfRes.ok) {
-        throw new Error("Failed to get CSRF token");
-      }
-
+      if (!csrfRes.ok) throw new Error("Failed to get CSRF token");
       const csrfData = await csrfRes.json();
 
-      // Step 2: Register user
       const res = await fetch("http://localhost:8000/api/register", {
         method: "POST",
         credentials: "include",
@@ -78,11 +81,11 @@ function RegisterPage() {
           firstName: form.firstName,
           lastName: form.lastName,
           phone: form.phone,
+          aboutMe: form.aboutMe,
         }),
       });
 
       const data = await res.json();
-
       if (data.success) {
         alert("Registered successfully! Please login.");
         router.push("/login");
@@ -91,19 +94,75 @@ function RegisterPage() {
       }
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      setError(
+        err instanceof Error ? err.message : "Something went wrong. Please try again."
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // STEP 1: Choose Role
+  if (step === 1) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#E9E9F4]">
+        <div className="relative bg-white rounded-2xl shadow-2xl p-12 max-w-3xl w-full text-center">
+          <button
+            onClick={() => router.push("/")}
+            className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:bg-gray-200 transition"
+            aria-label="Back to home"
+          >
+          <X className="w-6 h-6" />
+          </button>
+          <h2 className="text-3xl font-bold mb-8 text-black">Choose Your Role</h2>
+          <div className="grid grid-cols-2 gap-8">
+            {/* Student Box */}
+            <div
+              className="cursor-pointer p-10 border-2 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition"
+              onClick={() => {
+                setForm({ ...form, role: "student" });
+                setStep(2);
+              }}
+            >
+              <h3 className="text-2xl font-bold text-black mb-2">🎓 Student</h3>
+              <p className="text-gray-600 text-sm">
+                Explore and participate events or even create your own one.
+              </p>
+            </div>
+
+            {/* Organizer Box */}
+            <div
+              className="cursor-pointer p-10 border-2 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition"
+              onClick={() => {
+                setForm({ ...form, role: "organizer" });
+                setStep(2);
+              }}
+            >
+              <h3 className="text-2xl font-bold text-black mb-2">📝 Organizer</h3>
+              <p className="text-gray-600 text-sm">
+                Create and manage events for students.
+              </p>
+            </div>
+          </div>
+          
+          <div className="mt-8 text-black text-md">
+            Already have an account?{" "}
+            <Link href="/login" className="underline text-indigo-400">
+              Sign In
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // STEP 2: Registration Form
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-[#E9E9F4]">
-      <main className="flex flex-col items-center justify-center w-full px-4 sm:px-10 text-center">
+      <main className="flex flex-col items-center justify-center w-full px-4 sm:px-10">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-14">
-          <h2 className="text-4xl font-bold mb-5 text-black">Register</h2>
+          <h2 className="text-4xl text-center font-bold mb-5 text-black">Register as {form.role === "student" ? "Student" : "Organizer"}</h2>
 
-          {/* Error Message */}
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">
               {error}
@@ -112,8 +171,9 @@ function RegisterPage() {
 
           <form onSubmit={handleSubmit}>
             <div className="flex flex-col space-y-4">
+
               {/* Username */}
-              <div className="flex flex-col">
+              <div>
                 <label className="flex items-start text-xs p-2 text-black">
                   Username
                 </label>
@@ -130,12 +190,10 @@ function RegisterPage() {
                 </div>
               </div>
 
-              {/* First and Last Name */}
-              <div className="flex flex-row gap-4 w-full">
+              {/* First & Last Name */}
+              <div className="flex gap-4">
                 <div className="flex flex-col w-1/2">
-                  <label className="flex items-start text-xs p-2 text-black">
-                    First Name
-                  </label>
+                  <label className="text-xs text-left p-2 text-black">First Name</label>
                   <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
                     <input
                       type="text"
@@ -148,9 +206,7 @@ function RegisterPage() {
                   </div>
                 </div>
                 <div className="flex flex-col w-1/2">
-                  <label className="flex items-start text-xs p-2 text-black">
-                    Last Name
-                  </label>
+                  <label className="text-xs text-left p-2 text-black">Last Name</label>
                   <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
                     <input
                       type="text"
@@ -164,12 +220,10 @@ function RegisterPage() {
                 </div>
               </div>
 
-              {/* Email and Phone */}
-              <div className="flex flex-row gap-4 w-full">
+              {/* Email & Phone */}
+              <div className="flex gap-4">
                 <div className="flex flex-col w-1/2">
-                  <label className="flex items-start text-xs p-2 text-black">
-                    Email
-                  </label>
+                  <label className="text-xs text-left p-2 text-black">Email</label>
                   <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
                     <input
                       type="email"
@@ -183,9 +237,7 @@ function RegisterPage() {
                   </div>
                 </div>
                 <div className="flex flex-col w-1/2">
-                  <label className="flex items-start text-xs p-2 text-black">
-                    Phone Number
-                  </label>
+                  <label className="text-xs text-left p-2 text-black">Phone Number</label>
                   <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
                     <input
                       type="tel"
@@ -199,11 +251,31 @@ function RegisterPage() {
                 </div>
               </div>
 
-              {/* Password */}
-              <div className="flex flex-col">
-                <label className="flex items-start text-xs p-2 text-black">
-                  Password
-                </label>
+              {form.role && (
+                <div>
+                  <label className="flex items-start text-xs p-2 text-black">
+                    {form.role === "student" ? "Faculty" : "Organizer Name"}
+                  </label>
+                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                    <input
+                      type="text"
+                      name="faculty"
+                      placeholder={
+                        form.role === "student"
+                          ? "Enter your faculty (e.g. Software and Knowledge Engineering)"
+                          : "Enter your organizer name (e.g. Kasetsart University)"
+                      }
+                      value={form.aboutMe}
+                      onChange={handleChange}
+                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Password & Confirm */}
+              <div>
+                <label className="text-xs text-left p-2 text-black">Password</label>
                 <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
                   <input
                     type="password"
@@ -218,11 +290,8 @@ function RegisterPage() {
                 </div>
               </div>
 
-              {/* Confirm Password */}
-              <div className="flex flex-col">
-                <label className="flex items-start text-xs p-2 text-black">
-                  Confirm Password
-                </label>
+              <div>
+                <label className="text-xs text-left p-2 text-black">Confirm Password</label>
                 <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
                   <input
                     type="password"
@@ -236,56 +305,47 @@ function RegisterPage() {
                 </div>
               </div>
 
-              {/* Role Selector */}
-              <div className="flex flex-col">
-                <label className="flex items-start text-xs p-2 text-black">
-                  Roles
-                </label>
-                <select
-                  name="role"
-                  value={form.role}
-                  onChange={handleChange}
-                  required
-                  className="bg-gray-100 text-black text-sm w-50 p-3 rounded-full mb-5"
-                >
-                  <option value="" disabled>
-                    Select your role
-                  </option>
-                  <option value="student">Student</option>
-                  <option value="organizer">Organizer</option>
-                </select>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-4 pt-3">
-                <Link
-                  href="/"
-                  className="text-gray-500 hover:underline flex item-center text-sm py-2"
-                >
-                  Cancel
-                </Link>
+              {/* Buttons */}
+              <div className="flex justify-between items-center pt-3">
+                {/* Left side: Back */}
                 <button
-                  type="submit"
-                  disabled={loading}
-                  className="inline-flex items-center justify-center w-full px-4 py-1 text-base font-bold leading-6 text-white bg-indigo-400 border border-transparent rounded-full md:w-auto hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="flex items-center text-gray-500 hover:underline text-sm"
                 >
-                  {loading ? "Registering..." : "Confirm"}
+                  <MoveLeft className="w-4 h-4 mr-1" />
+                  <span>Back</span>
                 </button>
+
+                {/* Right side: Confirm + Cancel */}
+                <div className="flex items-center space-x-3"> 
+                  <Link href='/' className='text-gray-500 hover:underline flex item-center text-sm py-2'>
+                  Cancel
+                  </Link>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="inline-flex items-center justify-center px-6 py-2 text-base font-bold leading-6 text-white bg-indigo-400 border border-transparent rounded-full hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Registering..." : "Confirm"}
+                  </button>
+                </div>
               </div>
 
-              <hr className="h-px my-8 bg-gray-200 border-0" />
-              <div className="text-black text-md">
-                Already have an account?{" "}
-                <Link href="/login" className="underline text-indigo-400">
-                  Sign In
-                </Link>
-              </div>
             </div>
           </form>
+
+          {/* Already have an account */}
+          <hr className="my-8 border-gray-300" />
+          <div className="mt-8 text-center text-black text-md">
+            Already have an account?{" "}
+            <Link href="/login" className="underline text-indigo-400">
+              Sign In
+            </Link>
+          </div>
         </div>
       </main>
     </div>
   );
 }
-
-export default RegisterPage;
