@@ -292,6 +292,9 @@ function RegisterPage() {
                           className="bg-gray-100 text-black outline-none text-sm w-full px-3"
                           required
                         >
+                          <option value="" disabled>
+                            Select your faculty
+                          </option>
                           <option value="Agriculture">Agriculture</option>
                           <option value="Agro-industry">Agro-Industry</option>
                           <option value="Architecture">Architecture</option>
@@ -394,7 +397,21 @@ function RegisterPage() {
                 {/* Left side: Back */}
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => {
+                    setStep(1);
+                    setForm({
+                      username: "",
+                      firstName: "",
+                      lastName: "",
+                      email: "",
+                      phone: "",
+                      password: "",
+                      confirmPassword: "",
+                      role: "",
+                      aboutMe: {},
+                    });
+                    setError("");
+                  }}
                   className="flex items-center text-gray-500 hover:underline text-sm"
                 >
                   <MoveLeft className="w-4 h-4 mr-1" />
