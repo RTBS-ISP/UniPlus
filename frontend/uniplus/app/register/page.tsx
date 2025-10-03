@@ -5,9 +5,27 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MoveLeft, X } from "lucide-react";
 
-export default function RegisterPage() {
+type AboutMe = {
+  faculty?: string;
+  year?: string;
+  organizerName?: string;
+};
+
+type FormState = {
+  username: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  password: string;
+  confirmPassword: string;
+  role: string;
+  aboutMe: AboutMe;
+};
+
+function RegisterPage() {
   const [step, setStep] = useState<1 | 2>(1);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<FormState>({
     username: "",
     firstName: "",
     lastName: "",
@@ -16,7 +34,7 @@ export default function RegisterPage() {
     password: "",
     confirmPassword: "",
     role: "",
-    aboutMe: "",
+    aboutMe: {},
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -26,7 +44,15 @@ export default function RegisterPage() {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
+
+    if (form.role === "student" && (name === "faculty" || name === "year")) {
+      setForm({ ...form, aboutMe: { ...form.aboutMe, [name]: value } });
+    } else if (form.role === "organizer" && name === "organizerName") {
+      setForm({ ...form, aboutMe: { ...form.aboutMe, organizerName: value } });
+    } else {
+      setForm({ ...form, [name]: value });
+    }
+
     setError(""); // clear error when typing
   };
 
@@ -252,26 +278,84 @@ export default function RegisterPage() {
               </div>
 
               {form.role && (
-                <div>
-                  <label className="flex items-start text-xs p-2 text-black">
-                    {form.role === "student" ? "Faculty" : "Organizer Name"}
-                  </label>
-                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
-                    <input
-                      type="text"
-                      name="faculty"
-                      placeholder={
-                        form.role === "student"
-                          ? "Enter your faculty (e.g. Software and Knowledge Engineering)"
-                          : "Enter your organizer name (e.g. Kasetsart University)"
-                      }
-                      value={form.aboutMe}
-                      onChange={handleChange}
-                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
-                    />
+              <div>
+                {form.role === "student" ? (
+                  <div className="flex gap-4">
+                    {/* Faculty Dropdown */}
+                    <div className="flex flex-col w-1/2">
+                      <label className="flex items-start text-xs p-2 text-black">Faculty</label>
+                      <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                        <select
+                          name="faculty"
+                          value={form.aboutMe.faculty || ""}
+                          onChange={handleChange}
+                          className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                          required
+                        >
+                          <option value="Agriculture">Agriculture</option>
+                          <option value="Agro-industry">Agro-Industry</option>
+                          <option value="Architecture">Architecture</option>
+                          <option value="Business">Business Administration</option>
+                          <option value="Economics">Economics</option>
+                          <option value="Education">Education</option>
+                          <option value="Engineering">Engineering</option>
+                          <option value="Environment">Environment</option>
+                          <option value="Fisheries">Fisheries</option>
+                          <option value="Forestry">Forestry</option>
+                          <option value="Humanities">Humanities</option>
+                          <option value="Medicine">Medicine</option>
+                          <option value="Nursing">Nursing</option>
+                          <option value="Pharmaceutical_sciences">Pharmaceutical Sciences</option>
+                          <option value="Science">Science</option>
+                          <option value="Social_sciences">Social Sciences</option>
+                          <option value="Veterinary_medicine">Veterinary Medicine</option>
+                          <option value="Veterinary_technology">Veterinary Technology</option>
+                          <option value="Interdisciplinary_management_and_technology">
+                            Interdisciplinary Management and Technology
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Year Field */}
+                    <div className="flex flex-col w-1/2">
+                      <label className="flex items-start text-xs p-2 text-black">Year</label>
+                      <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                        <input
+                          type="number"
+                          name="year"
+                          placeholder="Enter your year (e.g. 1)"
+                          value={form.aboutMe.year || ""}
+                          onChange={handleChange}
+                          className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                          min="1"
+                          max="8"
+                          required
+                        />
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <>
+                    {/* Organizer Name */}
+                    <label className="flex items-start text-xs p-2 text-black">
+                      Organizer Name
+                    </label>
+                    <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                      <input
+                        type="text"
+                        name="organizerName"
+                        placeholder="Enter your organizer name (e.g. Kasetsart University)"
+                        value={form.aboutMe.organizerName || ""}
+                        onChange={handleChange}
+                        className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
               {/* Password & Confirm */}
               <div>
@@ -349,3 +433,5 @@ export default function RegisterPage() {
     </div>
   );
 }
+
+export default RegisterPage;
