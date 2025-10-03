@@ -241,6 +241,14 @@ def get_user(request):
     # This should always be true due to django_auth decorator,
     # but we check as a safety measure
     if request.user.is_authenticated:
+        import json
+        about_me_data = None
+        if request.user.about_me:
+            try:
+                about_me_data = json.loads(request.user.about_me)
+            except:
+                about_me_data = {}
+
         return 200, {
             "username": request.user.username,
             "email": request.user.email,
@@ -248,7 +256,7 @@ def get_user(request):
             "lastName": request.user.last_name,
             "phone": request.user.phone_number,
             "role": request.user.role,
-            "aboutMe": request.user.about_me,  
+            "aboutMe": about_me_data,
             "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC
         }
     # This should not be reached due to django_auth decorator
@@ -284,9 +292,6 @@ def check_auth(request):
     
 @api.patch("/user", auth=django_auth, response={200: schemas.UserSchema, 400: schemas.ErrorSchema})
 def update_user(request, payload: schemas.UpdateUserSchema):
-    """
-    Update current user's profile (editable fields only)
-    """
     user = request.user
     if payload.firstName is not None:
         user.first_name = payload.firstName
@@ -295,10 +300,14 @@ def update_user(request, payload: schemas.UpdateUserSchema):
     if payload.phone is not None:
         user.phone_number = payload.phone
     if payload.aboutMe is not None:
-        user.about_me = payload.aboutMe
+        import json
+        user.about_me = json.dumps(payload.aboutMe)
     if payload.profilePic is not None:
         user.profile_pic = payload.profilePic
     user.save()
+
+    import json
+    about_me_data = json.loads(user.about_me) if user.about_me else None
 
     return 200, {
         "username": user.username,
@@ -307,6 +316,6 @@ def update_user(request, payload: schemas.UpdateUserSchema):
         "lastName": user.last_name,
         "phone": user.phone_number,
         "role": user.role,
-        "aboutMe": user.about_me,
+        "aboutMe": about_me_data,
         "profilePic": user.profile_pic
     }
