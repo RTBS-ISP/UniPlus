@@ -2,6 +2,8 @@ from ninja import Schema
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
+
+
 class AboutMeSchema(BaseModel):
     faculty: str
     year: str
@@ -30,6 +32,15 @@ class UserSchema(Schema):
     lastName: str = None
     phone: str = None
     role: str = None
+    aboutMe: Optional[str] = None
+    profilePic: Optional[str] = None
+    
+class UpdateUserSchema(Schema):
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    phone: Optional[str] = None
+    aboutMe: Optional[str] = None
+    profilePic: Optional[str] = None
     
 # Generic success/failure messages
 class MessageSchema(Schema):

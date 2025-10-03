@@ -12,6 +12,8 @@ from django.db import IntegrityError
 from api.model.user import AttendeeUser
 from api import schemas
 
+DEFAULT_PROFILE_PIC = "/images/logo.png" 
+
 # Initialize the NinjaAPI instance with CSRF protection enabled
 # This ensures all POST/PUT/DELETE requests require a valid CSRF token
 api = NinjaAPI(csrf=True)
@@ -245,7 +247,9 @@ def get_user(request):
             "firstName": request.user.first_name,
             "lastName": request.user.last_name,
             "phone": request.user.phone_number,
-            "role": request.user.role
+            "role": request.user.role,
+            "aboutMe": request.user.about_me,  
+            "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC
         }
     # This should not be reached due to django_auth decorator
     return 401, {"error": "Not authenticated"}
@@ -276,4 +280,33 @@ def check_auth(request):
         "authenticated": request.user.is_authenticated,
         # Return username only if authenticated, otherwise None
         "username": request.user.username if request.user.is_authenticated else None
+    }
+    
+@api.patch("/user", auth=django_auth, response={200: schemas.UserSchema, 400: schemas.ErrorSchema})
+def update_user(request, payload: schemas.UpdateUserSchema):
+    """
+    Update current user's profile (editable fields only)
+    """
+    user = request.user
+    if payload.firstName is not None:
+        user.first_name = payload.firstName
+    if payload.lastName is not None:
+        user.last_name = payload.lastName
+    if payload.phone is not None:
+        user.phone_number = payload.phone
+    if payload.aboutMe is not None:
+        user.about_me = payload.aboutMe
+    if payload.profilePic is not None:
+        user.profile_pic = payload.profilePic
+    user.save()
+
+    return 200, {
+        "username": user.username,
+        "email": user.email,
+        "firstName": user.first_name,
+        "lastName": user.last_name,
+        "phone": user.phone_number,
+        "role": user.role,
+        "aboutMe": user.about_me,
+        "profilePic": user.profile_pic
     }
