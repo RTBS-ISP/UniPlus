@@ -16,7 +16,6 @@ from api import schemas
 # This ensures all POST/PUT/DELETE requests require a valid CSRF token
 api = NinjaAPI(csrf=True)
 
-
 @api.get("/", response=schemas.MessageSchema)
 def home(request):
     """
@@ -242,7 +241,11 @@ def get_user(request):
     if request.user.is_authenticated:
         return 200, {
             "username": request.user.username,
-            "email": request.user.email
+            "email": request.user.email,
+            "firstName": request.user.first_name,
+            "lastName": request.user.last_name,
+            "phone": request.user.phone_number,
+            "role": request.user.role
         }
     # This should not be reached due to django_auth decorator
     return 401, {"error": "Not authenticated"}

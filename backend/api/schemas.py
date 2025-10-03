@@ -20,13 +20,17 @@ class RegisterSchema(BaseModel):
 # For login input
 class LoginSchema(Schema):
     email: str
-    password: str
-
+    password: str   
+     
 # For returning user data (no password)
 class UserSchema(Schema):
     username: str
     email: str
-
+    firstName: str = None
+    lastName: str = None
+    phone: str = None
+    role: str = None
+    
 # Generic success/failure messages
 class MessageSchema(Schema):
     message: str
