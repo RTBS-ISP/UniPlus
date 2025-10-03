@@ -2,14 +2,11 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from .user import AttendeeUser
 from .event import Event
-from .organizer import OrganizerUser
 
 # class for making a ticket for events
 class Ticket(models.Model):
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="tickets")
-    organizer = models.ForeignKey(OrganizerUser, on_delete=models.CASCADE, related_name="tickets")
-    attendee_user = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="tickets")
-
+    attendee_user = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="my_tickets", null=True, blank=True)
     ticket_title = models.CharField(max_length=100)
     ticket_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     is_online = models.BooleanField(default=False)

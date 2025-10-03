@@ -21,7 +21,7 @@ services:
     build: ./backend
     container_name: uniplus_web
     command: >
-      sh -c "python manage.py makemigrations &&
+      sh -c "python manage.py makemigrations --noinput &&
              python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
     volumes:
@@ -36,7 +36,17 @@ services:
       - DB_PASSWORD=Password
     depends_on:
       db:
-        condition: service_healthy
-
+        condition: service_healthy     
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: uniplus_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
 volumes:
   db_data:
