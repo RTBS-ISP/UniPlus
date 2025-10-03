@@ -49,13 +49,14 @@ def register(request, payload: schemas.RegisterSchema):
             username=payload.username,
             password=payload.password,
             first_name=payload.first_name,
-            last_name=payload.last_name
+            last_name=payload.last_name,
+            phone_number=payload.phone_number,
         )
         
         # Set role if provided (assuming your AttendeeUser model has a role field)
         if hasattr(payload, 'role') and payload.role:
             user.role = payload.role
-            user.save()
+            user.save() 
         
         return 200, {
             "success": True,
@@ -114,7 +115,7 @@ def login_view(request, payload: schemas.LoginSchema):
             return 401, {"error": "Invalid credentials"}
             
     except Exception as e:
-        return 401, {"error": str(e)}
+        return 401, {"error": f"Login failed: {str(e)}"}
 
 @api.post("/logout", auth=django_auth, response=schemas.MessageSchema)
 def logout_view(request):
@@ -154,165 +155,35 @@ def get_user_profile(request):
 
 # Event related endpoints 
 # Create Event
-@api.post("/events", auth=django_auth, response={201: schemas.EventResponseSchema, 400: schemas.ErrorSchema, 401: schemas.ErrorSchema})
+@api.post("/events", auth=django_auth, response={201: schemas.EventSchema, 400: schemas.ErrorSchema})
 def create_event(request, payload: schemas.EventCreateSchema):
-    """
-    Create a new event (requires authentication)
-    Accepts picture as base64 string or file path
-    """
+    """Create a new event (requires authentication)"""
     try:
-        if not request.user.is_authenticated:
-            return 401, {"error": "Authentication required"}
+        if payload.end_date_register <= payload.start_date_register:
+            return 400, {"error": "End date must be after start date"}
         
-        if not payload.event_name:
-            return 400, {"error": "Event name is required"}
-        
-        if not payload.faculty:
-            return 400, {"error": "Faculty is required"}
-        
-        if payload.number_of_students <= 0:
-            return 400, {"error": "Number of students must be greater than 0"}
-        
-        if not payload.years:
-            return 400, {"error": "Years field is required"}
-        
-        if not payload.descriptions:
-            return 400, {"error": "Description is required"}
-        
-        if not payload.host or len(payload.host) == 0:
-            return 400, {"error": "At least one host must be specified"}
-        
-        # Handle picture if provided
-        picture_file = None
-        if payload.picture:
-            # Check if picture is base64 encoded
-            if payload.picture.startswith('data:image'):
-                try:
-                    format, imgstr = payload.picture.split(';base64,')
-                    ext = format.split('/')[-1]
-                    
-                    filename = f"event_{uuid.uuid4().hex[:10]}.{ext}"
-                    
-                    data = ContentFile(base64.b64decode(imgstr), name=filename)
-                    picture_file = data
-                except Exception as e:
-                    return 400, {"error": f"Invalid base64 image data: {str(e)}"}
-        
-        event_data = {
-            "event_name": payload.event_name,
-            "number_of_students": payload.number_of_students,
-            "faculty": payload.faculty,
-            "years": payload.years,  
-            "descriptions": payload.descriptions,
-            "host": payload.host,
-            "attendees": payload.attendees if payload.attendees else []
-        }
-        
-        event = Event(**event_data)
-        
-        if picture_file:
-            event.picture.save(picture_file.name, picture_file, save=False)
-        
-        event.save()
+        # Create event
+        event = Event.objects.create(
+            event_title=payload.event_title,
+            event_description=payload.event_description,
+            start_date_register=payload.start_date_register,
+            end_date_register=payload.end_date_register,
+            max_attendee=payload.max_attendee,
+            is_online=getattr(payload, 'is_online', False),  # CHANGED: Added default value for is_online
+        )
         
         return 201, {
-            "id": event.id,
-            "event_name": event.event_name,
-            "number_of_students": event.number_of_students,
-            "faculty": event.faculty,
-            "years": event.years, 
-            "descriptions": event.descriptions,
-            "host": event.host,
-            "attendees": event.attendees,
-            "picture": event.picture.url if event.picture else None,
-            "created_at": event.created_at,
-            "updated_at": event.updated_at
+            "id": event.id,  
+            "event_title": event.event_title,
+            "event_description": event.event_description,
+            "event_create_date": event.event_create_date.isoformat  () if event.event_create_date else None,
+            "max_attendee": event.max_attendee,
+            "start_date_register": event.start_date_register.isoformat() if event.start_date_register else None, 
+            "end_date_register": event.end_date_register.isoformat() if event.end_date_register else None,  
+            "is_online": event.is_online,
         }
         
     except IntegrityError as e:
-        return 400, {"error": "Registration failed. Please try again."}
+        return 400, {"error": f"Event creation failed due to database error: {str(e)}"}
     except Exception as e:
-        return 400, {"error": f"Failed to create event: {str(e)}"}
-    
-# Get all events
-@api.get("/events", response={200: List[schemas.EventResponseSchema], 400: schemas.ErrorSchema})
-def get_events(request):
-    """Get all events"""
-    try:
-        events = Event.objects.all().order_by('-created_at')
-        return 200, [
-            {
-                "id": event.id,
-                "event_name": event.event_name,
-                "number_of_students": event.number_of_students,
-                "faculty": event.faculty,
-                "years": event.years,
-                "descriptions": event.descriptions,
-                "host": event.host,
-                "attendees": event.attendees,
-                "picture": event.picture.url if event.picture else None,
-                "created_at": event.created_at,
-                "updated_at": event.updated_at
-            }
-            for event in events
-        ]
-    except Exception as e:
-        return 400, {"error": f"Failed to fetch events: {str(e)}"}
-    
-# Get event by ID
-@api.get("/events/{event_id}", response={200: schemas.EventResponseSchema, 404: schemas.ErrorSchema})
-def get_event(request, event_id: int):
-    """Get a specific event by ID"""
-    try:
-        event = get_object_or_404(Event, id=event_id)
-        return 200, {
-            "id": event.id,
-            "event_name": event.event_name,
-            "number_of_students": event.number_of_students,
-            "faculty": event.faculty,
-            "years": event.years,
-            "descriptions": event.descriptions,
-            "host": event.host,
-            "attendees": event.attendees,
-            "picture": event.picture.url if event.picture else None,
-            "created_at": event.created_at,
-            "updated_at": event.updated_at
-        }
-    except Exception as e:
-        return 404, {"error": f"Event not found: {str(e)}"}
-    
-# register for an event
-@api.post("/events/{event_id}/register", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema, 401: schemas.ErrorSchema, 404: schemas.ErrorSchema})
-def register_for_event(request, event_id: int):
-    """Register current user for an event (Students only)"""
-    try:
-        if not request.user.is_authenticated:
-            return 401, {"error": "Authentication required"}
-        
-        if request.user.role != 'student':
-            return 400, {"error": "Only students can register for events"}
-        
-        event = get_object_or_404(Event, id=event_id)
-        user_email = request.user.email
-        
-        if user_email in event.attendees:
-            return 400, {"error": "You are already registered for this event"}
-        
-        if len(event.attendees) >= event.number_of_students:
-            return 400, {"error": "Event is full"}
-        
-        event.attendees.append(user_email)
-        event.save()    
-        return 200, {
-            "success": True,
-            "message": f"Successfully registered for {event.event_name}",
-            "event": {
-                "id": event.id,
-                "event_name": event.event_name,
-                "current_attendees": len(event.attendees),
-                "max_attendees": event.number_of_students
-            }
-        }
-        
-    except Exception as e:
-        return 400, {"error": f"Failed to register for event: {str(e)}"}
+        return 400, {"error": f"Event creation failed: {str(e)}"}

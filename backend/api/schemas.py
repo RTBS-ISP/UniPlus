@@ -1,15 +1,16 @@
-
 from ninja import Schema
-from typing import Optional,List
+from typing import Optional, List
 from datetime import datetime
+from pydantic import BaseModel, validator
 
 class RegisterSchema(Schema):
     username: str
     email: str
     password: str
     role: str
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    first_name: str
+    last_name: str
+    phone_number: str
 
 class LoginSchema(Schema):
     email: str
@@ -38,30 +39,21 @@ class SuccessSchema(Schema):
     user: UserSchema = None
 
 
-class EventCreateSchema(Schema):
-    event_name: str
-    number_of_students: int
-    faculty: str
-    years: str 
-    descriptions: str
-    host: List[str] 
-    attendees: Optional[List[str]] = None  
-    picture: Optional[str] = None
 
-class EventResponseSchema(Schema):
-    id: int
-    event_name: str
-    number_of_students: int
-    faculty: str
-    years: str
-    descriptions: str
-    host: List[str] 
-    attendees: List[str]
-    picture: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-class EventRegistrationSchema(Schema):
-    success: bool
-    message: str
-    event: dict = None
+class EventCreateSchema(BaseModel):
+    event_title: str
+    event_description: str
+    start_date_register: datetime
+    end_date_register: datetime
+    max_attendee: int
+    is_online: bool = False  
+    
+class EventSchema(BaseModel):
+    id: int 
+    event_title: str
+    event_description: str
+    event_create_date: str | None = None
+    max_attendee: int
+    start_date_register: str | None = None
+    end_date_register: str | None = None
+    is_online: bool = False  
