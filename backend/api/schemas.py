@@ -32,14 +32,14 @@ class UserSchema(Schema):
     lastName: str = None
     phone: str = None
     role: str = None
-    aboutMe: Optional[str] = None
+    aboutMe: Optional[Dict[str, Any]] = None
     profilePic: Optional[str] = None
     
 class UpdateUserSchema(Schema):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
     phone: Optional[str] = None
-    aboutMe: Optional[str] = None
+    aboutMe: Optional[Dict[str, Any]] = None
     profilePic: Optional[str] = None
     
 # Generic success/failure messages
