@@ -1,307 +1,224 @@
-"""
-UniPlus API - Event Management System
-This module handles user authentication and authorization for the UniPlus platform.
-It provides endpoints for user registration, login, logout, and profile management.
-"""
-
 from ninja import NinjaAPI
 from ninja.security import django_auth
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
 from django.db import IntegrityError
+from django.core.files.base import ContentFile
+import uuid
+import base64
+
 from api.model.user import AttendeeUser
+from api.model.event import Event  
 from api import schemas
+from django.shortcuts import get_object_or_404
+from typing import List
 
-# Initialize the NinjaAPI instance with CSRF protection enabled
-# This ensures all POST/PUT/DELETE requests require a valid CSRF token
+# Create API instance with CSRF protection enabled
 api = NinjaAPI(csrf=True)
-
 
 @api.get("/", response=schemas.MessageSchema)
 def home(request):
-    """
-    Home endpoint - API health check and welcome message
-    
-    This endpoint serves as a simple health check to verify the API is running.
-    It requires no authentication and returns a welcome message.
-    
-    Args:
-        request: The Django HTTP request object
-        
-    Returns:
-        dict: A welcome message confirming the API is operational
-    """
+    """Home endpoint"""
     return {"message": "Welcome to UniPlus API"}
-
 
 @api.get("/set-csrf-token")
 def get_csrf_token(request):
-    """
-    Generate and return a CSRF token for the current session
-    
-    CSRF tokens are required for all state-changing operations (POST, PUT, DELETE)
-    to prevent Cross-Site Request Forgery attacks. The frontend should call this
-    endpoint before making any authenticated requests and include the token in
-    the 'X-CSRFToken' header.
-    
-    Args:
-        request: The Django HTTP request object
-        
-    Returns:
-        dict: Contains the CSRF token to be used in subsequent requests
-        
-    Example:
-        Response: {"csrftoken": "abc123xyz..."}
-        Usage: Headers: {"X-CSRFToken": "abc123xyz..."}
-    """
+    """Get CSRF token for subsequent requests"""
     return {"csrftoken": get_token(request)}
-
 
 @api.post("/register", response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
 def register(request, payload: schemas.RegisterSchema):
-    """
-    Register a new user account
-    
-    Creates a new AttendeeUser account with the provided credentials.
-    Performs validation to ensure unique email and username, and requires
-    firstName, lastName, phone, and role.
-    
-    Args:
-        request: The Django HTTP request object
-        payload: RegisterSchema containing:
-            - username (str): Unique username for the account
-            - email (str): Unique email address (used as primary login)
-            - password (str): User's password (will be hashed)
-            - firstName (str): User's first name
-            - lastName (str): User's last name
-            - phone (str): User's phone number
-            - role (str): User role (student/organizer)
-    
-    Returns:
-        200: Success response with user data if registration successful
-        400: Error response with specific error message if validation fails
-        
-    Raises:
-        IntegrityError: If database constraints are violated
-        Exception: For any other unexpected errors
-        
-    Security:
-        - Passwords are automatically hashed using Django's password system
-        - Email uniqueness is enforced at the database level
-        - CSRF token required for this endpoint
-    """
+    """Register a new user"""
     try:
-        # Validate that all required fields are provided
-        # This provides a clear error message for missing fields
+        # Validation
         if not payload.username or not payload.email or not payload.password:
             return 400, {"error": "Username, email, and password are required"}
         
-        if not payload.firstName or not payload.lastName:
-            return 400, {"error": "First name and last name are required"}
-        
-        if not payload.phone:
-            return 400, {"error": "Phone number is required"}
-        
-        if not payload.role:
-            return 400, {"error": "Role is required"}
-        
-        # Check if a user with this email already exists
-        # Email is used as the primary authentication field
+        # Check if user already exists
         if AttendeeUser.objects.filter(email=payload.email).exists():
             return 400, {"error": "User with this email already exists"}
         
-        # Check if the username is already taken
-        # Usernames must be unique even though email is the login field
         if AttendeeUser.objects.filter(username=payload.username).exists():
             return 400, {"error": "Username already taken"}
         
-        # Create the new user account
-        # create_user() method automatically hashes the password
-        # Note: USERNAME_FIELD is 'email', so email is the primary identifier
+
+
+        # Create user (]]
         user = AttendeeUser.objects.create_user(
-            email=payload.email,        # Primary authentication field
-            username=payload.username,  # Display name/handle
-            password=payload.password   # Will be hashed automatically
+            email=payload.email,
+            username=payload.username,
+            password=payload.password,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            phone_number=payload.phone_number,
         )
         
-        # Set additional required fields
-        user.first_name = payload.firstName
-        user.last_name = payload.lastName
-        user.phone_number = payload.phone
-        user.role = payload.role
-        user.save()
+        # Set role if provided (assuming your AttendeeUser model has a role field)
+        if hasattr(payload, 'role') and payload.role:
+            user.role = payload.role
+            user.save() 
         
-        # Return success response with basic user information
-        # Note: Never return sensitive data like passwords
         return 200, {
             "success": True,
             "message": "User registered successfully",
             "user": {
                 "username": user.username,
-                "email": user.email
+                "email": user.email,
+                "first_name": user.first_name, 
+                "last_name": user.last_name,
+                "role": user.role,
+                "phone_number": user.phone_number,
+                "about_me": user.about_me,
+                "verification_status": user.verification_status,
+                "creation_date": user.creation_date.isoformat() if user.creation_date else None
             }
         }
         
     except IntegrityError as e:
-        # Handle database constraint violations
-        # This might occur if there's a race condition with duplicate emails
-        return 400, {"error": f"Database error: {str(e)}"}
+        return 400, {"error": "Registration failed. Please try again."}
     except Exception as e:
-        # Catch-all for any unexpected errors
-        # In production, you might want to log these for debugging
         return 400, {"error": str(e)}
-
 
 @api.post("/login", response={200: schemas.SuccessSchema, 401: schemas.ErrorSchema})
 def login_view(request, payload: schemas.LoginSchema):
-    """
-    Authenticate and login a user
-    
-    Validates user credentials and creates a session for authenticated users.
-    Uses email as the primary authentication field (not username).
-    
-    Args:
-        request: The Django HTTP request object
-        payload: LoginSchema containing:
-            - email (str): User's email address
-            - password (str): User's password
-    
-    Returns:
-        200: Success response with user data if login successful
-        401: Unauthorized response if credentials are invalid
-        
-    Session:
-        Creates a Django session cookie upon successful authentication,
-        which will be used for subsequent authenticated requests.
-        
-    Security:
-        - Passwords are never stored or transmitted in plain text
-        - Failed login attempts return generic error messages to prevent
-          user enumeration attacks
-        - CSRF token required for this endpoint
-    """
+    """Login user"""
     try:
-        # Validate that both email and password are provided
         if not payload.email or not payload.password:
             return 401, {"error": "Email and password are required"}
         
+        # Get user by email first
         try:
-            # First, verify that a user with this email exists
-            # This is needed because we use email as the USERNAME_FIELD
             user_obj = AttendeeUser.objects.get(email=payload.email)
-            
-            # Authenticate using Django's built-in authentication system
-            # Note: We pass email to the username parameter because
-            # AttendeeUser.USERNAME_FIELD = 'email'
+            # Authenticate using email (since USERNAME_FIELD is 'email')
             user = authenticate(request, username=payload.email, password=payload.password)
         except AttendeeUser.DoesNotExist:
-            # Return generic error message to prevent user enumeration
             return 401, {"error": "Invalid credentials"}
         
-        # Check if authentication was successful
         if user is not None:
-            # Create a session for the authenticated user
-            # This sets a session cookie that will be sent with subsequent requests
             login(request, user)
-            
-            # Return success response with basic user information
             return 200, {
                 "success": True,
                 "message": "Logged in successfully",
                 "user": {
                     "username": user.username,
-                    "email": user.email
+                    "email": user.email,
+                    "first_name": user.first_name, 
+                    "last_name": user.last_name,
+                    "role": user.role,
+                    "phone_number": user.phone_number,
+                    "about_me": user.about_me,
+                    "verification_status": user.verification_status,
+                    "creation_date": user.creation_date.isoformat() if user.creation_date else None
                 }
             }
         else:
-            # Authentication failed - password was incorrect
             return 401, {"error": "Invalid credentials"}
             
     except Exception as e:
-        # Handle any unexpected errors during login
-        # In production, log these errors for debugging
-        return 401, {"error": str(e)}
-
+        return 401, {"error": f"Login failed: {str(e)}"}
 
 @api.post("/logout", auth=django_auth, response=schemas.MessageSchema)
 def logout_view(request):
-    """
-    Logout the current authenticated user
-    
-    Terminates the user's session and clears authentication cookies.
-    Requires the user to be authenticated (enforced by django_auth decorator).
-    
-    Args:
-        request: The Django HTTP request object with authenticated user
-        
-    Returns:
-        dict: Confirmation message that logout was successful
-        
-    Security:
-        - Requires valid authentication (django_auth)
-        - CSRF token required for this endpoint
-        - Clears all session data for the user
-    """
-    # Django's logout function handles clearing the session and cookies
+    """Logout user (requires authentication)"""
     logout(request)
     return {"message": "Logged out successfully"}
 
 
+@api.get("/check-auth")
+def check_auth(request):
+    """Check if user is authenticated"""
+    return {
+        "authenticated": request.user.is_authenticated,
+        "username": request.user.username if request.user.is_authenticated else None,
+        "first_name": request.user.first_name if request.user.is_authenticated else None,
+        "last_name": request.user.last_name if request.user.is_authenticated else None
+    }
+
+
 @api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
-def get_user(request):
-    """
-    Get current authenticated user's basic information
-    
-    Returns the username and email of the currently logged-in user.
-    This endpoint requires authentication and is typically used by the
-    frontend to verify the user's session and display user info.
-    
-    Args:
-        request: The Django HTTP request object with authenticated user
-        
-    Returns:
-        200: User information if authenticated
-        401: Error message if not authenticated
-        
-    Security:
-        - Requires valid authentication (django_auth)
-        - Only returns non-sensitive user information
-    """
-    # Check if the user is authenticated
-    # This should always be true due to django_auth decorator,
-    # but we check as a safety measure
+def get_user_profile(request):
+    """Get detailed profile of current authenticated user including first and last name"""
     if request.user.is_authenticated:
         return 200, {
             "username": request.user.username,
-            "email": request.user.email
+            "email": request.user.email,
+            "first_name": request.user.first_name,
+            "last_name": request.user.last_name,
+            "role": request.user.role,
+            "phone_number": request.user.phone_number,
+            "about_me": request.user.about_me,
+            "verification_status": request.user.verification_status,
+            "creation_date": request.user.creation_date.isoformat() if request.user.creation_date else None
         }
-    # This should not be reached due to django_auth decorator
     return 401, {"error": "Not authenticated"}
 
 
-@api.get("/check-auth")
-def check_auth(request):
-    """
-    Check authentication status without requiring authentication
-    
-    This endpoint allows the frontend to check if a user is currently
-    authenticated without triggering an authentication error. Useful for
-    conditionally rendering UI elements based on auth status.
-    
-    Args:
-        request: The Django HTTP request object
+# Event related endpoints 
+# Create Event
+@api.post("/creat_events", auth=django_auth, response={201: schemas.EventSchema, 400: schemas.ErrorSchema})
+def create_event(request, payload: schemas.EventCreateSchema):
+    """Create a new event (requires authentication)"""
+    try:
+        if payload.end_date_register <= payload.start_date_register:
+            return 400, {"error": "End date must be after start date"}
         
-    Returns:
-        dict: Authentication status and username (if authenticated)
-            - authenticated (bool): True if user is logged in
-            - username (str|None): Username if authenticated, None otherwise
-            
-    Note:
-        This endpoint does NOT require authentication, making it safe
-        to call from any context without handling auth errors.
-    """
-    return {
-        "authenticated": request.user.is_authenticated,
-        # Return username only if authenticated, otherwise None
-        "username": request.user.username if request.user.is_authenticated else None
+        # Create event
+        event = Event.objects.create(
+            event_title=payload.event_title,
+            event_description=payload.event_description,
+            start_date_register=payload.start_date_register,
+            end_date_register=payload.end_date_register,
+            max_attendee=payload.max_attendee,
+            is_online=getattr(payload, 'is_online', False),  
+        )
+        
+        return 201, {
+            "id": event.id,  
+            "event_title": event.event_title,
+            "event_description": event.event_description,
+            "event_create_date": event.event_create_date.isoformat  () if event.event_create_date else None,
+            "max_attendee": event.max_attendee,
+            "start_date_register": event.start_date_register.isoformat() if event.start_date_register else None, 
+            "end_date_register": event.end_date_register.isoformat() if event.end_date_register else None,  
+            "is_online": event.is_online,
+        }
+        
+    except IntegrityError as e:
+        return 400, {"error": f"Event creation failed due to database error: {str(e)}"}
+    except Exception as e:
+        return 400, {"error": f"Event creation failed: {str(e)}"}
+    
+# get all events
+@api.get("/events", response=List[schemas.EventSchema])
+def get_all_events(request):
+    """Get all events"""
+    events = Event.objects.all().order_by('-event_create_date')
+    return [
+        {
+            "id": event.id,
+            "event_title": event.event_title,
+            "event_description": event.event_description,
+            "event_create_date": event.event_create_date.isoformat() if event.event_create_date else None,
+            "max_attendee": event.max_attendee,
+            "start_date_register": event.start_date_register.isoformat() if event.start_date_register else None,
+            "end_date_register": event.end_date_register.isoformat() if event.end_date_register else None,
+            "is_online": event.is_online,
+        }
+        for event in events
+    ]
+
+# get specific event by id
+@api.get("/events/{event_id}", response={200: schemas.EventSchema, 404: schemas.ErrorSchema})
+def get_event(request, event_id: int):
+    """Get a specific event by ID"""
+    event = get_object_or_404(Event, id=event_id)
+    return 200, {
+        "id": event.id,
+        "event_title": event.event_title,
+        "event_description": event.event_description,
+        "event_create_date": event.event_create_date.isoformat() if event.event_create_date else None,
+        "max_attendee": event.max_attendee,
+        "start_date_register": event.start_date_register.isoformat() if event.start_date_register else None,
+        "end_date_register": event.end_date_register.isoformat() if event.end_date_register else None,
+        "is_online": event.is_online,
     }
