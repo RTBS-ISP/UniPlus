@@ -59,96 +59,65 @@ def get_csrf_token(request):
 
 @api.post("/register", response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
 def register(request, payload: schemas.RegisterSchema):
-    """
-    Register a new user account
-    
-    Creates a new AttendeeUser account with the provided credentials.
-    Performs validation to ensure unique email and username, and requires
-    firstName, lastName, phone, and role.
-    
-    Args:
-        request: The Django HTTP request object
-        payload: RegisterSchema containing:
-            - username (str): Unique username for the account
-            - email (str): Unique email address (used as primary login)
-            - password (str): User's password (will be hashed)
-            - firstName (str): User's first name
-            - lastName (str): User's last name
-            - phone (str): User's phone number
-            - role (str): User role (student/organizer)
-    
-    Returns:
-        200: Success response with user data if registration successful
-        400: Error response with specific error message if validation fails
-        
-    Raises:
-        IntegrityError: If database constraints are violated
-        Exception: For any other unexpected errors
-        
-    Security:
-        - Passwords are automatically hashed using Django's password system
-        - Email uniqueness is enforced at the database level
-        - CSRF token required for this endpoint
-    """
+    """Register a new user"""
     try:
-        # Validate that all required fields are provided
-        # This provides a clear error message for missing fields
+        # Validation
         if not payload.username or not payload.email or not payload.password:
             return 400, {"error": "Username, email, and password are required"}
         
-        if not payload.firstName or not payload.lastName:
-            return 400, {"error": "First name and last name are required"}
-        
-        if not payload.phone:
-            return 400, {"error": "Phone number is required"}
-        
-        if not payload.role:
-            return 400, {"error": "Role is required"}
-        
-        # Check if a user with this email already exists
-        # Email is used as the primary authentication field
+        # Check if user already exists
         if AttendeeUser.objects.filter(email=payload.email).exists():
             return 400, {"error": "User with this email already exists"}
         
-        # Check if the username is already taken
-        # Usernames must be unique even though email is the login field
         if AttendeeUser.objects.filter(username=payload.username).exists():
             return 400, {"error": "Username already taken"}
-        
-        # Create the new user account
-        # create_user() method automatically hashes the password
-        # Note: USERNAME_FIELD is 'email', so email is the primary identifier
+
+        # Convert about_me dict to string if it exists
+        about_me_str = None
+        if payload.about_me:
+            import json
+            about_me_str = json.dumps(payload.about_me)
+
         user = AttendeeUser.objects.create_user(
-            email=payload.email,        # Primary authentication field
-            username=payload.username,  # Display name/handle
-            password=payload.password   # Will be hashed automatically
+            email=payload.email,
+            username=payload.username,
+            password=payload.password,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+            phone_number=payload.phone_number,
+            about_me=about_me_str  # Store as JSON string
         )
         
-        # Set additional required fields
-        user.first_name = payload.firstName
-        user.last_name = payload.lastName
-        user.phone_number = payload.phone
-        user.role = payload.role
-        user.save()
+        # Set role if provided
+        if hasattr(payload, 'role') and payload.role:
+            user.role = payload.role
+            user.save()
         
-        # Return success response with basic user information
-        # Note: Never return sensitive data like passwords
+        # Parse about_me back for response
+        about_me_response = None
+        if about_me_str:
+            import json
+            about_me_response = json.loads(about_me_str)
+        
         return 200, {
             "success": True,
             "message": "User registered successfully",
             "user": {
                 "username": user.username,
-                "email": user.email
+                "email": user.email,
+                "first_name": user.first_name, 
+                "last_name": user.last_name,
+                "role": user.role,
+                "phone_number": user.phone_number,
+                "about_me": about_me_response,  # Return as object
+                "verification_status": user.verification_status,
+                "creation_date": user.creation_date.isoformat() if user.creation_date else None
             }
         }
         
     except IntegrityError as e:
-        # Handle database constraint violations
-        # This might occur if there's a race condition with duplicate emails
-        return 400, {"error": f"Database error: {str(e)}"}
+        return 400, {"error": "Registration failed. Please try again."}
     except Exception as e:
-        # Catch-all for any unexpected errors
-        # In production, you might want to log these for debugging
         return 400, {"error": str(e)}
 
 

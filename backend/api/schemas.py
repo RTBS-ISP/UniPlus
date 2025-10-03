@@ -1,14 +1,20 @@
 from ninja import Schema
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 
-# For user registration input
-class RegisterSchema(Schema):
+class AboutMeSchema(BaseModel):
+    faculty: str
+    year: str
+
+class RegisterSchema(BaseModel):
     username: str
     email: str
     password: str
+    first_name: str
+    last_name: str
+    phone_number: str
+    about_me: Dict[str, Any]
     role: str
-    firstName: str    
-    lastName: str     
-    phone: str 
 
 # For login input
 class LoginSchema(Schema):

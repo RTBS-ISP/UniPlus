@@ -82,15 +82,43 @@ function RegisterPage() {
       return;
     }
 
+    // Role-specific validation
+    if (form.role === "student") {
+      if (!form.aboutMe.faculty || !form.aboutMe.year) {
+        setError("Faculty and year are required for students");
+        return;
+      }
+    } else if (form.role === "organizer") {
+      if (!form.aboutMe.organizerName) {
+        setError("Organizer name is required");
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
+      // Get CSRF token
       const csrfRes = await fetch("http://localhost:8000/api/set-csrf-token", {
         method: "GET",
         credentials: "include",
       });
       if (!csrfRes.ok) throw new Error("Failed to get CSRF token");
       const csrfData = await csrfRes.json();
+
+      // Prepare the request body according to your backend schema
+      const requestBody = {
+        username: form.username,
+        email: form.email,
+        password: form.password,
+        first_name: form.firstName, // Changed from firstName to first_name
+        last_name: form.lastName,   // Changed from lastName to last_name
+        phone_number: form.phone,   // Changed from phone to phone_number
+        about_me: form.aboutMe,     // Changed from aboutMe to about_me
+        role: form.role,
+      };
+
+      console.log("Sending request:", requestBody); // For debugging
 
       const res = await fetch("http://localhost:8000/api/register", {
         method: "POST",
@@ -99,27 +127,19 @@ function RegisterPage() {
           "Content-Type": "application/json",
           "X-CSRFToken": csrfData.csrftoken,
         },
-        body: JSON.stringify({
-          username: form.username,
-          email: form.email,
-          password: form.password,
-          role: form.role,
-          firstName: form.firstName,
-          lastName: form.lastName,
-          phone: form.phone,
-          aboutMe: form.aboutMe,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await res.json();
-      if (data.success) {
+      
+      if (res.ok && data.success) {
         alert("Registered successfully! Please login.");
         router.push("/login");
       } else {
         setError(data.error || data.message || "Registration failed");
       }
     } catch (err) {
-      console.error(err);
+      console.error("Registration error:", err);
       setError(
         err instanceof Error ? err.message : "Something went wrong. Please try again."
       );
@@ -138,7 +158,7 @@ function RegisterPage() {
             className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:bg-gray-200 transition"
             aria-label="Back to home"
           >
-          <X className="w-6 h-6" />
+            <X className="w-6 h-6" />
           </button>
           <h2 className="text-3xl font-bold mb-8 text-black">Choose Your Role</h2>
           <div className="grid grid-cols-2 gap-8">
@@ -278,87 +298,87 @@ function RegisterPage() {
               </div>
 
               {form.role && (
-              <div>
-                {form.role === "student" ? (
-                  <div className="flex gap-4">
-                    {/* Faculty Dropdown */}
-                    <div className="flex flex-col w-1/2">
-                      <label className="flex items-start text-xs p-2 text-black">Faculty</label>
-                      <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
-                        <select
-                          name="faculty"
-                          value={form.aboutMe.faculty || ""}
-                          onChange={handleChange}
-                          className="bg-gray-100 text-black outline-none text-sm w-full px-3"
-                          required
-                        >
-                          <option value="" disabled>
-                            Select your faculty
-                          </option>
-                          <option value="Agriculture">Agriculture</option>
-                          <option value="Agro-industry">Agro-Industry</option>
-                          <option value="Architecture">Architecture</option>
-                          <option value="Business">Business Administration</option>
-                          <option value="Economics">Economics</option>
-                          <option value="Education">Education</option>
-                          <option value="Engineering">Engineering</option>
-                          <option value="Environment">Environment</option>
-                          <option value="Fisheries">Fisheries</option>
-                          <option value="Forestry">Forestry</option>
-                          <option value="Humanities">Humanities</option>
-                          <option value="Medicine">Medicine</option>
-                          <option value="Nursing">Nursing</option>
-                          <option value="Pharmaceutical_sciences">Pharmaceutical Sciences</option>
-                          <option value="Science">Science</option>
-                          <option value="Social_sciences">Social Sciences</option>
-                          <option value="Veterinary_medicine">Veterinary Medicine</option>
-                          <option value="Veterinary_technology">Veterinary Technology</option>
-                          <option value="Interdisciplinary_management_and_technology">
-                            Interdisciplinary Management and Technology
-                          </option>
-                        </select>
+                <div>
+                  {form.role === "student" ? (
+                    <div className="flex gap-4">
+                      {/* Faculty Dropdown */}
+                      <div className="flex flex-col w-1/2">
+                        <label className="flex items-start text-xs p-2 text-black">Faculty</label>
+                        <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                          <select
+                            name="faculty"
+                            value={form.aboutMe.faculty || ""}
+                            onChange={handleChange}
+                            className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                            required
+                          >
+                            <option value="" disabled>
+                              Select your faculty
+                            </option>
+                            <option value="Agriculture">Agriculture</option>
+                            <option value="Agro-industry">Agro-Industry</option>
+                            <option value="Architecture">Architecture</option>
+                            <option value="Business">Business Administration</option>
+                            <option value="Economics">Economics</option>
+                            <option value="Education">Education</option>
+                            <option value="Engineering">Engineering</option>
+                            <option value="Environment">Environment</option>
+                            <option value="Fisheries">Fisheries</option>
+                            <option value="Forestry">Forestry</option>
+                            <option value="Humanities">Humanities</option>
+                            <option value="Medicine">Medicine</option>
+                            <option value="Nursing">Nursing</option>
+                            <option value="Pharmaceutical_sciences">Pharmaceutical Sciences</option>
+                            <option value="Science">Science</option>
+                            <option value="Social_sciences">Social Sciences</option>
+                            <option value="Veterinary_medicine">Veterinary Medicine</option>
+                            <option value="Veterinary_technology">Veterinary Technology</option>
+                            <option value="Interdisciplinary_management_and_technology">
+                              Interdisciplinary Management and Technology
+                            </option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Year Field */}
+                      <div className="flex flex-col w-1/2">
+                        <label className="flex items-start text-xs p-2 text-black">Year</label>
+                        <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                          <input
+                            type="number"
+                            name="year"
+                            placeholder="Enter your year (e.g. 1)"
+                            value={form.aboutMe.year || ""}
+                            onChange={handleChange}
+                            className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                            min="1"
+                            max="8"
+                            required
+                          />
+                        </div>
                       </div>
                     </div>
-
-                    {/* Year Field */}
-                    <div className="flex flex-col w-1/2">
-                      <label className="flex items-start text-xs p-2 text-black">Year</label>
+                  ) : (
+                    <>
+                      {/* Organizer Name */}
+                      <label className="flex items-start text-xs p-2 text-black">
+                        Organizer Name
+                      </label>
                       <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
                         <input
-                          type="number"
-                          name="year"
-                          placeholder="Enter your year (e.g. 1)"
-                          value={form.aboutMe.year || ""}
+                          type="text"
+                          name="organizerName"
+                          placeholder="Enter your organizer name (e.g. Kasetsart University)"
+                          value={form.aboutMe.organizerName || ""}
                           onChange={handleChange}
                           className="bg-gray-100 text-black outline-none text-sm w-full px-3"
-                          min="1"
-                          max="8"
                           required
                         />
                       </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* Organizer Name */}
-                    <label className="flex items-start text-xs p-2 text-black">
-                      Organizer Name
-                    </label>
-                    <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
-                      <input
-                        type="text"
-                        name="organizerName"
-                        placeholder="Enter your organizer name (e.g. Kasetsart University)"
-                        value={form.aboutMe.organizerName || ""}
-                        onChange={handleChange}
-                        className="bg-gray-100 text-black outline-none text-sm w-full px-3"
-                        required
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Password & Confirm */}
               <div>
@@ -421,7 +441,7 @@ function RegisterPage() {
                 {/* Right side: Confirm + Cancel */}
                 <div className="flex items-center space-x-3"> 
                   <Link href='/' className='text-gray-500 hover:underline flex item-center text-sm py-2'>
-                  Cancel
+                    Cancel
                   </Link>
 
                   <button
