@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 class AboutMeSchema(BaseModel):
     faculty: str
     year: str
+    organization_name: str
 
 class RegisterSchema(BaseModel):
     username: str
