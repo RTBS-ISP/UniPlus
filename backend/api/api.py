@@ -155,7 +155,7 @@ def get_user_profile(request):
 
 # Event related endpoints 
 # Create Event
-@api.post("/creat_events", auth=django_auth, response={201: schemas.EventSchema, 400: schemas.ErrorSchema})
+@api.post("/create_events", auth=django_auth, response={201: schemas.EventSchema, 400: schemas.ErrorSchema})
 def create_event(request, payload: schemas.EventCreateSchema):
     """Create a new event (requires authentication)"""
     try:
