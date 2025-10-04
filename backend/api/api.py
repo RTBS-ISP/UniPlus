@@ -12,11 +12,18 @@ from django.middleware.csrf import get_token
 from django.db import IntegrityError
 from api.model.user import AttendeeUser
 from api.model.event import Event
+from api.model.ticket import Ticket
 from api import schemas
 from typing import List
 from ninja import File, Form
 from ninja.files import UploadedFile
 from typing import Optional
+
+
+
+from django.utils import timezone
+from django.shortcuts import get_object_or_404
+
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
@@ -225,27 +232,6 @@ def logout_view(request):
 
 @api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
 def get_user(request):
-    """
-    Get current authenticated user's basic information
-    
-    Returns the username and email of the currently logged-in user.
-    This endpoint requires authentication and is typically used by the
-    frontend to verify the user's session and display user info.
-    
-    Args:
-        request: The Django HTTP request object with authenticated user
-        
-    Returns:
-        200: User information if authenticated
-        401: Error message if not authenticated
-        
-    Security:
-        - Requires valid authentication (django_auth)
-        - Only returns non-sensitive user information
-    """
-    # Check if the user is authenticated
-    # This should always be true due to django_auth decorator,
-    # but we check as a safety measure
     if request.user.is_authenticated:
         import json
         about_me_data = None
@@ -255,6 +241,36 @@ def get_user(request):
             except:
                 about_me_data = {}
 
+        tickets = []
+        
+        if hasattr(request.user, 'my_tickets') and request.user.my_tickets.exists():
+            for ticket in request.user.my_tickets.all().select_related('event', 'event__organizer'):
+                try:
+                    event = ticket.event
+                    ticket_data = {
+                        "date": event.start_date_register.strftime("%Y-%m-%d") if event and event.start_date_register else None,
+                        "time": event.start_date_register.strftime("%H:%M:%S") if event and event.start_date_register else None,
+                        "location": event.event_address if event else None,
+                        "organizer": event.organizer.username if event and event.organizer else None,
+                        "user_information": {
+                            "name": f"{request.user.first_name} {request.user.last_name}",
+                            "firstName": request.user.first_name,
+                            "lastName": request.user.last_name,
+                            "email": request.user.email,
+                            "phone": request.user.phone_number
+                        },
+                        "event_title": event.event_title if event else None,
+                        "event_description": event.event_description if event else None,
+                        "ticket_number": ticket.qr_code,
+                        "event_id": event.id if event else None,
+                        "is_online": ticket.is_online,
+                        "event_meeting_link": ticket.meeting_link
+                    }
+                    tickets.append(ticket_data)
+                except Exception as e:
+                    print(f"Error processing ticket: {e}")
+                    continue
+
         return 200, {
             "username": request.user.username,
             "email": request.user.email,
@@ -263,9 +279,9 @@ def get_user(request):
             "phone": request.user.phone_number,
             "role": request.user.role,
             "aboutMe": about_me_data,
-            "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC
+            "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC,  # Fixed typo here
+            "tickets": tickets
         }
-    # This should not be reached due to django_auth decorator
     return 401, {"error": "Not authenticated"}
 
 
@@ -362,7 +378,9 @@ def get_list_events(request):
         "event_address": e.event_address,
         "is_online": e.is_online,
         "status_registration": e.status_registration,
+        "attendee": e.attendee, 
     } for e in events]
+
     
 @api.patch("/user", auth=django_auth, response={200: schemas.UserSchema, 400: schemas.ErrorSchema})
 def update_user(
@@ -403,3 +421,98 @@ def update_user(
         "aboutMe": about_me_data,
         "profilePic": user.profile_picture.url if user.profile_picture else DEFAULT_PROFILE_PIC,
     }
+
+
+@api.post("/events/{event_id}/register", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def register_for_event(request, event_id: int):
+    """
+    Register the authenticated user for an event,
+    update AttendeeUser.tickets and Event.attendee
+    """
+    try:
+        from django.utils import timezone
+        from api.model.ticket import Ticket
+        from api.model.user import AttendeeUser
+        from api.model.event import Event
+        import uuid
+        from datetime import datetime
+
+        # Get event & user
+        event = get_object_or_404(Event, id=event_id)
+        user = request.user
+
+        # Already registered?
+        if Ticket.objects.filter(event=event, attendee_user=user).exists():
+            return 400, {"error": "You are already registered for this event"}
+
+        # Registration period check
+        if timezone.now() > event.end_date_register:
+            return 400, {"error": "Event registration has closed"}
+
+        # Max attendee check
+        if event.max_attendee and Ticket.objects.filter(event=event).count() >= event.max_attendee:
+            return 400, {"error": "Event has reached maximum attendees"}
+
+        # Status check
+        if event.status_registration != "OPEN":
+            return 400, {"error": "Event registration is not open"}
+
+        # Create ticket
+        qr_code_value = str(uuid.uuid4())
+        ticket = Ticket.objects.create(
+            event=event,
+            attendee_user=user,
+            ticket_title=f"Ticket for {event.event_title}",
+            qr_code=qr_code_value,
+            is_online=event.is_online,
+            meeting_link=event.event_meeting_link if event.is_online else None
+        )
+
+        # ✅ Update AttendeeUser.tickets (append to list)
+        attendee = user
+
+
+        new_ticket_info = {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "location": event.event_address,
+            "organizer": event.organizer.username,
+            "user_information": {
+                "name": f"{user.first_name} {user.last_name}",
+                "firstName": user.first_name,
+                "lastName": user.last_name,
+                "email": user.email,
+                "phone": attendee.phone if hasattr(attendee, 'phone') else "",
+            },
+            "event_title": event.event_title,
+            "event_description": event.event_description,
+            "ticket_number": qr_code_value,
+            "event_id": event.id,
+            "is_online": event.is_online,
+            "event_meeting_link": event.event_meeting_link,
+        }
+
+        tickets = attendee.ticket if isinstance(attendee.ticket, list) else []
+        tickets.append(new_ticket_info)
+        attendee.ticket = tickets
+        attendee.save()
+
+        # ✅ Update Event.attendee (append user ID)
+        attendees = event.attendee if isinstance(event.attendee, list) else []
+        if user.id not in attendees:
+            attendees.append(user.id)
+        event.attendee = attendees
+        event.save()
+
+        return 200, {
+            "success": True,
+            "message": "Successfully registered for the event",
+            "ticket_number": qr_code_value
+        }
+
+    except Event.DoesNotExist:
+        return 400, {"error": "Event not found"}
+    except AttendeeUser.DoesNotExist:
+        return 400, {"error": "AttendeeUser profile not found"}
+    except Exception as e:
+        return 400, {"error": str(e)}

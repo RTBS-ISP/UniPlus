@@ -1,9 +1,7 @@
 from django.db import models
-from django.contrib.auth.models import AbstractUser
 from .socials import Social
 from .user import AttendeeUser
 
-# the class for events used for event creation in the create event page 
 class Event(models.Model):
     organizer = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="events")
     social = models.ForeignKey(Social, on_delete=models.SET_NULL, null=True, blank=True, related_name="events")
@@ -28,6 +26,7 @@ class Event(models.Model):
     verification_status = models.CharField(max_length=50, blank=True, null=True)
     terms_and_conditions = models.TextField(blank=True, null=True)
     event_updated_at = models.DateTimeField(auto_now=True)
+    attendee = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return self.event_title

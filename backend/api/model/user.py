@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractUser
 # base class for all users 
 class AttendeeUser(AbstractUser):
     email = models.EmailField(unique=True)
+    ticket = models.CharField(max_length=255, null=True, blank=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     role = models.CharField(max_length=50, blank=True, null=True, default="Attendee")
     about_me = models.TextField(blank=True, null=True)
