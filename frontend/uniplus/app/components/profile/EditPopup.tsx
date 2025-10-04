@@ -44,7 +44,7 @@ export default function EditPopup({
   );
   const [file, setFile] = useState<File | null>(null);
 
-  // ✅ Reset on popup open
+  // Reset on popup open
   useEffect(() => {
     if (open) {
       setFirstName(initialData.firstName ?? "");
@@ -69,7 +69,7 @@ export default function EditPopup({
     }
   };
 
-  // ✅ Validation rules
+  // Validation rules
   const isPhoneValid =
     phone.trim() === "" || /^\d{10}$/.test(phone.trim()); // allow empty or exactly 10 digits
   const isFirstNameValid =
@@ -80,13 +80,12 @@ export default function EditPopup({
   const isFormValid = isPhoneValid && isFirstNameValid && isLastNameValid;
 
   const handleSubmit = () => {
-    if (!isFormValid) return; // safety net
+    if (!isFormValid) return; 
 
     const dataToSave: any = {
       firstName: firstName.trim() !== "" ? firstName : initialData.firstName,
       lastName: lastName.trim() !== "" ? lastName : initialData.lastName,
-      phone: phone.trim() !== "" ? phone : initialData.phone,
-      profilePic: profilePic || initialData.profilePic,
+      phone: phone.trim() !== "" ? phone : initialData.phone
     };
 
     if (role === "student") {
@@ -111,6 +110,10 @@ export default function EditPopup({
       };
     }
 
+    if (file) {
+      dataToSave.file = file; // send the File object for upload
+    }
+
     onSave(dataToSave);
   };
 
@@ -126,10 +129,18 @@ export default function EditPopup({
           <div className="flex flex-col items-center">
             {profilePic ? (
               <img
-                src={profilePic}
+                src={
+                    profilePic?.startsWith("data:")       
+                    ? profilePic
+                    : profilePic?.startsWith("/images") 
+                    ? profilePic
+                    : profilePic                       
+                    ? `http://localhost:8000${profilePic}`
+                    : "/images/logo.png"        
+                }
                 alt="Preview"
                 className="w-[256px] h-[297px] object-cover rounded-xl mb-2"
-              />
+                />
             ) : (
               <div className="w-[256px] h-[297px] bg-gray-200 flex items-center justify-center rounded-xl mb-2">
                 <span className="text-gray-500 text-sm">No image</span>
