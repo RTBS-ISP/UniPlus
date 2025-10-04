@@ -4,7 +4,8 @@ This module handles user authentication and authorization for the UniPlus platfo
 It provides endpoints for user registration, login, logout, and profile management.
 """
 
-from ninja import NinjaAPI
+from ninja import NinjaAPI, Form
+from ninja.files import UploadedFile
 from ninja.security import django_auth
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
@@ -17,10 +18,11 @@ from ninja import File, Form
 from ninja.files import UploadedFile
 from typing import Optional
 
+DEFAULT_PROFILE_PIC = "/images/logo.png" 
+
 # Initialize the NinjaAPI instance with CSRF protection enabled
 # This ensures all POST/PUT/DELETE requests require a valid CSRF token
 api = NinjaAPI(csrf=True)
-
 
 @api.get("/", response=schemas.MessageSchema)
 def home(request):
@@ -245,9 +247,23 @@ def get_user(request):
     # This should always be true due to django_auth decorator,
     # but we check as a safety measure
     if request.user.is_authenticated:
+        import json
+        about_me_data = None
+        if request.user.about_me:
+            try:
+                about_me_data = json.loads(request.user.about_me)
+            except:
+                about_me_data = {}
+
         return 200, {
             "username": request.user.username,
-            "email": request.user.email
+            "email": request.user.email,
+            "firstName": request.user.first_name,
+            "lastName": request.user.last_name,
+            "phone": request.user.phone_number,
+            "role": request.user.role,
+            "aboutMe": about_me_data,
+            "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC
         }
     # This should not be reached due to django_auth decorator
     return 401, {"error": "Not authenticated"}
@@ -347,3 +363,43 @@ def get_list_events(request):
         "is_online": e.is_online,
         "status_registration": e.status_registration,
     } for e in events]
+    
+@api.patch("/user", auth=django_auth, response={200: schemas.UserSchema, 400: schemas.ErrorSchema})
+def update_user(
+    request,
+    firstName: str = Form(None),
+    lastName: str = Form(None),
+    phone: str = Form(None),
+    aboutMe: str = Form(None),
+    profilePic: UploadedFile = None
+):
+    user = request.user
+    if firstName:
+        user.first_name = firstName
+    if lastName:
+        user.last_name = lastName
+    if phone:
+        user.phone_number = phone
+    if aboutMe:
+        import json
+        user.about_me = aboutMe  # already a JSON string from frontend
+
+    if profilePic:
+        # Save uploaded file to user.profile_picture field
+        user.profile_picture.save(profilePic.name, profilePic, save=True)
+
+    user.save()
+
+    import json
+    about_me_data = json.loads(user.about_me) if user.about_me else None
+
+    return 200, {
+        "username": user.username,
+        "email": user.email,
+        "firstName": user.first_name,
+        "lastName": user.last_name,
+        "phone": user.phone_number,
+        "role": user.role,
+        "aboutMe": about_me_data,
+        "profilePic": user.profile_picture.url if user.profile_picture else DEFAULT_PROFILE_PIC,
+    }
