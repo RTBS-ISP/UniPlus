@@ -153,22 +153,6 @@ function ProfilePage() {
                 </div>
               </div>
             </div>
-
-            {/* Right Side: Stats */}
-            <div className="grid grid-cols-3 gap-6 items-center px-6">
-              <div className="text-center bg-indigo-50 rounded-lg px-12 py-5 shadow">
-                <div className="text-sm text-gray-500">Registered</div>
-                <div className="text-2xl font-bold text-indigo-600">12</div>
-              </div>
-              <div className="text-center bg-indigo-50 rounded-lg px-12 py-5 shadow">
-                <div className="text-sm text-gray-500">Finished</div>
-                <div className="text-2xl font-bold text-indigo-600">8</div>
-              </div>
-              <div className="text-center bg-indigo-50 rounded-lg px-12 py-5 shadow">
-                <div className="text-sm text-gray-500">Saved</div>
-                <div className="text-2xl font-bold text-indigo-600">5</div>
-              </div>
-            </div>
           </div>
         </div>
 
