@@ -221,33 +221,6 @@ export default function EditPopup({
               </>
             )}
 
-            {role === "student" && (
-              <>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Faculty
-                </label>
-                <input
-                  type="text"
-                  className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
-                  value={aboutMe.faculty || ""}
-                  onChange={(e) =>
-                    setAboutMe((prev) => ({ ...prev, faculty: e.target.value }))
-                  }
-                />
-
-                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                  Year
-                </label>
-                <input
-                  type="text"
-                  className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
-                  value={aboutMe.year || ""}
-                  onChange={(e) =>
-                    setAboutMe((prev) => ({ ...prev, year: e.target.value }))
-                  }
-                />
-              </>
-            )}
           </div>
         </div>
 
