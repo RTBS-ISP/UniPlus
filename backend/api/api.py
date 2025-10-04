@@ -11,7 +11,12 @@ from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
 from django.db import IntegrityError
 from api.model.user import AttendeeUser
+from api.model.event import Event
 from api import schemas
+from typing import List
+from ninja import File, Form
+from ninja.files import UploadedFile
+from typing import Optional
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
@@ -192,7 +197,7 @@ def login_view(request, payload: schemas.LoginSchema):
         # Handle any unexpected errors during login
         # In production, log these errors for debugging
         return 401, {"error": str(e)}
-
+    
 
 @api.post("/logout", auth=django_auth, response=schemas.MessageSchema)
 def logout_view(request):
@@ -290,6 +295,74 @@ def check_auth(request):
         # Return username only if authenticated, otherwise None
         "username": request.user.username if request.user.is_authenticated else None
     }
+
+@api.post("/events/create", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def create_event(
+    request,
+    event_title: str = Form(...),
+    event_description: str = Form(...),
+    start_date_register: str = Form(...),
+    end_date_register: str = Form(...),
+    is_online: str = Form("false"),
+    max_attendee: Optional[str] = Form(None),
+    event_address: Optional[str] = Form(None),
+    event_meeting_link: Optional[str] = Form(None),
+    event_category: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    event_email: Optional[str] = Form(None),
+    event_phone_number: Optional[str] = Form(None),
+    event_website_url: Optional[str] = Form(None),
+    terms_and_conditions: Optional[str] = Form(None),
+    event_image: Optional[UploadedFile] = File(None),
+):
+    """Create a new event with file upload support"""
+    try:
+        from datetime import datetime
+        
+        event = Event.objects.create(
+            organizer=request.user,
+            event_title=event_title,
+            event_description=event_description,
+            start_date_register=datetime.fromisoformat(start_date_register.replace('Z', '+00:00')),
+            end_date_register=datetime.fromisoformat(end_date_register.replace('Z', '+00:00')),
+            max_attendee=int(max_attendee) if max_attendee else None,
+            event_address=event_address,
+            is_online=(is_online.lower() == 'true'),
+            event_meeting_link=event_meeting_link,
+            event_category=event_category,
+            tags=tags,
+            event_email=event_email,
+            event_phone_number=event_phone_number,
+            event_website_url=event_website_url,
+            terms_and_conditions=terms_and_conditions,
+            event_image=event_image if event_image else None,
+        )
+        
+        return 200, {
+            "success": True,
+            "message": "Event created successfully",
+        }
+        
+    except Exception as e:
+        return 400, {"error": str(e)}
+
+@api.get("/events", response=List[schemas.EventSchema])
+def get_list_events(request):
+    """Get all events"""
+    events = Event.objects.all().select_related('organizer')
+    return [{
+        "id": e.id,
+        "event_title": e.event_title,
+        "event_description": e.event_description,
+        "organizer_username": e.organizer.username,
+        "event_create_date": e.event_create_date,
+        "start_date_register": e.start_date_register,
+        "end_date_register": e.end_date_register,
+        "max_attendee": e.max_attendee,
+        "event_address": e.event_address,
+        "is_online": e.is_online,
+        "status_registration": e.status_registration,
+    } for e in events]
     
 @api.patch("/user", auth=django_auth, response={200: schemas.UserSchema, 400: schemas.ErrorSchema})
 def update_user(

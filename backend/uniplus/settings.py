@@ -155,7 +155,8 @@ USE_TZ = True
 # Static files
 # ===========================
 STATIC_URL = 'static/'  # URL prefix for static files
-
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 # ===========================
 # Default primary key
 # ===========================
