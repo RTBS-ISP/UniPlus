@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react'
 import Navbar from "../components/navbar";
 import EditPopup from '../components/profile/EditPopup';
-import Image from 'next/image';
 
 interface AboutMe {
   faculty?: string;
@@ -55,18 +54,26 @@ function ProfilePage() {
 
   const handleEditSave = async (data: any) => {
     const csrftoken = getCookie("csrftoken");
+    const formData = new FormData();
+
+    if (data.firstName) formData.append("firstName", data.firstName);
+    if (data.lastName) formData.append("lastName", data.lastName);
+    if (data.phone) formData.append("phone", data.phone);
+    if (data.aboutMe) formData.append("aboutMe", JSON.stringify(data.aboutMe));
+    if (data.file) formData.append("profilePic", data.file);
+
     const res = await fetch("http://localhost:8000/api/user", {
       method: "PATCH",
       credentials: "include",
       headers: {
-        "Content-Type": "application/json",
         "X-CSRFToken": csrftoken ?? "",
       },
-      body: JSON.stringify(data),
+      body: formData,
     });
 
     if (res.ok) {
       const updatedUser = await res.json();
+      console.log("Profile updated", updatedUser);
       setUser(updatedUser);
       setEditOpen(false);
     } else {
@@ -99,13 +106,17 @@ function ProfilePage() {
           <div className="bg-white rounded-2xl shadow-2xl flex justify-between p-6">
             {/* Left Side: Profile Info */}
             <div className="flex flex-row gap-x-6">
-              <Image
-                src={user.profilePic || "/images/logo.png"}
-                alt="Profile Picture"
-                width={256}
-                height={297}
-                className='rounded-xl object-cover'
-              />
+              <div className="w-64 h-72 overflow-hidden rounded-xl">
+                <img
+                  src={
+                    user.profilePic.startsWith("/images")
+                      ? user.profilePic
+                      : `http://localhost:8000${user.profilePic}`
+                  }
+                  alt="Profile Picture"
+                  className="w-full h-full object-cover"
+                />
+              </div>
               <div className="flex flex-col justify-start">
                 <div className='text-black font-extrabold text-4xl'>
                   {user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1)}{" "}
