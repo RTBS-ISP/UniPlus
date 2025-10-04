@@ -13,6 +13,9 @@ from api.model.user import AttendeeUser
 from api.model.event import Event
 from api import schemas
 from typing import List
+from ninja import File, Form
+from ninja.files import UploadedFile
+from typing import Optional
 
 # Initialize the NinjaAPI instance with CSRF protection enabled
 # This ensures all POST/PUT/DELETE requests require a valid CSRF token
@@ -278,38 +281,54 @@ def check_auth(request):
     }
 
 @api.post("/events/create", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
-def create_event(request, payload: schemas.EventCreateSchema):
-    """
-    create event
-    """
+def create_event(
+    request,
+    event_title: str = Form(...),
+    event_description: str = Form(...),
+    start_date_register: str = Form(...),
+    end_date_register: str = Form(...),
+    is_online: str = Form("false"),
+    max_attendee: Optional[str] = Form(None),
+    event_address: Optional[str] = Form(None),
+    event_meeting_link: Optional[str] = Form(None),
+    event_category: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
+    event_email: Optional[str] = Form(None),
+    event_phone_number: Optional[str] = Form(None),
+    event_website_url: Optional[str] = Form(None),
+    terms_and_conditions: Optional[str] = Form(None),
+    event_image: Optional[UploadedFile] = File(None),
+):
+    """Create a new event with file upload support"""
     try:
-        # Create event with authenticated user as organizer
+        from datetime import datetime
+        
         event = Event.objects.create(
             organizer=request.user,
-            event_title=payload.event_title,
-            event_description=payload.event_description,
-            start_date_register=payload.start_date_register,
-            end_date_register=payload.end_date_register,
-            max_attendee=payload.max_attendee,
-            event_address=payload.event_address,
-            is_online=payload.is_online,
-            event_meeting_link=payload.event_meeting_link,
-            event_category=payload.event_category,
-            tags=payload.tags,
-            event_email=payload.event_email,
-            event_phone_number=payload.event_phone_number,
-            event_website_url=payload.event_website_url,
-            terms_and_conditions=payload.terms_and_conditions,
+            event_title=event_title,
+            event_description=event_description,
+            start_date_register=datetime.fromisoformat(start_date_register.replace('Z', '+00:00')),
+            end_date_register=datetime.fromisoformat(end_date_register.replace('Z', '+00:00')),
+            max_attendee=int(max_attendee) if max_attendee else None,
+            event_address=event_address,
+            is_online=(is_online.lower() == 'true'),
+            event_meeting_link=event_meeting_link,
+            event_category=event_category,
+            tags=tags,
+            event_email=event_email,
+            event_phone_number=event_phone_number,
+            event_website_url=event_website_url,
+            terms_and_conditions=terms_and_conditions,
+            event_image=event_image if event_image else None,
         )
-
+        
         return 200, {
             "success": True,
-            "message": "Event has been created successfully"
+            "message": "Event created successfully",
         }
-
+        
     except Exception as e:
         return 400, {"error": str(e)}
-    
 
 @api.get("/events", response=List[schemas.EventSchema])
 def get_list_events(request):

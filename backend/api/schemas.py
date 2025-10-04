@@ -49,7 +49,7 @@ class EventCreateSchema(Schema):
     start_date_register: datetime
     end_date_register: datetime
     max_attendee: Optional[int] = None
-    event_address: str
+    event_address: Optional[str] = None 
     is_online: bool = False
     event_meeting_link: Optional[str] = None
     event_category: Optional[str] = None
