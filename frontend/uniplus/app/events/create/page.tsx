@@ -5,6 +5,8 @@ import Link from "next/link";
 import Navbar from "../../components/navbar";
 import TagPicker from "../../components/forms/TagPicker";
 
+
+
 type FormData = {
   name: string;
   students: string;
@@ -37,12 +39,66 @@ export default function EventCreatePage() {
     reader.readAsDataURL(file);
   };
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // TODO: send to API
-    console.log("Create event payload", data);
-    alert("Event created! (mock)");
-  };
+const submit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  try {
+    // Get CSRF token
+    const csrfRes = await fetch("http://localhost:8000/api/set-csrf-token", {
+      method: "GET",
+      credentials: "include",
+    });
+    
+    if (!csrfRes.ok) {
+      throw new Error("Failed to get CSRF token");
+    }
+    
+    const csrfData = await csrfRes.json();
+
+    // Create proper datetime strings
+    const now = new Date();
+    const thirtyDaysLater = new Date(now);
+    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
+
+    // Create event
+    const res = await fetch("http://localhost:8000/api/events/create", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfData.csrftoken,
+      },
+      body: JSON.stringify({
+        event_title: data.name,
+        event_description: data.description,
+        start_date_register: now.toISOString(),
+        end_date_register: thirtyDaysLater.toISOString(),
+        max_attendee: data.students ? parseInt(data.students) : null,
+        event_category: data.faculty || null,
+        tags: [...data.hostTags, ...data.attendeeTags, data.year].filter(Boolean).join(',') || null,
+        is_online: false,
+        event_meeting_link: "",
+        event_address: "",
+        event_email: "",
+        event_phone_number: "",
+        event_website_url: "",
+        terms_and_conditions: "",
+      }),
+    });
+
+    const result = await res.json();
+    
+    if (result.success) {
+      alert("Event created successfully!");
+      window.location.href = "/events";
+    } else {
+      alert("Error: " + (result.error || "Failed to create event"));
+    }
+  } catch (err) {
+    console.error("Create event error:", err);
+    alert("Failed to create event. Make sure you're logged in and all required fields are filled.");
+  }
+};
 
   return (
     <div className="min-h-screen bg-[#ece8f3]">
