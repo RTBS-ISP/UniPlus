@@ -18,7 +18,7 @@ class Event(models.Model):
     is_online = models.BooleanField(default=False)
     event_meeting_link = models.URLField(blank=True, null=True)
     event_category = models.CharField(max_length=100, blank=True, null=True)
-    tags = models.CharField(max_length=200, blank=True, null=True)
+    tags = models.CharField(max_length=500, blank=True, null=True)
     whitelisted_emails = models.TextField(blank=True, null=True)
     blacklisted_emails = models.TextField(blank=True, null=True)
     status_registration = models.CharField(max_length=50, default="OPEN")
