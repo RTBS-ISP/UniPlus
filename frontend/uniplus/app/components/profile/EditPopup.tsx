@@ -44,6 +44,7 @@ export default function EditPopup({
   );
   const [file, setFile] = useState<File | null>(null);
 
+  // ✅ Reset on popup open
   useEffect(() => {
     if (open) {
       setFirstName(initialData.firstName ?? "");
@@ -68,7 +69,19 @@ export default function EditPopup({
     }
   };
 
+  // ✅ Validation rules
+  const isPhoneValid =
+    phone.trim() === "" || /^\d{10}$/.test(phone.trim()); // allow empty or exactly 10 digits
+  const isFirstNameValid =
+    firstName.trim() === "" || /^[A-Za-z\s]+$/.test(firstName.trim());
+  const isLastNameValid =
+    lastName.trim() === "" || /^[A-Za-z\s]+$/.test(lastName.trim());
+
+  const isFormValid = isPhoneValid && isFirstNameValid && isLastNameValid;
+
   const handleSubmit = () => {
+    if (!isFormValid) return; // safety net
+
     const dataToSave: any = {
       firstName: firstName.trim() !== "" ? firstName : initialData.firstName,
       lastName: lastName.trim() !== "" ? lastName : initialData.lastName,
@@ -135,35 +148,59 @@ export default function EditPopup({
 
           {/* Right: Inputs */}
           <div className="flex-1">
+            {/* First Name */}
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               First Name
             </label>
             <input
               type="text"
-              className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
+              className={`text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-1 ${
+                !isFirstNameValid ? "border border-red-500" : ""
+              }`}
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
             />
+            {!isFirstNameValid && (
+              <p className="text-red-500 text-sm mb-2">
+                First name should not contain numbers or special characters.
+              </p>
+            )}
 
+            {/* Last Name */}
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Last Name
             </label>
             <input
               type="text"
-              className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
+              className={`text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-1 ${
+                !isLastNameValid ? "border border-red-500" : ""
+              }`}
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
             />
+            {!isLastNameValid && (
+              <p className="text-red-500 text-sm mb-2">
+                Last name should not contain numbers or special characters.
+              </p>
+            )}
 
+            {/* Phone */}
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Phone Number
             </label>
             <input
               type="text"
-              className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
+              className={`text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-1 ${
+                !isPhoneValid ? "border border-red-500" : ""
+              }`}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
+            {!isPhoneValid && (
+              <p className="text-red-500 text-sm mb-2">
+                Phone number must be exactly 10 digits and not contain special characters.
+              </p>
+            )}
 
             {role === "organizer" && (
               <>
@@ -214,6 +251,7 @@ export default function EditPopup({
           </div>
         </div>
 
+        {/* Action Buttons */}
         <div className="flex justify-end gap-3">
           <button
             onClick={onClose}
@@ -223,7 +261,14 @@ export default function EditPopup({
           </button>
           <button
             onClick={handleSubmit}
-            className="inline-flex items-center justify-center px-6 py-2 text-base font-bold leading-6 text-white bg-indigo-500 border border-transparent rounded hover:bg-indigo-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!isFormValid}
+            className={`inline-flex items-center justify-center px-6 py-2 text-base font-bold leading-6 text-white 
+              ${
+                isFormValid
+                  ? "bg-indigo-500 hover:bg-indigo-400 focus:ring-indigo-400"
+                  : "bg-gray-400 cursor-not-allowed"
+              } 
+              border border-transparent rounded focus:outline-none focus:ring-2 focus:ring-offset-2`}
           >
             Save
           </button>
