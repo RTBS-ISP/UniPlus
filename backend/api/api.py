@@ -4,7 +4,8 @@ This module handles user authentication and authorization for the UniPlus platfo
 It provides endpoints for user registration, login, logout, and profile management.
 """
 
-from ninja import NinjaAPI
+from ninja import NinjaAPI, Form
+from ninja.files import UploadedFile
 from ninja.security import django_auth
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
@@ -291,19 +292,29 @@ def check_auth(request):
     }
     
 @api.patch("/user", auth=django_auth, response={200: schemas.UserSchema, 400: schemas.ErrorSchema})
-def update_user(request, payload: schemas.UpdateUserSchema):
+def update_user(
+    request,
+    firstName: str = Form(None),
+    lastName: str = Form(None),
+    phone: str = Form(None),
+    aboutMe: str = Form(None),
+    profilePic: UploadedFile = None
+):
     user = request.user
-    if payload.firstName is not None:
-        user.first_name = payload.firstName
-    if payload.lastName is not None:
-        user.last_name = payload.lastName
-    if payload.phone is not None:
-        user.phone_number = payload.phone
-    if payload.aboutMe is not None:
+    if firstName:
+        user.first_name = firstName
+    if lastName:
+        user.last_name = lastName
+    if phone:
+        user.phone_number = phone
+    if aboutMe:
         import json
-        user.about_me = json.dumps(payload.aboutMe)
-    if payload.profilePic is not None:
-        user.profile_pic = payload.profilePic
+        user.about_me = aboutMe  # already a JSON string from frontend
+
+    if profilePic:
+        # Save uploaded file to user.profile_picture field
+        user.profile_picture.save(profilePic.name, profilePic, save=True)
+
     user.save()
 
     import json
@@ -317,5 +328,5 @@ def update_user(request, payload: schemas.UpdateUserSchema):
         "phone": user.phone_number,
         "role": user.role,
         "aboutMe": about_me_data,
-        "profilePic": user.profile_pic
+        "profilePic": user.profile_picture.url if user.profile_picture else DEFAULT_PROFILE_PIC,
     }
