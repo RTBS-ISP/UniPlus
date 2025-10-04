@@ -284,6 +284,10 @@ def create_event(request, payload: schemas.EventCreateSchema):
     """
     try:
         # Create event with authenticated user as organizer
+        tags_string = None
+        if payload.tags:
+            tags_string = ",".join(payload.tags)
+
         event = Event.objects.create(
             organizer=request.user,
             event_title=payload.event_title,
@@ -295,7 +299,7 @@ def create_event(request, payload: schemas.EventCreateSchema):
             is_online=payload.is_online,
             event_meeting_link=payload.event_meeting_link,
             event_category=payload.event_category,
-            tags=payload.tags,
+            tags=tags_string,
             event_email=payload.event_email,
             event_phone_number=payload.event_phone_number,
             event_website_url=payload.event_website_url,
@@ -304,7 +308,8 @@ def create_event(request, payload: schemas.EventCreateSchema):
 
         return 200, {
             "success": True,
-            "message": "Event has been created successfully"
+            "message": "Event has been created successfully",
+            "created_by" : request.user.username
         }
 
     except Exception as e:
@@ -328,3 +333,115 @@ def get_list_events(request):
         "is_online": e.is_online,
         "status_registration": e.status_registration,
     } for e in events]
+
+@api.get("/events/{event_id}", response={200: schemas.EventSchema, 404: schemas.ErrorSchema})
+def get_event(request, event_id: int):
+    """Get a single event by ID"""
+    try:
+        event = Event.objects.select_related('organizer').get(id=event_id)
+        return {
+            "id": event.id,
+            "event_title": event.event_title,
+            "event_description": event.event_description,
+            "organizer_username": event.organizer.username,
+            "event_create_date": event.event_create_date,
+            "start_date_register": event.start_date_register,
+            "end_date_register": event.end_date_register,
+            "max_attendee": event.max_attendee,
+            "event_address": event.event_address,
+            "is_online": event.is_online,
+            "status_registration": event.status_registration,
+        }
+    except Event.DoesNotExist:
+        return 404, {"error": "Event not found"}
+
+@api.patch("/events/{event_id}", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema})
+def update_event(request, event_id: int, payload: schemas.EventUpdateSchema):
+    """
+    Partially update an existing event
+    
+    Only the event organizer can update their own events.
+    Partial updates are supported - only provided fields will be updated.
+    """
+    try:
+        try:
+            event = Event.objects.get(id=event_id)
+        except Event.DoesNotExist:
+            return 404, {"error": "Event not found"}
+        
+        if event.organizer != request.user:
+            return 403, {"error": "You can only edit your own events"}
+        
+        update_fields = []
+        
+        if payload.event_title is not None:
+            event.event_title = payload.event_title
+            update_fields.append('event_title')
+            
+        if payload.event_description is not None:
+            event.event_description = payload.event_description
+            update_fields.append('event_description')
+            
+        if payload.start_date_register is not None:
+            event.start_date_register = payload.start_date_register
+            update_fields.append('start_date_register')
+            
+        if payload.end_date_register is not None:
+            event.end_date_register = payload.end_date_register
+            update_fields.append('end_date_register')
+            
+        if payload.max_attendee is not None:
+            event.max_attendee = payload.max_attendee
+            update_fields.append('max_attendee')
+            
+        if payload.event_address is not None:
+            event.event_address = payload.event_address
+            update_fields.append('event_address')
+            
+        if payload.is_online is not None:
+            event.is_online = payload.is_online
+            update_fields.append('is_online')
+            
+        if payload.event_meeting_link is not None:
+            event.event_meeting_link = payload.event_meeting_link
+            update_fields.append('event_meeting_link')
+            
+        if payload.event_category is not None:
+            event.event_category = payload.event_category
+            update_fields.append('event_category')
+            
+        # Handle tags conversion from list to string
+        if payload.tags is not None:
+            tags_string = ",".join(payload.tags) if payload.tags else None
+            event.tags = tags_string
+            update_fields.append('tags')
+            
+        if payload.event_email is not None:
+            event.event_email = payload.event_email
+            update_fields.append('event_email')
+            
+        if payload.event_phone_number is not None:
+            event.event_phone_number = payload.event_phone_number
+            update_fields.append('event_phone_number')
+            
+        if payload.event_website_url is not None:
+            event.event_website_url = payload.event_website_url
+            update_fields.append('event_website_url')
+            
+        if payload.terms_and_conditions is not None:
+            event.terms_and_conditions = payload.terms_and_conditions
+            update_fields.append('terms_and_conditions')
+        
+        if update_fields:
+            event.save(update_fields=update_fields)
+            message = "Event updated successfully"
+        else:
+            message = "No fields to update"
+        
+        return 200, {
+            "success": True,
+            "message": message
+        }
+
+    except Exception as e:
+        return 400, {"error": str(e)}

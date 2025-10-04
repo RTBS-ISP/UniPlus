@@ -1,6 +1,6 @@
 from ninja import Schema
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 class AboutMeSchema(BaseModel):
@@ -53,7 +53,7 @@ class EventCreateSchema(Schema):
     is_online: bool = False
     event_meeting_link: Optional[str] = None
     event_category: Optional[str] = None
-    tags: Optional[str] = None
+    tags: Optional[List[str]] 
     event_email: Optional[str] = None
     event_phone_number: Optional[str] = None
     event_website_url: Optional[str] = None
@@ -71,3 +71,19 @@ class EventSchema(Schema):
     event_address: Optional[str]
     is_online: bool
     status_registration: str
+
+class EventUpdateSchema(Schema):
+    event_title: Optional[str]  = None
+    event_description: Optional[str] = None
+    start_date_register: Optional[datetime] = None
+    end_date_register: Optional[datetime] = None
+    max_attendee: Optional[int]  = None
+    event_address: Optional[str]  = None
+    is_online: Optional[bool]  = None
+    event_meeting_link: Optional[str] = None 
+    event_category: Optional[str] = None
+    tags: Optional[List[str]]  = None
+    event_email: Optional[str] = None 
+    event_phone_number: Optional[str] = None 
+    event_website_url: Optional[str] = None 
+    terms_and_conditions: Optional[str] = None 
