@@ -1,35 +1,60 @@
 import React, { useState, useEffect } from "react";
 
+interface AboutMe {
+  faculty?: string;
+  year?: string;
+  organizerName?: string;
+}
+
 interface EditPopupProps {
   open: boolean;
   onClose: () => void;
+  role: string;
   onSave: (data: {
     firstName?: string;
     lastName?: string;
-    aboutMe?: string;
+    phone?: string;
+    aboutMe?: AboutMe;
     profilePic?: string;
   }) => void;
   initialData: {
     firstName?: string;
     lastName?: string;
-    aboutMe?: string;
+    phone?: string;
+    aboutMe?: AboutMe | null;
     profilePic?: string;
   };
 }
 
-export default function EditPopup({ open, onClose, onSave, initialData }: EditPopupProps) {
-  const [firstName, setFirstName] = useState(initialData.firstName || "");
-  const [lastName, setLastName] = useState(initialData.lastName || "");
-  const [aboutMe, setAboutMe] = useState(initialData.aboutMe || "");
-  const [profilePic, setProfilePic] = useState<string | null>(initialData.profilePic || null);
+export default function EditPopup({
+  open,
+  onClose,
+  role,
+  onSave,
+  initialData,
+}: EditPopupProps) {
+  const [firstName, setFirstName] = useState(initialData.firstName ?? "");
+  const [lastName, setLastName] = useState(initialData.lastName ?? "");
+  const [phone, setPhone] = useState(initialData.phone ?? "");
+  const [aboutMe, setAboutMe] = useState<AboutMe>(
+    initialData.aboutMe || { faculty: "", year: "", organizerName: "" }
+  );
+  const [profilePic, setProfilePic] = useState<string | null>(
+    initialData.profilePic || null
+  );
   const [file, setFile] = useState<File | null>(null);
 
   useEffect(() => {
-    setFirstName(initialData.firstName || "");
-    setLastName(initialData.lastName || "");
-    setAboutMe(initialData.aboutMe || "");
-    setProfilePic(initialData.profilePic || null);
-  }, [initialData]);
+    if (open) {
+      setFirstName(initialData.firstName ?? "");
+      setLastName(initialData.lastName ?? "");
+      setPhone(initialData.phone ?? "");
+      setAboutMe(
+        initialData.aboutMe || { faculty: "", year: "", organizerName: "" }
+      );
+      setProfilePic(initialData.profilePic || null);
+    }
+  }, [open, initialData]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -44,12 +69,36 @@ export default function EditPopup({ open, onClose, onSave, initialData }: EditPo
   };
 
   const handleSubmit = () => {
-    onSave({
-      firstName,
-      lastName,
-      aboutMe,
-      profilePic: profilePic || undefined,
-    });
+    const dataToSave: any = {
+      firstName: firstName.trim() !== "" ? firstName : initialData.firstName,
+      lastName: lastName.trim() !== "" ? lastName : initialData.lastName,
+      phone: phone.trim() !== "" ? phone : initialData.phone,
+      profilePic: profilePic || initialData.profilePic,
+    };
+
+    if (role === "student") {
+      dataToSave.aboutMe = {
+        faculty:
+          aboutMe.faculty?.trim() !== ""
+            ? aboutMe.faculty
+            : initialData.aboutMe?.faculty,
+        year:
+          aboutMe.year?.trim() !== ""
+            ? aboutMe.year
+            : initialData.aboutMe?.year,
+      };
+    }
+
+    if (role === "organizer") {
+      dataToSave.aboutMe = {
+        organizerName:
+          aboutMe.organizerName?.trim() !== ""
+            ? aboutMe.organizerName
+            : initialData.aboutMe?.organizerName,
+      };
+    }
+
+    onSave(dataToSave);
   };
 
   if (!open) return null;
@@ -59,51 +108,109 @@ export default function EditPopup({ open, onClose, onSave, initialData }: EditPo
       <div className="bg-white rounded-lg shadow-lg p-10 w-[800px] max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl text-black font-bold mb-6">Edit Profile</h2>
 
-        {/* Profile Edit Form */}
         <div className="mb-6 flex gap-8">
-          {/* Left: Profile Picture Preview */}
+          {/* Left: Profile Picture */}
           <div className="flex flex-col items-center">
             {profilePic ? (
-                <img
+              <img
                 src={profilePic}
                 alt="Preview"
                 className="w-[256px] h-[297px] object-cover rounded-xl mb-2"
-                />
+              />
             ) : (
-                <div className="w-[256px] h-[297px] bg-gray-200 flex items-center justify-center rounded-xl mb-2">
+              <div className="w-[256px] h-[297px] bg-gray-200 flex items-center justify-center rounded-xl mb-2">
                 <span className="text-gray-500 text-sm">No image</span>
-                </div>
+              </div>
             )}
             <label className="cursor-pointer bg-indigo-500 text-white px-4 py-1 rounded text-sm hover:bg-indigo-600">
-                Upload Picture
-                <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+              Upload Picture
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+              />
             </label>
           </div>
 
-          {/* Right: Input fields */}
+          {/* Right: Inputs */}
           <div className="flex-1">
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              First Name
+            </label>
             <input
               type="text"
-              placeholder="First Name"
-              className="text-black bg-gray-100 rounded w-full px-3 py-2 mb-3"
+              className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
             />
 
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Last Name
+            </label>
             <input
               type="text"
-              placeholder="Last Name"
-              className="text-black bg-gray-100 rounded w-full px-3 py-2 mb-3"
+              className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
             />
 
-            <textarea
-              placeholder="Faculty (e.g. Software and Knowledge Engineering)"
-              className="text-black bg-gray-100 rounded w-full px-3 py-2 mb-3 resize-none h-[80px]"
-              value={aboutMe}
-              onChange={(e) => setAboutMe(e.target.value)}
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Phone Number
+            </label>
+            <input
+              type="text"
+              className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
+
+            {role === "organizer" && (
+              <>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Organizer Name
+                </label>
+                <input
+                  type="text"
+                  className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
+                  value={aboutMe.organizerName || ""}
+                  onChange={(e) =>
+                    setAboutMe((prev) => ({
+                      ...prev,
+                      organizerName: e.target.value,
+                    }))
+                  }
+                />
+              </>
+            )}
+
+            {role === "student" && (
+              <>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Faculty
+                </label>
+                <input
+                  type="text"
+                  className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
+                  value={aboutMe.faculty || ""}
+                  onChange={(e) =>
+                    setAboutMe((prev) => ({ ...prev, faculty: e.target.value }))
+                  }
+                />
+
+                <label className="block text-sm font-semibold text-gray-700 mb-1">
+                  Year
+                </label>
+                <input
+                  type="text"
+                  className="text-black bg-gray-100 rounded-lg w-full px-3 py-2 mb-4"
+                  value={aboutMe.year || ""}
+                  onChange={(e) =>
+                    setAboutMe((prev) => ({ ...prev, year: e.target.value }))
+                  }
+                />
+              </>
+            )}
           </div>
         </div>
 
