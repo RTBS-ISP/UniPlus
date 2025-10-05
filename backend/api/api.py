@@ -12,11 +12,18 @@ from django.middleware.csrf import get_token
 from django.db import IntegrityError
 from api.model.user import AttendeeUser
 from api.model.event import Event
+from api.model.ticket import Ticket
 from api import schemas
 from typing import List
 from ninja import File, Form
 from ninja.files import UploadedFile
 from typing import Optional
+
+
+
+from django.utils import timezone
+from django.shortcuts import get_object_or_404
+
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
@@ -92,7 +99,7 @@ def register(request, payload: schemas.RegisterSchema):
             first_name=payload.first_name,
             last_name=payload.last_name,
             phone_number=payload.phone_number,
-            about_me=about_me_str  # Store as JSON string
+            about_me=about_me_str  
         )
         
         # Set role if provided
@@ -116,7 +123,7 @@ def register(request, payload: schemas.RegisterSchema):
                 "last_name": user.last_name,
                 "role": user.role,
                 "phone_number": user.phone_number,
-                "about_me": about_me_response,  # Return as object
+                "about_me": about_me_response,  
                 "verification_status": user.verification_status,
                 "creation_date": user.creation_date.isoformat() if user.creation_date else None
             }
@@ -225,27 +232,6 @@ def logout_view(request):
 
 @api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
 def get_user(request):
-    """
-    Get current authenticated user's basic information
-    
-    Returns the username and email of the currently logged-in user.
-    This endpoint requires authentication and is typically used by the
-    frontend to verify the user's session and display user info.
-    
-    Args:
-        request: The Django HTTP request object with authenticated user
-        
-    Returns:
-        200: User information if authenticated
-        401: Error message if not authenticated
-        
-    Security:
-        - Requires valid authentication (django_auth)
-        - Only returns non-sensitive user information
-    """
-    # Check if the user is authenticated
-    # This should always be true due to django_auth decorator,
-    # but we check as a safety measure
     if request.user.is_authenticated:
         import json
         about_me_data = None
@@ -255,6 +241,36 @@ def get_user(request):
             except:
                 about_me_data = {}
 
+        tickets = []
+        
+        if hasattr(request.user, 'my_tickets') and request.user.my_tickets.exists():
+            for ticket in request.user.my_tickets.all().select_related('event', 'event__organizer'):
+                try:
+                    event = ticket.event
+                    ticket_data = {
+                        "date": event.start_date_register.strftime("%Y-%m-%d") if event and event.start_date_register else None,
+                        "time": event.start_date_register.strftime("%H:%M:%S") if event and event.start_date_register else None,
+                        "location": event.event_address if event else None,
+                        "organizer": event.organizer.username if event and event.organizer else None,
+                        "user_information": {
+                            "name": f"{request.user.first_name} {request.user.last_name}",
+                            "firstName": request.user.first_name,
+                            "lastName": request.user.last_name,
+                            "email": request.user.email,
+                            "phone": request.user.phone_number
+                        },
+                        "event_title": event.event_title if event else None,
+                        "event_description": event.event_description if event else None,
+                        "ticket_number": ticket.qr_code,
+                        "event_id": event.id if event else None,
+                        "is_online": ticket.is_online,
+                        "event_meeting_link": ticket.meeting_link
+                    }
+                    tickets.append(ticket_data)
+                except Exception as e:
+                    print(f"Error processing ticket: {e}")
+                    continue
+
         return 200, {
             "username": request.user.username,
             "email": request.user.email,
@@ -263,9 +279,9 @@ def get_user(request):
             "phone": request.user.phone_number,
             "role": request.user.role,
             "aboutMe": about_me_data,
-            "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC
+            "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC,  # Fixed typo here
+            "tickets": tickets
         }
-    # This should not be reached due to django_auth decorator
     return 401, {"error": "Not authenticated"}
 
 
@@ -349,20 +365,41 @@ def create_event(
 @api.get("/events", response=List[schemas.EventSchema])
 def get_list_events(request):
     """Get all events"""
+    import json
     events = Event.objects.all().select_related('organizer')
-    return [{
-        "id": e.id,
-        "event_title": e.event_title,
-        "event_description": e.event_description,
-        "organizer_username": e.organizer.username,
-        "event_create_date": e.event_create_date,
-        "start_date_register": e.start_date_register,
-        "end_date_register": e.end_date_register,
-        "max_attendee": e.max_attendee,
-        "event_address": e.event_address,
-        "is_online": e.is_online,
-        "status_registration": e.status_registration,
-    } for e in events]
+    
+    result = []
+    for e in events:
+        tags_list = e.tags
+        if isinstance(e.tags, str):
+            try:
+                tags_list = json.loads(e.tags)
+            except:
+                tags_list = []
+        elif not isinstance(e.tags, list):
+            tags_list = []
+        
+        result.append({
+            "id": e.id,
+            "event_title": e.event_title,
+            "event_description": e.event_description,
+            "organizer_username": e.organizer.username if e.organizer else "Unknown",
+            "event_create_date": e.event_create_date,
+            "start_date_register": e.start_date_register,
+            "end_date_register": e.end_date_register,
+            "max_attendee": e.max_attendee,
+            "current_attendees": len(e.attendee) if e.attendee else 0,
+            "event_address": e.event_address,
+            "is_online": e.is_online,
+            "status_registration": e.status_registration,
+            "attendee": e.attendee,
+            "tags": tags_list,
+            "event_category": e.event_category or "",
+            "event_image": e.event_image.url if e.event_image else None,
+        })
+    
+    return result
+
     
 @api.patch("/user", auth=django_auth, response={200: schemas.UserSchema, 400: schemas.ErrorSchema})
 def update_user(
@@ -382,7 +419,7 @@ def update_user(
         user.phone_number = phone
     if aboutMe:
         import json
-        user.about_me = aboutMe  # already a JSON string from frontend
+        user.about_me = aboutMe 
 
     if profilePic:
         # Save uploaded file to user.profile_picture field
@@ -402,4 +439,108 @@ def update_user(
         "role": user.role,
         "aboutMe": about_me_data,
         "profilePic": user.profile_picture.url if user.profile_picture else DEFAULT_PROFILE_PIC,
+    }
+
+
+@api.post("/events/{event_id}/register", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def register_for_event(request, event_id: int):
+    try:
+        from django.utils import timezone
+        import uuid
+
+        # Get event & user
+        event = get_object_or_404(Event, id=event_id)
+        user = request.user
+
+        # Already registered?
+        if Ticket.objects.filter(event=event, attendee=user).exists():
+            return 400, {"error": "You are already registered for this event"}
+
+        # Registration period check
+        if timezone.now() > event.end_date_register:
+            return 400, {"error": "Event registration has closed"}
+
+        # Max attendee check
+        if event.max_attendee and Ticket.objects.filter(event=event).count() >= event.max_attendee:
+            return 400, {"error": "Event has reached maximum attendees"}
+
+        # Status check
+        if event.status_registration != "OPEN":
+            return 400, {"error": "Event registration is not open"}
+
+        # Create ticket
+        qr_code_value = str(uuid.uuid4())
+        ticket = Ticket.objects.create(
+            event=event,
+            attendee=user,
+            qr_code=qr_code_value,
+            is_online=event.is_online,
+            meeting_link=event.event_meeting_link if event.is_online else None,
+            user_name=f"{user.first_name} {user.last_name}",
+            user_email=user.email,
+            event_title=event.event_title,
+            start_date=event.start_date_register,
+            location=event.event_address if not event.is_online else "Online",
+        )
+
+        attendees = event.attendee if isinstance(event.attendee, list) else []
+        if user.id not in attendees:
+            attendees.append(user.id)
+        event.attendee = attendees
+        event.save()
+
+        return 200, {
+            "success": True,
+            "message": "Successfully registered for the event",
+            "ticket_number": qr_code_value
+        }
+
+    except Event.DoesNotExist:
+        return 400, {"error": "Event not found"}
+    except Exception as e:
+        return 400, {"error": str(e)}
+
+@api.get("/events/{event_id}", response=schemas.EventDetailSchema)
+def get_event_detail(request, event_id: int):
+    event = get_object_or_404(Event, id=event_id)
+    
+    tags_list = event.tags
+    if isinstance(event.tags, str):
+        import json
+        try:
+            tags_list = json.loads(event.tags)
+        except:
+            tags_list = []
+    
+    return {
+        "id": event.id,
+        "event_title": event.event_title,
+        "event_description": event.event_description,
+        "organizer_username": event.organizer.username if event.organizer else "Unknown",
+        "start_date_register": event.start_date_register,
+        "end_date_register": event.end_date_register,
+        "max_attendee": event.max_attendee or 0,
+        "current_attendees": len(event.attendee) if event.attendee else 0,
+        "event_address": event.event_address or "",
+        "is_online": event.is_online,
+        "event_meeting_link": event.event_meeting_link or "",
+        "tags": tags_list if tags_list else [],
+        "event_category": event.event_category or "",
+        "event_image": event.event_image.url if event.event_image else None,
+    }
+
+@api.get("/tickets/{ticket_id}", auth=django_auth, response=schemas.TicketDetailSchema)
+def get_ticket_detail(request, ticket_id: int):
+    ticket = get_object_or_404(Ticket, id=ticket_id, attendee=request.user)
+    return {
+        "qr_code": ticket.qr_code,
+        "event_title": ticket.event.event_title,
+        "event_description": ticket.event.event_description,
+        "start_date": ticket.event.start_date_register,
+        "location": ticket.event.event_address if not ticket.is_online else "Online",
+        "meeting_link": ticket.meeting_link,
+        "is_online": ticket.is_online,
+        "organizer": ticket.event.organizer.username,
+        "user_name": f"{request.user.first_name} {request.user.last_name}",
+        "user_email": request.user.email,
     }

@@ -1,8 +1,7 @@
 from ninja import Schema
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any,List
 from datetime import datetime
-
 
 
 class AboutMeSchema(BaseModel):
@@ -24,6 +23,19 @@ class RegisterSchema(BaseModel):
 class LoginSchema(Schema):
     email: str
     password: str   
+    
+class TicketInfoSchema(Schema):
+    date: Optional[str] = None
+    time: Optional[str] = None
+    location: Optional[str] = None
+    organizer: Optional[str] = None
+    user_information: Optional[Dict[str, str]] = None
+    event_title: Optional[str] = None
+    event_description: Optional[str] = None
+    ticket_number: Optional[str] = None
+    event_id: Optional[int] = None
+    is_online: bool = False
+    event_meeting_link: Optional[str] = None
      
 # For returning user data (no password)
 class UserSchema(Schema):
@@ -35,7 +47,8 @@ class UserSchema(Schema):
     role: str = None
     aboutMe: Optional[Dict[str, Any]] = None
     profilePic: Optional[str] = None
-    
+    tickets: List[TicketInfoSchema] = [] 
+
 class UpdateUserSchema(Schema):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
@@ -86,3 +99,45 @@ class EventSchema(Schema):
     event_address: Optional[str]
     is_online: bool
     status_registration: str
+
+
+class UserEventSchema(Schema):
+    id: int
+    event_title: str
+    event_description: str
+    event_address: Optional[str]
+    is_online: bool
+    event_meeting_link: Optional[str]
+    start_date_register: datetime
+    end_date_register: datetime
+    organizer_username: str
+    registration_date: datetime
+    ticket_number: str
+
+class EventDetailSchema(Schema):
+    id: int
+    event_title: str
+    event_description: str
+    organizer_username: str
+    start_date_register: datetime
+    end_date_register: datetime
+    max_attendee: Optional[int] = None
+    current_attendees: int
+    event_address: str
+    is_online: bool
+    event_meeting_link: Optional[str] = None
+    tags: list[str]
+    event_category: str
+    event_image: Optional[str] = None
+
+class TicketDetailSchema(Schema):
+    qr_code: str
+    event_title: str
+    event_description: str
+    start_date: datetime
+    location: str
+    meeting_link: Optional[str] = None
+    is_online: bool
+    organizer: str
+    user_name: str
+    user_email: str
