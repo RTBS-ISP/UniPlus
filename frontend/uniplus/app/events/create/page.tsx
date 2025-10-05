@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import Navbar from "../../components/navbar";
+import TagSelector from "../../components/TagSelector";
 
 type FormData = {
   eventTitle: string;
@@ -12,7 +13,7 @@ type FormData = {
   isOnline: boolean;
   eventMeetingLink: string;
   eventCategory: string;
-  tags: string;
+  tags: string[];
   eventEmail: string;
   eventPhoneNumber: string;
   eventWebsiteUrl: string;
@@ -34,7 +35,7 @@ export default function EventCreatePage() {
     isOnline: false,
     eventMeetingLink: "",
     eventCategory: "",
-    tags: "",
+    tags: [],
     eventEmail: "",
     eventPhoneNumber: "",
     eventWebsiteUrl: "",
@@ -95,7 +96,7 @@ export default function EventCreatePage() {
       if (data.eventAddress) formData.append("event_address", data.eventAddress);
       if (data.eventMeetingLink) formData.append("event_meeting_link", data.eventMeetingLink);
       if (data.eventCategory) formData.append("event_category", data.eventCategory);
-      if (data.tags) formData.append("tags", data.tags);
+      if (data.tags.length > 0) formData.append("tags", JSON.stringify(data.tags));
       if (data.eventEmail) formData.append("event_email", data.eventEmail);
       if (data.eventPhoneNumber) formData.append("event_phone_number", data.eventPhoneNumber);
       if (data.eventWebsiteUrl) formData.append("event_website_url", data.eventWebsiteUrl);
@@ -277,19 +278,11 @@ export default function EventCreatePage() {
               </div>
             )}
 
-            {/* Tags */}
-            <div>
-              <label className="block text-sm font-semibold text-black mb-2">
-                Tags (comma-separated)
-              </label>
-              <input
-                type="text"
-                value={data.tags}
-                onChange={(e) => setData({ ...data, tags: e.target.value })}
-                placeholder="e.g., technology, networking, workshop"
-                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black placeholder-gray-400"
-              />
-            </div>
+            {/* Tags - NEW COMPONENT */}
+            <TagSelector 
+              tags={data.tags} 
+              setTags={(newTags) => setData({ ...data, tags: newTags })} 
+            />
 
             {/* Contact Information */}
             <div className="space-y-4 p-6 bg-indigo-50 rounded-xl">

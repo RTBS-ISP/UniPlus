@@ -4,7 +4,6 @@ from typing import Optional, Dict, Any,List
 from datetime import datetime
 
 
-
 class AboutMeSchema(BaseModel):
     faculty: str
     year: str
@@ -115,4 +114,30 @@ class UserEventSchema(Schema):
     registration_date: datetime
     ticket_number: str
 
+class EventDetailSchema(Schema):
+    id: int
+    event_title: str
+    event_description: str
+    organizer_username: str
+    start_date_register: datetime
+    end_date_register: datetime
+    max_attendee: Optional[int] = None
+    current_attendees: int
+    event_address: str
+    is_online: bool
+    event_meeting_link: Optional[str] = None
+    tags: list[str]
+    event_category: str
+    event_image: Optional[str] = None
 
+class TicketDetailSchema(Schema):
+    qr_code: str
+    event_title: str
+    event_description: str
+    start_date: datetime
+    location: str
+    meeting_link: Optional[str] = None
+    is_online: bool
+    organizer: str
+    user_name: str
+    user_email: str
