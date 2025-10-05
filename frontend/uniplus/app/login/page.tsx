@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@/app/context/UserContext';
 
 function LoginPage() {
   const [email, setEmail] = useState('');
@@ -10,6 +11,7 @@ function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { setUser } = useUser();
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -47,7 +49,19 @@ function LoginPage() {
 
       if (data.success) {
         console.log('Login successful:', data.message);
-        // Redirect to dashboard
+
+        // Fetch the logged-in user's data right after login
+        const userRes = await fetch('http://localhost:8000/api/user', {
+          credentials: 'include',
+        });
+
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          setUser(userData);
+          console.log('User data set:', userData);
+        }
+
+        // Redirect to profile
         router.push('/profile');
       } else {
         setError(data.error || "Login failed. Please check your credentials");
@@ -68,33 +82,33 @@ function LoginPage() {
           <form onSubmit={handleSubmit}>
             <div className="flex flex-col space-y-4">
               {/* Email */}
-              <div className='flex flex-col'>
-                <label className='flex items-start text-xs p-2 text-black'>Email</label>
-                <div className='bg-gray-100 p-2 flex items-center mb-5 rounded-full'>   
-                  <input 
-                    type='email' 
-                    name='email' 
-                    placeholder='Enter your email' 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
-                    required 
-                    className='bg-gray-100 text-black outline-none text-sm w-full px-3'
+              <div className="flex flex-col">
+                <label className="flex items-start text-xs p-2 text-black">Email</label>
+                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
                   />
                 </div>
               </div>
 
               {/* Password */}
-              <div className='flex flex-col'>
-                <label className='flex items-start text-xs p-2 text-black'>Password</label>
-                <div className='bg-gray-100 p-2 flex items-center mb-5 rounded-full'>
-                  <input 
-                    type='password' 
-                    name='password' 
-                    placeholder='Enter your password' 
-                    value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
-                    required 
-                    className='bg-gray-100 text-black outline-none text-sm w-full px-3'
+              <div className="flex flex-col">
+                <label className="flex items-start text-xs p-2 text-black">Password</label>
+                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                  <input
+                    type="password"
+                    name="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
                   />
                 </div>
               </div>
@@ -103,21 +117,27 @@ function LoginPage() {
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-4 pt-3">
-                <Link href='/' className='text-gray-500 hover:underline flex item-center text-sm py-2'>
+                <Link
+                  href="/"
+                  className="text-gray-500 hover:underline flex item-center text-sm py-2"
+                >
                   Cancel
                 </Link>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={loading}
                   className="inline-flex items-center justify-center w-full px-4 py-1 text-base font-bold leading-6 text-white bg-indigo-400 border border-transparent rounded-full md:w-auto hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Logging in...' : 'Login'}
                 </button>
               </div>
-              
-              <hr className="h-px my-5 bg-gray-200 border-0"/>
-              <div className='text-black text-md'>
-                Don't have an account? <Link href="/register" className='underline text-indigo-400'>Sign Up</Link>
+
+              <hr className="h-px my-5 bg-gray-200 border-0" />
+              <div className="text-black text-md">
+                Don't have an account?{' '}
+                <Link href="/register" className="underline text-indigo-400">
+                  Sign Up
+                </Link>
               </div>
             </div>
           </form>
