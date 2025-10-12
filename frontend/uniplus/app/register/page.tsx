@@ -24,7 +24,6 @@ type FormState = {
 };
 
 function RegisterPage() {
-  const [step, setStep] = useState<1 | 2>(1);
   const [form, setForm] = useState<FormState>({
     username: "",
     firstName: "",
@@ -111,10 +110,10 @@ function RegisterPage() {
         username: form.username,
         email: form.email,
         password: form.password,
-        first_name: form.firstName, // Changed from firstName to first_name
-        last_name: form.lastName,   // Changed from lastName to last_name
-        phone_number: form.phone,   // Changed from phone to phone_number
-        about_me: form.aboutMe,     // Changed from aboutMe to about_me
+        first_name: form.firstName, 
+        last_name: form.lastName,   
+        phone_number: form.phone,   
+        about_me: form.aboutMe,    
         role: form.role,
       };
 
@@ -148,66 +147,14 @@ function RegisterPage() {
     }
   };
 
-  // STEP 1: Choose Role
-  if (step === 1) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#E9E9F4]">
-        <div className="relative bg-white rounded-2xl shadow-2xl p-12 max-w-3xl w-full text-center">
-          <button
-            onClick={() => router.push("/")}
-            className="absolute top-6 right-6 p-2 rounded-full text-gray-500 hover:bg-gray-200 transition"
-            aria-label="Back to home"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <h2 className="text-3xl font-bold mb-8 text-black">Choose Your Role</h2>
-          <div className="grid grid-cols-2 gap-8">
-            {/* Student Box */}
-            <div
-              className="cursor-pointer p-10 border-2 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition"
-              onClick={() => {
-                setForm({ ...form, role: "student" });
-                setStep(2);
-              }}
-            >
-              <h3 className="text-2xl font-bold text-black mb-2">🎓 Student</h3>
-              <p className="text-gray-600 text-sm">
-                Explore and participate events or even create your own one.
-              </p>
-            </div>
-
-            {/* Organizer Box */}
-            <div
-              className="cursor-pointer p-10 border-2 rounded-xl hover:border-indigo-400 hover:bg-indigo-50 transition"
-              onClick={() => {
-                setForm({ ...form, role: "organizer" });
-                setStep(2);
-              }}
-            >
-              <h3 className="text-2xl font-bold text-black mb-2">📝 Organizer</h3>
-              <p className="text-gray-600 text-sm">
-                Create and manage events for students.
-              </p>
-            </div>
-          </div>
-          
-          <div className="mt-8 text-black text-md">
-            Already have an account?{" "}
-            <Link href="/login" className="underline text-indigo-400">
-              Sign In
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // STEP 2: Registration Form
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-[#E9E9F4]">
+    <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-indigo-100">
       <main className="flex flex-col items-center justify-center w-full px-4 sm:px-10">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-14">
-          <h2 className="text-4xl text-center font-bold mb-5 text-black">Register as {form.role === "student" ? "Student" : "Organizer"}</h2>
+        <div className="flex items-start w-full max-w-3xl">
+          <h1 className="text-5xl text-center font-extrabold mb-5 text-gray-800">Register</h1>
+        </div>
+
+        <div className="bg-white rounded-[30px] shadow-2xl w-full max-w-3xl p-14">
 
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm">
@@ -220,10 +167,8 @@ function RegisterPage() {
 
               {/* Username */}
               <div>
-                <label className="flex items-start text-xs p-2 text-black">
-                  Username
-                </label>
-                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                <label className="flex text-sm pb-2 text-gray-800">Username</label>
+                <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
                   <input
                     type="text"
                     name="username"
@@ -231,7 +176,7 @@ function RegisterPage() {
                     value={form.username}
                     onChange={handleChange}
                     required
-                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                    className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                   />
                 </div>
               </div>
@@ -239,28 +184,28 @@ function RegisterPage() {
               {/* First & Last Name */}
               <div className="flex gap-4">
                 <div className="flex flex-col w-1/2">
-                  <label className="text-xs text-left p-2 text-black">First Name</label>
-                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                  <label className="text-sm text-left pb-2 text-gray-800">First Name</label>
+                  <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
                     <input
                       type="text"
                       name="firstName"
                       placeholder="Enter your first name"
                       value={form.firstName}
                       onChange={handleChange}
-                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                      className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                     />
                   </div>
                 </div>
                 <div className="flex flex-col w-1/2">
-                  <label className="text-xs text-left p-2 text-black">Last Name</label>
-                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                  <label className="text-sm text-left pb-2 text-gray-800">Last Name</label>
+                  <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
                     <input
                       type="text"
                       name="lastName"
                       placeholder="Enter your last name"
                       value={form.lastName}
                       onChange={handleChange}
-                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                      className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                     />
                   </div>
                 </div>
@@ -269,8 +214,8 @@ function RegisterPage() {
               {/* Email & Phone */}
               <div className="flex gap-4">
                 <div className="flex flex-col w-1/2">
-                  <label className="text-xs text-left p-2 text-black">Email</label>
-                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                  <label className="text-sm text-left pb-2 text-gray-800">Email</label>
+                  <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
                     <input
                       type="email"
                       name="email"
@@ -278,22 +223,75 @@ function RegisterPage() {
                       value={form.email}
                       onChange={handleChange}
                       required
-                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                      className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                     />
                   </div>
                 </div>
                 <div className="flex flex-col w-1/2">
-                  <label className="text-xs text-left p-2 text-black">Phone Number</label>
-                  <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                  <label className="text-sm text-left pb-2 text-gray-800">Phone Number</label>
+                  <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
                     <input
                       type="tel"
                       name="phone"
                       placeholder="Enter your phone number"
                       value={form.phone}
                       onChange={handleChange}
-                      className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                      className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Password & Confirm */}
+              <div>
+                <label className="flex text-sm text-left pb-2 text-gray-800">Password</label>
+                <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
+                  <input
+                    type="password"
+                    name="password"
+                    placeholder="Enter your password"
+                    value={form.password}
+                    onChange={handleChange}
+                    required
+                    minLength={8}
+                    className="bg-white text-gray-800 outline-none text-sm w-full px-3"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="flex text-sm text-left pb-2 text-gray-800">Confirm Password</label>
+                <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
+                  <input
+                    type="password"
+                    name="confirmPassword"
+                    placeholder="Confirm your password"
+                    value={form.confirmPassword}
+                    onChange={handleChange}
+                    required
+                    className="bg-white text-gray-800 outline-none text-sm w-full px-3"
+                  />
+                </div>
+              </div>
+
+              {/* Role Selection */}
+              <div className="flex flex-col w-1/2">
+                <label className="text-sm pb-2 text-gray-800">Role</label>
+                <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
+                  <select
+                    name="role"
+                    value={form.role}
+                    onChange={handleChange}
+                    required
+                    className="bg-white text-gray-800 outline-none text-sm w-full px-3"
+                  >
+                    <option value="" disabled>
+                      Select your role
+                    </option>
+                    <option value="student">Student</option>
+                    <option value="teacher">Teacher</option>
+                    <option value="organizer">Organizer</option>
+                  </select>
                 </div>
               </div>
 
@@ -303,13 +301,13 @@ function RegisterPage() {
                     <div className="flex gap-4">
                       {/* Faculty Dropdown */}
                       <div className="flex flex-col w-1/2">
-                        <label className="flex items-start text-xs p-2 text-black">Faculty</label>
-                        <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                        <label className="text-sm pb-2 text-gray-800">Faculty</label>
+                        <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
                           <select
                             name="faculty"
                             value={form.aboutMe.faculty || ""}
                             onChange={handleChange}
-                            className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                            className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                             required
                           >
                             <option value="" disabled>
@@ -342,15 +340,15 @@ function RegisterPage() {
 
                       {/* Year Field */}
                       <div className="flex flex-col w-1/2">
-                        <label className="flex items-start text-xs p-2 text-black">Year</label>
-                        <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                        <label className="text-sm pb-2 text-gray-800">Year</label>
+                        <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
                           <input
                             type="number"
                             name="year"
-                            placeholder="Enter your year (e.g. 1)"
+                            placeholder="Enter your year (1-8)"
                             value={form.aboutMe.year || ""}
                             onChange={handleChange}
-                            className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                            className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                             min="1"
                             max="8"
                             required
@@ -358,20 +356,57 @@ function RegisterPage() {
                         </div>
                       </div>
                     </div>
+                  ) : form.role === "teacher" ? (
+                    <div>
+                      {/* Faculty Dropdown */}
+                      <label className="flex text-sm pb-2 text-gray-800">Faculty</label>
+                        <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
+                          <select
+                            name="faculty"
+                            value={form.aboutMe.faculty || ""}
+                            onChange={handleChange}
+                            className="bg-white text-gray-800 outline-none text-sm w-full px-3"
+                            required
+                          >
+                            <option value="" disabled>
+                              Select your faculty
+                            </option>
+                            <option value="Agriculture">Agriculture</option>
+                            <option value="Agro-industry">Agro-Industry</option>
+                            <option value="Architecture">Architecture</option>
+                            <option value="Business">Business Administration</option>
+                            <option value="Economics">Economics</option>
+                            <option value="Education">Education</option>
+                            <option value="Engineering">Engineering</option>
+                            <option value="Environment">Environment</option>
+                            <option value="Fisheries">Fisheries</option>
+                            <option value="Forestry">Forestry</option>
+                            <option value="Humanities">Humanities</option>
+                            <option value="Medicine">Medicine</option>
+                            <option value="Nursing">Nursing</option>
+                            <option value="Pharmaceutical_sciences">Pharmaceutical Sciences</option>
+                            <option value="Science">Science</option>
+                            <option value="Social_sciences">Social Sciences</option>
+                            <option value="Veterinary_medicine">Veterinary Medicine</option>
+                            <option value="Veterinary_technology">Veterinary Technology</option>
+                            <option value="Interdisciplinary_management_and_technology">
+                              Interdisciplinary Management and Technology
+                            </option>
+                          </select>
+                        </div>
+                      </div>
                   ) : (
                     <>
                       {/* Organizer Name */}
-                      <label className="flex items-start text-xs p-2 text-black">
-                        Organizer Name
-                      </label>
-                      <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                      <label className="flex text-sm p-2 text-gray-800">Organizer Name</label>
+                      <div className="bg-white border border-gray-200 p-1.5 rounded-lg">
                         <input
                           type="text"
                           name="organizerName"
                           placeholder="Enter your organizer name (e.g. Kasetsart University)"
                           value={form.aboutMe.organizerName || ""}
                           onChange={handleChange}
-                          className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                          className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                           required
                         />
                       </div>
@@ -380,88 +415,27 @@ function RegisterPage() {
                 </div>
               )}
 
-              {/* Password & Confirm */}
-              <div>
-                <label className="text-xs text-left p-2 text-black">Password</label>
-                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
-                  <input
-                    type="password"
-                    name="password"
-                    placeholder="Enter your password"
-                    value={form.password}
-                    onChange={handleChange}
-                    required
-                    minLength={8}
-                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-left p-2 text-black">Confirm Password</label>
-                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
-                  <input
-                    type="password"
-                    name="confirmPassword"
-                    placeholder="Confirm your password"
-                    value={form.confirmPassword}
-                    onChange={handleChange}
-                    required
-                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
-                  />
-                </div>
-              </div>
-
               {/* Buttons */}
-              <div className="flex justify-between items-center pt-3">
-                {/* Left side: Back */}
+              <div className="flex justify-end items-center pt-4 space-x-4">
+                <Link href='/' className='text-gray-500 hover:underline flex item-center text-sm py-2'>
+                  Cancel
+                </Link>
+
                 <button
-                  type="button"
-                  onClick={() => {
-                    setStep(1);
-                    setForm({
-                      username: "",
-                      firstName: "",
-                      lastName: "",
-                      email: "",
-                      phone: "",
-                      password: "",
-                      confirmPassword: "",
-                      role: "",
-                      aboutMe: {},
-                    });
-                    setError("");
-                  }}
-                  className="flex items-center text-gray-500 hover:underline text-sm"
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex items-center justify-center px-6 py-2 text-base font-bold leading-6 text-white bg-indigo-500 border border-transparent rounded-lg hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <MoveLeft className="w-4 h-4 mr-1" />
-                  <span>Back</span>
+                  {loading ? "Registering..." : "Confirm"}
                 </button>
-
-                {/* Right side: Confirm + Cancel */}
-                <div className="flex items-center space-x-3"> 
-                  <Link href='/' className='text-gray-500 hover:underline flex item-center text-sm py-2'>
-                    Cancel
-                  </Link>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="inline-flex items-center justify-center px-6 py-2 text-base font-bold leading-6 text-white bg-indigo-400 border border-transparent rounded-full hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? "Registering..." : "Confirm"}
-                  </button>
-                </div>
               </div>
-
             </div>
           </form>
 
           {/* Already have an account */}
-          <hr className="my-8 border-gray-300" />
-          <div className="mt-8 text-center text-black text-md">
+          <div className="mt-8 text-center text-gray-800 text-md">
             Already have an account?{" "}
-            <Link href="/login" className="underline text-indigo-400">
+            <Link href="/login" className="underline text-indigo-500">
               Sign In
             </Link>
           </div>
