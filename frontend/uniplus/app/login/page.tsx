@@ -75,16 +75,18 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-[#E9E9F4]">
+    <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-indigo-100">
       <main className="flex flex-col items-center justify-center w-full px-4 sm:px-10 text-center">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-14">
-          <h2 className="text-4xl font-bold mb-5 text-black">Login</h2>
+        <div className="flex items-start w-full max-w-3xl">
+          <h1 className="text-5xl text-center font-extrabold mb-5 text-gray-800">Login</h1>
+        </div>
+        <div className="bg-white rounded-[30px] shadow-2xl w-full max-w-3xl p-14">
           <form onSubmit={handleSubmit}>
             <div className="flex flex-col space-y-4">
               {/* Email */}
               <div className="flex flex-col">
-                <label className="flex items-start text-xs p-2 text-black">Email</label>
-                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                <label className="flex text-sm pb-2 text-gray-800">Email</label>
+                <div className="bg-white border border-gray-200 p-1.5 mb-5 rounded-lg">
                   <input
                     type="email"
                     name="email"
@@ -92,15 +94,15 @@ function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                    className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                   />
                 </div>
               </div>
 
               {/* Password */}
               <div className="flex flex-col">
-                <label className="flex items-start text-xs p-2 text-black">Password</label>
-                <div className="bg-gray-100 p-2 flex items-center mb-5 rounded-full">
+                <label className="flex text-sm pb-2 text-gray-800">Password</label>
+                <div className="bg-white border border-gray-200 p-1.5 mb-5 rounded-lg">
                   <input
                     type="password"
                     name="password"
@@ -108,7 +110,7 @@ function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="bg-gray-100 text-black outline-none text-sm w-full px-3"
+                    className="bg-white text-gray-800 outline-none text-sm w-full px-3"
                   />
                 </div>
               </div>
@@ -116,7 +118,7 @@ function LoginPage() {
               {error && <p className="text-red-500 text-xs italic mb-4">{error}</p>}
 
               {/* Action Buttons */}
-              <div className="flex justify-end gap-4 pt-3">
+              <div className="flex justify-end items-center pt-4 space-x-4">
                 <Link
                   href="/"
                   className="text-gray-500 hover:underline flex item-center text-sm py-2"
@@ -126,16 +128,15 @@ function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="inline-flex items-center justify-center w-full px-4 py-1 text-base font-bold leading-6 text-white bg-indigo-400 border border-transparent rounded-full md:w-auto hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center px-6 py-2 text-base font-bold leading-6 text-white bg-indigo-500 border border-transparent rounded-lg hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Logging in...' : 'Login'}
                 </button>
               </div>
 
-              <hr className="h-px my-5 bg-gray-200 border-0" />
-              <div className="text-black text-md">
+              <div className="text-gray-800 text-md">
                 Don't have an account?{' '}
-                <Link href="/register" className="underline text-indigo-400">
+                <Link href="/register" className="underline text-indigo-500">
                   Sign Up
                 </Link>
               </div>
