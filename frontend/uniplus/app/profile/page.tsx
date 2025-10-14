@@ -78,12 +78,12 @@ function ProfilePage() {
         }}
       />
 
-      <div className="flex flex-col min-h-screen bg-[#E9E9F4]">
-        <div className="flex flex-col w-full px-20 py-10 mb-6">
-          <div className="bg-white rounded-2xl shadow-2xl flex justify-between p-6">
-            <div className="flex flex-row gap-x-6">
+      <div className="flex flex-col min-h-screen bg-indigo-100">
+        <div className="flex flex-col w-full px-20 py-10 mb-3">
+          <div className="flex justify-between p-6">
+            <div className="flex flex-row gap-x-6 items-stretch">
               {/* Profile Picture */}
-              <div className="w-64 h-72 overflow-hidden rounded-xl">
+              <div className="w-64 h-64 overflow-hidden rounded-xl">
                 <img
                   src={
                     user.profilePic.startsWith("/images")
@@ -96,38 +96,63 @@ function ProfilePage() {
               </div>
 
               {/* Info */}
-              <div className="flex flex-col justify-start">
-                <div className="text-black font-extrabold text-4xl">
-                  {user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1)}{" "}
-                  {user.lastName.charAt(0).toUpperCase() + user.lastName.slice(1)}
-                </div>
-
-                <div className="text-gray-500 text-base pt-3 capitalize">
-                  Role: {user.role}
-                </div>
-
-                {/* Role-Specific Info */}
-                {user.role === "student" && user.aboutMe && (
-                  <div className="text-gray-500 text-base py-2 space-y-2">
-                    <div className="font-medium">Faculty: {user.aboutMe.faculty}</div>
-                    <div className="font-medium">Year: {user.aboutMe.year}</div>
-                    <div className="font-medium">Tel: {user.phone}</div>
+              <div className="flex flex-col justify-between h-64">
+                <div className="overflow-y-auto">
+                  <div className="text-gray-800 font-extrabold text-5xl">
+                    {user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1)}{" "}
+                    {user.lastName.charAt(0).toUpperCase() + user.lastName.slice(1)}
                   </div>
-                )}
-
-                {user.role === "organizer" && user.aboutMe && (
-                  <div className="text-gray-500 text-base py-2 space-y-2">
-                    <div className="font-medium">
-                      Organizer: {user.aboutMe.organizerName}
+                  
+                  {user.role && (
+                    <div className="flex mt-3 mb-4">
+                      {user.role === "student" ? (
+                        <div className="bg-sky-100 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
+                          Student
+                        </div>
+                      ) : user.role === "teacher" ? (
+                        <div className="bg-indigo-200 text-gray-800 font-bold text-base px-5 py-1rounded-lg text-center">
+                          Teacher
+                        </div>
+                      ) : user.role === "organizer" ? (
+                        <div className="bg-purple-100 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
+                          Organizer
+                        </div>
+                      ) : user.role === "admin" && (
+                        <div className="bg-slate-200 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
+                          Admin
+                        </div>
+                      )}
                     </div>
-                    <div className="font-medium">Tel: {user.phone}</div>
-                  </div>
-                )}
+                  )}
 
-                <div className="mt-3">
+                  {/* Role-Specific Info */}
+                  {user.role === "student" && user.aboutMe && (
+                    <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
+                      <div className="font-medium">Faculty: {user.aboutMe.faculty}</div>
+                      <div className="font-medium">Year: {user.aboutMe.year}</div>
+                      <div className="font-medium">Tel: {user.phone}</div>
+                    </div>
+                  )}
+
+                  {user.role === "teacher" && user.aboutMe && (
+                    <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
+                      <div className="font-medium">Faculty: {user.aboutMe.faculty}</div>
+                      <div className="font-medium">Tel: {user.phone}</div>
+                    </div>
+                  )}
+
+                  {user.role === "organizer" && user.aboutMe && (
+                    <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
+                      <div className="font-medium">Organizer: {user.aboutMe.organizerName}</div>
+                      <div className="font-medium">Tel: {user.phone}</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4">
                   <button
                     onClick={() => setEditOpen(true)}
-                    className="px-5 py-2.5 font-medium bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-600 text-indigo-500 rounded-lg text-sm"
+                    className="px-5 py-2 font-bold bg-indigo-500 hover:bg-indigo-300 text-white rounded-lg text-sm"
                   >
                     Edit Profile
                   </button>
@@ -137,8 +162,8 @@ function ProfilePage() {
           </div>
         </div>
 
-        {/* Registered & History */}
-        <div className="flex flex-col w-full px-20 py-6">
+        {/* Event History & Stats*/}
+        <div className="flex flex-col w-full px-20">
           <div className="bg-white rounded-2xl shadow-2xl flex flex-row gap-x-8 p-6">
             <div className="text-xl text-black font-extrabold cursor-pointer hover:text-indigo-600">
               Registered
