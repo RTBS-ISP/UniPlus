@@ -4,7 +4,9 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../components/navbar";
 import EditPopup from "../components/profile/EditPopup";
+import Tabs from '../components/profile/Tabs';
 import { useUser } from "../context/UserContext"; 
+import { Calendar } from 'lucide-react';
 
 function ProfilePage() {
   const { user, setUser } = useUser(); 
@@ -164,14 +166,7 @@ function ProfilePage() {
 
         {/* Event History & Stats*/}
         <div className="flex flex-col w-full px-20">
-          <div className="bg-white rounded-2xl shadow-2xl flex flex-row gap-x-8 p-6">
-            <div className="text-xl text-black font-extrabold cursor-pointer hover:text-indigo-600">
-              Registered
-            </div>
-            <div className="text-xl text-black font-extrabold cursor-pointer hover:text-indigo-600">
-              History
-            </div>
-          </div>
+          <Tabs items={items} />
         </div>
       </div>
     </main>
@@ -179,3 +174,45 @@ function ProfilePage() {
 }
 
 export default ProfilePage;
+
+const items = [
+  {
+      title: "Event History",
+      content: (
+        <div className="flex items-center justify-center bg-white p-4 rounded-xl shadow-md h-128">
+          <div className="flex flex-col items-center text-gray-800 font-semibold text-xl">
+            <Calendar className="mb-2.5" size={52} />
+            No registered events yet
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Statistics",
+      content: (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Total Events */}
+          <div className="flex flex-row items-centers bg-white text-gray-800 p-6 rounded-xl shadow-md">
+            <div className="flex flex-col">
+              <div className="font-medium text-lg mb-2.5">Total Events</div>
+              <div className="font-extrabold text-indigo-500 text-3xl">3</div>
+            </div>
+            <Calendar className="ml-auto mt-2 w-10 h-10 text-indigo-500" />
+          </div>
+
+          {/* Upcoming */}
+          <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
+            <div className="font-medium text-lg mb-2.5">Upcoming</div>
+            <div className="font-extrabold text-indigo-500 text-3xl">1</div>
+          </div>
+
+          {/* Attended */}
+          <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
+            <div className="font-medium text-lg mb-2.5">Attended</div>
+            <div className="font-extrabold text-indigo-500 text-3xl">2</div>
+          </div>
+        </div>
+      ),
+    },
+];
+
