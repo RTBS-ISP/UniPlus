@@ -1,91 +1,161 @@
+// app/events/page.tsx
 "use client";
 
 import { useMemo, useState } from "react";
 import Navbar from "../components/navbar";
 import SearchBar from "../components/events/SearchBar";
 import SortPanel from "../components/events/SortPanel";
+import FilterPanel, { FilterValues } from "../components/events/FilterPanel";
 import EventCard from "../components/events/EventCard";
 import Pagination from "../components/events/Pagination";
 import { events as seed } from "../../lib/events/events-data";
 
 export default function EventsPage() {
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"recent" | "popular" | "upcoming">("recent");
+  const [sort, setSort] =
+    useState<"recent" | "popular" | "upcoming">("recent");
+  const [filters, setFilters] = useState<FilterValues>({
+    category: "",
+    host: "",
+    dateFrom: "",
+    dateTo: "",
+    location: "",
+  });
   const [page, setPage] = useState(1);
   const pageSize = 5;
 
-  // Filter + sort
+  // ---- Build dropdown options from data ----
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    seed.forEach((e) => {
+      if (e.category) set.add(e.category);
+      // also allow categories that appear inside tags
+      [
+        "Technology",
+        "Design",
+        "Health",
+        "Sports",
+        "Arts",
+        "Networking",
+        "Business",
+        "Science",
+        "Club",
+        "Campus",
+      ].forEach((k) => {
+        if (e.tags?.includes(k)) set.add(k);
+      });
+    });
+    return Array.from(set).sort();
+  }, []);
+
+  const hostOptions = useMemo(() => {
+    const set = new Set<string>();
+    seed.forEach((e) => {
+      if (e.host?.[0]) set.add(e.host[0]);
+    });
+    return Array.from(set).sort();
+  }, []);
+
+  // ---- Filter + Sort ----
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = seed.filter((e) =>
-      [e.title, e.excerpt, ...e.tags, ...e.host].some((x) =>
-        x.toLowerCase().includes(q)
-      )
-    );
 
-    if (sort === "popular") list = [...list].sort((a, b) => b.popularity - a.popularity);
-    if (sort === "recent") list = [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    if (sort === "upcoming") list = [...list].sort((a, b) => a.date.localeCompare(b.date));
+    let list = seed.filter((e) => {
+      const matchesText = [e.title, e.excerpt, ...(e.tags || []), ...(e.host || [])]
+        .some((x) => x.toLowerCase().includes(q));
+
+      const matchesCategory = filters.category
+        ? e.category === filters.category ||
+          (e.tags || []).includes(filters.category)
+        : true;
+
+      const matchesHost = filters.host
+        ? (e.host?.[0] || "").toLowerCase() === filters.host.toLowerCase()
+        : true;
+
+      const matchesLocation = filters.location
+        ? (e.location ?? "").toLowerCase().includes(filters.location.toLowerCase())
+        : true;
+
+      const matchesDateFrom = filters.dateFrom
+        ? e.startDate
+          ? e.startDate >= filters.dateFrom
+          : false
+        : true;
+
+      const matchesDateTo = filters.dateTo
+        ? e.endDate
+          ? e.endDate <= filters.dateTo
+          : false
+        : true;
+
+      return (
+        matchesText &&
+        matchesCategory &&
+        matchesHost &&
+        matchesLocation &&
+        matchesDateFrom &&
+        matchesDateTo
+      );
+    });
+
+    if (sort === "popular")
+      list = [...list].sort((a, b) => b.popularity - a.popularity);
+    if (sort === "recent")
+      list = [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (sort === "upcoming")
+      list = [...list].sort((a, b) => a.date.localeCompare(b.date));
 
     return list;
-  }, [query, sort]);
+  }, [query, sort, filters]);
 
-  // Pagination
+  // ---- Pagination ----
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const start = (page - 1) * pageSize;
   const pageItems = filtered.slice(start, start + pageSize);
 
   return (
     <div className="min-h-screen bg-[#ece8f3]">
-      {/* Global hover animation for the "More" button inside EventCard */}
-      <style jsx global>{`
-        /* Apply to either a class or a data-attribute on the button */
-        .event-card-more,
-        [data-role="more"] {
-          transition: transform 200ms ease, box-shadow 200ms ease, background-color 200ms ease;
-          will-change: transform;
-        }
-        .event-card-more:hover,
-        [data-role="more"]:hover {
-          transform: translateY(-1px) scale(1.04);
-          box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
-          background-color: #111; /* subtle lighten from pure black if you use bg-black */
-        }
-        .event-card-more:active,
-        [data-role="more"]:active {
-          transform: translateY(0) scale(0.98);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-        }
-        /* Optional: a soft focus ring for keyboard users */
-        .event-card-more:focus-visible,
-        [data-role="more"]:focus-visible {
-          outline: none;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.45); /* Tailwind's blue-ish ring */
-        }
-      `}</style>
-
       <Navbar />
 
       {/* Header */}
       <section className="mx-auto max-w-6xl px-4 py-8">
-        <h1 className="text-3xl text-black font-bold">Events List</h1>
+        <h1 className="text-3xl text-black font-bold">Discover Events</h1>
         <p className="mt-2 max-w-2xl text-sm text-gray-600">
-          Discover clubs, meetups, and university events happening around campus. Use the search
-          and sort options to quickly find what you’re looking for.
+          Explore clubs, meetups, and university events happening around campus.
+          Use the search and filters to find exactly what you’re looking for.
         </p>
+
+        <button
+          onClick={() => (window.location.href = "/events/create")}
+          className="mt-4 rounded-full bg-[#6366F1] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4F46E5] transition"
+        >
+          + Create Event
+        </button>
       </section>
 
       {/* Content */}
       <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 pb-16 md:grid-cols-12">
-        {/* Left: Sort panel (starts lower, sticks to top on scroll) */}
+        {/* Left: Sort + Filter */}
         <aside className="pt-[52px] md:col-span-3">
-          <div className="sticky top-30">
+          <div className="sticky top-30 space-y-4">
             <SortPanel
               value={sort}
               onChange={(v) => {
                 setPage(1);
                 setSort(v);
               }}
+            />
+
+            <FilterPanel
+              categories={categoryOptions}
+              hosts={hostOptions}
+              value={filters}
+              onChange={(f) => {
+                setPage(1);
+                setFilters(f);
+              }}
+              onClear={() => setPage(1)}
             />
           </div>
         </aside>
@@ -137,26 +207,10 @@ export default function EventsPage() {
             <div key={i}>
               <p className="text-sm font-medium text-gray-800">{t}</p>
               <ul className="mt-3 space-y-1 text-sm text-gray-600">
-                <li>
-                  <a href="#" className="hover:underline">
-                    Page
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:underline">
-                    Page
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:underline">
-                    Page
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:underline">
-                    Page
-                  </a>
-                </li>
+                <li><a href="#" className="hover:underline">Page</a></li>
+                <li><a href="#" className="hover:underline">Page</a></li>
+                <li><a href="#" className="hover:underline">Page</a></li>
+                <li><a href="#" className="hover:underline">Page</a></li>
               </ul>
             </div>
           ))}
