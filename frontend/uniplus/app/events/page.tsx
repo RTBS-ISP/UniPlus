@@ -115,7 +115,7 @@ export default function EventsPage() {
   const pageItems = filtered.slice(start, start + pageSize);
 
   return (
-    <div className="min-h-screen bg-[#ece8f3]">
+    <div className="min-h-screen bg-[#E0E7FF]">
       <Navbar />
 
       {/* Header */}
