@@ -72,6 +72,37 @@ export default function DashBoardPage() {
             </div>
           </div>
         </div>
+
+        {/* QR Code Section */}
+        <div className="flex flex-col items-center justify-center rounded-lg mt-10 mx-52 p-10 bg-white">
+          <div className="flex flex-row items-center w-full mb-2 gap-3">
+            <div className="p-3 bg-indigo-100 rounded-lg">
+              <QrCode size={42} className="text-indigo-500" />
+            </div>
+            <div className="flex flex-col w-full">
+              <div className="text-gray-800 text-3xl font-extrabold w-full">
+                QR Code Scanner
+              </div>
+              <div className="text-gray-400 text-base font-medium w-full">
+                Scan attendee tickets for instant check-in
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-row w-full gap-x-2">
+            <input
+              type="text"
+              placeholder="Scan QR code or enter Ticket ID (e.g., T123456)"
+              className="w-7xl px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-gray-800 placeholder-gray-400"
+            />
+            <button
+              type="submit"
+              className="inline-flex items-center justify-center w-full px-4 py-1 text-base font-bold leading-6 text-white bg-indigo-500 border border-transparent rounded-lg md:w-auto hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <UserCheck className="mr-1"/> Check In
+            </button>
+          </div>
+        </div>
       </div>
     </main>
   );
