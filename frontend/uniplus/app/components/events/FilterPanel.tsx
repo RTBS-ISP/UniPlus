@@ -14,8 +14,8 @@ type Props = {
   value?: Partial<FilterValues>;
   onChange: (v: FilterValues) => void;
   onClear?: () => void;
-  categories: string[]; // supply unique categories from data
-  hosts: string[];      // supply unique host roles from data (Organizer, Student, etc.)
+  categories: string[];
+  hosts: string[];
 };
 
 const defaults: FilterValues = {
@@ -51,7 +51,9 @@ export default function FilterPanel({
     onClear?.();
   };
 
-  const field = "rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-indigo-200";
+  // Make all inputs/selects full width to match the Clear button.
+  const field =
+    "w-full rounded-full border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-indigo-200";
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -88,7 +90,7 @@ export default function FilterPanel({
           </select>
         </div>
 
-        {/* Date */}
+        {/* Date range */}
         <div>
           <label className="mb-1 block text-sm text-gray-700">Date</label>
           <div className="grid grid-cols-2 gap-2">
@@ -119,7 +121,7 @@ export default function FilterPanel({
         </div>
 
         {/* Actions */}
-        <div className="pt-1 flex gap-2">
+        <div className="pt-1">
           <button
             type="button"
             onClick={clearAll}
