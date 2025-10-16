@@ -111,9 +111,9 @@ function ProfilePage() {
                         <div className="bg-sky-100 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
                           Student
                         </div>
-                      ) : user.role === "teacher" ? (
-                        <div className="bg-indigo-200 text-gray-800 font-bold text-base px-5 py-1rounded-lg text-center">
-                          Teacher
+                      ) : user.role === "professor" ? (
+                        <div className="bg-indigo-200 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
+                          Professor
                         </div>
                       ) : user.role === "organizer" ? (
                         <div className="bg-purple-100 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
@@ -136,7 +136,7 @@ function ProfilePage() {
                     </div>
                   )}
 
-                  {user.role === "teacher" && user.aboutMe && (
+                  {user.role === "professor" && user.aboutMe && (
                     <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
                       <div className="font-medium">Faculty: {user.aboutMe.faculty}</div>
                       <div className="font-medium">Tel: {user.phone}</div>
