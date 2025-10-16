@@ -289,7 +289,7 @@ function RegisterPage() {
                       Select your role
                     </option>
                     <option value="student">Student</option>
-                    <option value="teacher">Teacher</option>
+                    <option value="professor">Professor</option>
                     <option value="organizer">Organizer</option>
                   </select>
                 </div>
@@ -356,7 +356,7 @@ function RegisterPage() {
                         </div>
                       </div>
                     </div>
-                  ) : form.role === "teacher" ? (
+                  ) : form.role === "professor" ? (
                     <div>
                       {/* Faculty Dropdown */}
                       <label className="flex text-sm pb-2 text-gray-800">Faculty</label>
