@@ -1,10 +1,53 @@
+"use client";
 import Navbar from "../../../components/navbar"; 
 import { QrCode, UserCheck, User, Clock } from "lucide-react";
+import { useState } from "react";
 
 export default function DashBoardPage() {
-  const totalRegistered = 100;
-  const checkedIn = 32;
-  const pending = totalRegistered - checkedIn;
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Mock-up attendee data
+  const attendees = [
+    {
+      ticketId: "T123456",
+      name: "John Doe",
+      email: "john@example.com",
+      status: "present",
+      registered: "2025-10-05 22:00",
+      checkedIn: "2025-10-07 22:00"
+    },
+    {
+      ticketId: "T123457",
+      name: "Charlie Brown",
+      email: "charlie@example.com",
+      status: "pending",
+      registered: "2025-10-05 22:30",
+      checkedIn: "—"
+    },
+    {
+      ticketId: "T123458",
+      name: "Jane Smith",
+      email: "jane@example.com",
+      status: "present",
+      registered: "2025-10-06 10:00",
+      checkedIn: "2025-10-07 21:30"
+    }
+  ];
+
+  // Filter and search logic
+  const filteredAttendees = attendees.filter(attendee => {
+    const matchesFilter = activeFilter === "all" || attendee.status === activeFilter;
+    const matchesSearch = searchQuery === "" || 
+      attendee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      attendee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      attendee.ticketId.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
+
+  const totalRegistered = attendees.length;
+  const checkedIn = attendees.filter(a => a.status === "present").length;
+  const pending = attendees.filter(a => a.status === "pending").length;
   const attendanceRate = (checkedIn / totalRegistered) * 100;
 
   return (
@@ -101,6 +144,101 @@ export default function DashBoardPage() {
             >
               <UserCheck className="mr-1"/> Check In
             </button>
+          </div>
+        </div>
+
+        {/* Attendee Table */}
+        <div className="flex flex-col mt-12 pb-20 mx-52">
+          {/* Title and Search in same row */}
+          <div className="flex flex-row justify-between items-center mb-4">
+            <div className="text-gray-800 text-2xl font-bold">Attendee Table</div>
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, email, or ticket ID....."
+                className="px-4 py-2 w-80 rounded-full bg-white border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-gray-800 placeholder-gray-400"
+              />
+            </div>
+          </div>
+          
+          {/* Filter Tabs */}
+          <div className="flex flex-row gap-2 mb-4">
+            <button 
+              onClick={() => setActiveFilter("all")}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                activeFilter === "all" 
+                  ? "bg-indigo-500 text-white" 
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              All ({attendees.length})
+            </button>
+            <button 
+              onClick={() => setActiveFilter("present")}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                activeFilter === "present" 
+                  ? "bg-lime-500 text-white" 
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              Present ({checkedIn})
+            </button>
+            <button 
+              onClick={() => setActiveFilter("pending")}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                activeFilter === "pending" 
+                  ? "bg-yellow-400 text-white" 
+                  : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              Pending ({pending})
+            </button>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-indigo-500 text-white">
+                  <th className="px-6 py-3 text-left font-bold text-sm">TICKET ID</th>
+                  <th className="px-6 py-3 text-left font-bold text-sm">NAME</th>
+                  <th className="px-6 py-3 text-left font-bold text-sm">EMAIL</th>
+                  <th className="px-6 py-3 text-center font-bold text-sm">STATUS</th>
+                  <th className="px-6 py-3 text-left font-bold text-sm">REGISTERED</th>
+                  <th className="px-6 py-3 text-left font-bold text-sm">CHECKED IN</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white">
+                {filteredAttendees.length > 0 ? (
+                  filteredAttendees.map((attendee, index) => (
+                    <tr key={index} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 text-gray-800 font-medium">{attendee.ticketId}</td>
+                      <td className="px-6 py-4 text-gray-800 font-medium">{attendee.name}</td>
+                      <td className="px-6 py-4 text-gray-800">{attendee.email}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
+                          attendee.status === "present" 
+                            ? "bg-lime-500 text-white" 
+                            : "bg-yellow-400 text-white"
+                        }`}>
+                          {attendee.status === "present" ? "Present" : "Pending"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-gray-800">{attendee.registered}</td>
+                      <td className="px-6 py-4 text-gray-800">{attendee.checkedIn}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                      No attendees found matching your search.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
