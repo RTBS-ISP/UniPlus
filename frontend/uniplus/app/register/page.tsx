@@ -48,6 +48,8 @@ function RegisterPage() {
       setForm({ ...form, aboutMe: { ...form.aboutMe, [name]: value } });
     } else if (form.role === "organizer" && name === "organizerName") {
       setForm({ ...form, aboutMe: { ...form.aboutMe, organizerName: value } });
+    } else if (form.role === "professor" && name === "faculty") {
+      setForm({ ...form, aboutMe: { ...form.aboutMe, faculty: value } });
     } else {
       setForm({ ...form, [name]: value });
     }
@@ -90,6 +92,11 @@ function RegisterPage() {
     } else if (form.role === "organizer") {
       if (!form.aboutMe.organizerName) {
         setError("Organizer name is required");
+        return;
+      }
+    } else if (form.role === "professor") {
+      if (!form.aboutMe.faculty) {
+        setError("Faculty is required for professors");
         return;
       }
     }
