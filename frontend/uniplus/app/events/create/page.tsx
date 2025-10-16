@@ -34,8 +34,8 @@ type FormData = {
   termsAndConditions: string;
   registrationStartDate: string;
   registrationEndDate: string;
-  eventStartDate: string; // derived
-  eventEndDate: string;   // derived
+  eventStartDate: string;
+  eventEndDate: string; 
   imageFile: File | null;
   imagePreview: string;
 };
@@ -50,7 +50,7 @@ const sectionCard =
   "rounded-2xl border border-gray-200 bg-white p-6 shadow-sm";
 
 export default function EventCreatePage() {
-  const toast = useAlert(); // ✅ NEW
+  const toast = useAlert();
 
   const [data, setData] = useState<FormData>({
     eventTitle: "",
