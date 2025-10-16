@@ -11,8 +11,8 @@ export type AlertToastProps = {
   onClose: () => void;
   text: string;
   variant?: Variant;
-  duration?: number; // ms (auto close), default 2500
-  className?: string; // optional override
+  duration?: number;
+  className?: string;
 };
 
 const ICONS: Record<Variant, React.ReactNode> = {
@@ -61,7 +61,6 @@ export default function AlertToast({
           role="status"
           aria-live="polite"
           className={[
-            // ✅ moved from right-top → centered top
             'fixed left-1/2 top-6 -translate-x-1/2 z-[1000]',
             className,
           ].join(' ')}
