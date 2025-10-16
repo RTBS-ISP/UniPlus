@@ -80,7 +80,6 @@ class EventCreateSchema(Schema):
     event_address: Optional[str] = None 
     is_online: bool = False
     event_meeting_link: Optional[str] = None
-    event_category: Optional[str] = None
     tags: Optional[str] = None
     event_email: Optional[str] = None
     event_phone_number: Optional[str] = None
@@ -95,10 +94,16 @@ class EventSchema(Schema):
     event_create_date: datetime
     start_date_register: datetime
     end_date_register: datetime
-    max_attendee: Optional[int]
-    event_address: Optional[str]
+    event_start_date: datetime 
+    event_end_date: datetime   
+    max_attendee: Optional[int] = None
+    current_attendees: int
+    event_address: str
     is_online: bool
     status_registration: str
+    attendee: list
+    tags: list
+    event_image: Optional[str] = None
 
 
 class UserEventSchema(Schema):
@@ -121,14 +126,16 @@ class EventDetailSchema(Schema):
     organizer_username: str
     start_date_register: datetime
     end_date_register: datetime
-    max_attendee: Optional[int] = None
+    event_start_date: datetime  
+    event_end_date: datetime   
+    max_attendee: int
     current_attendees: int
     event_address: str
     is_online: bool
-    event_meeting_link: Optional[str] = None
-    tags: list[str]
-    event_category: str
+    event_meeting_link: str
+    tags: list
     event_image: Optional[str] = None
+    is_registered: bool
 
 class TicketDetailSchema(Schema):
     qr_code: str
@@ -136,6 +143,7 @@ class TicketDetailSchema(Schema):
     event_description: str
     start_date: datetime
     location: str
+    event_date: str
     meeting_link: Optional[str] = None
     is_online: bool
     organizer: str

@@ -12,19 +12,18 @@ type FormData = {
   eventAddress: string;
   isOnline: boolean;
   eventMeetingLink: string;
-  eventCategory: string;
   tags: string[];
   eventEmail: string;
   eventPhoneNumber: string;
   eventWebsiteUrl: string;
   termsAndConditions: string;
-  startDate: string;
-  endDate: string;
+  registrationStartDate: string;  
+  registrationEndDate: string;    
+  eventStartDate: string;         
+  eventEndDate: string;           
   imageFile: File | null;
   imagePreview: string;
 };
-
-const CATEGORIES = ["Engineering", "Science", "Business", "Humanities", "Architecture", "Arts", "Sports", "Technology"];
 
 export default function EventCreatePage() {
   const [data, setData] = useState<FormData>({
@@ -34,14 +33,15 @@ export default function EventCreatePage() {
     eventAddress: "",
     isOnline: false,
     eventMeetingLink: "",
-    eventCategory: "",
     tags: [],
     eventEmail: "",
     eventPhoneNumber: "",
     eventWebsiteUrl: "",
     termsAndConditions: "",
-    startDate: "",
-    endDate: "",
+    registrationStartDate: "",
+    registrationEndDate: "",
+    eventStartDate: "",      
+    eventEndDate: "",        
     imageFile: null,
     imagePreview: "",
   });
@@ -69,6 +69,12 @@ export default function EventCreatePage() {
         return;
       }
 
+      if (!data.eventStartDate || !data.eventEndDate) {
+        setError("Event start and end dates are required");
+        setLoading(false);
+        return;
+      }
+
       // Get CSRF token
       const csrfRes = await fetch("http://localhost:8000/api/set-csrf-token", {
         method: "GET",
@@ -83,25 +89,58 @@ export default function EventCreatePage() {
       formData.append("event_title", data.eventTitle);
       formData.append("event_description", data.eventDescription);
       
-      // Dates
-      const startDate = data.startDate ? new Date(data.startDate).toISOString() : new Date().toISOString();
-      const endDate = data.endDate ? new Date(data.endDate).toISOString() : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      formData.append("start_date_register", startDate);
-      formData.append("end_date_register", endDate);
+      // Registration dates (when people can register)
+      const regStartDate = data.registrationStartDate 
+        ? new Date(data.registrationStartDate).toISOString() 
+        : new Date().toISOString();
+      const regEndDate = data.registrationEndDate 
+        ? new Date(data.registrationEndDate).toISOString() 
+        : new Date(data.eventStartDate).toISOString(); // Default to event start
+      
+      formData.append("start_date_register", regStartDate);
+      formData.append("end_date_register", regEndDate);
+
+      // Event dates (when event actually happens) - NEW
+      formData.append("event_start_date", new Date(data.eventStartDate).toISOString());
+      formData.append("event_end_date", new Date(data.eventEndDate).toISOString());
 
       formData.append("is_online", String(data.isOnline));
 
-      // Optional fields - only add if filled
-      if (data.maxAttendee) formData.append("max_attendee", data.maxAttendee);
-      if (data.eventAddress) formData.append("event_address", data.eventAddress);
-      if (data.eventMeetingLink) formData.append("event_meeting_link", data.eventMeetingLink);
-      if (data.eventCategory) formData.append("event_category", data.eventCategory);
-      if (data.tags.length > 0) formData.append("tags", JSON.stringify(data.tags));
-      if (data.eventEmail) formData.append("event_email", data.eventEmail);
-      if (data.eventPhoneNumber) formData.append("event_phone_number", data.eventPhoneNumber);
-      if (data.eventWebsiteUrl) formData.append("event_website_url", data.eventWebsiteUrl);
-      if (data.termsAndConditions) formData.append("terms_and_conditions", data.termsAndConditions);
-      if (data.imageFile) formData.append("event_image", data.imageFile);
+      // Optional fields - only append if they have actual non-empty values
+      if (data.maxAttendee && data.maxAttendee.trim()) {
+        formData.append("max_attendee", data.maxAttendee);
+      }
+      if (data.eventAddress && data.eventAddress.trim()) {
+        formData.append("event_address", data.eventAddress);
+      }
+      if (data.isOnline && data.eventMeetingLink && data.eventMeetingLink.trim()) {
+        formData.append("event_meeting_link", data.eventMeetingLink);
+      }
+      if (data.tags.length > 0) {
+        formData.append("tags", JSON.stringify(data.tags));
+      }
+      if (data.eventEmail && data.eventEmail.trim()) {
+        formData.append("event_email", data.eventEmail);
+      }
+      if (data.eventPhoneNumber && data.eventPhoneNumber.trim()) {
+        formData.append("event_phone_number", data.eventPhoneNumber);
+      }
+      if (data.eventWebsiteUrl && data.eventWebsiteUrl.trim()) {
+        formData.append("event_website_url", data.eventWebsiteUrl);
+      }
+      if (data.termsAndConditions && data.termsAndConditions.trim()) {
+        formData.append("terms_and_conditions", data.termsAndConditions);
+      }
+      if (data.imageFile) {
+        formData.append("event_image", data.imageFile);
+      }
+
+      // Debug: Log what we're sending
+      console.log("=== FormData being sent ===");
+      for (let [key, value] of formData.entries()) {
+        console.log(key, ":", typeof value === 'object' ? 'File' : value);
+      }
+      console.log("=========================");
 
       // Send request
       const res = await fetch("http://localhost:8000/api/events/create", {
@@ -115,11 +154,30 @@ export default function EventCreatePage() {
 
       const result = await res.json();
 
-      if (result.success) {
+      if (res.ok && result.success) {
         alert("Event created successfully!");
         window.location.href = "/events";
       } else {
-        setError(result.error || "Failed to create event");
+        // Log detailed error for debugging
+        console.error("Server response:", result);
+        
+        // Handle different error formats
+        let errorMessage = "Failed to create event";
+        if (result.error) {
+          errorMessage = result.error;
+        } else if (result.detail) {
+          // Django Ninja validation errors
+          if (Array.isArray(result.detail)) {
+            errorMessage = result.detail.map((err: any) => 
+              `${err.loc.join('.')}: ${err.msg}`
+            ).join(', ');
+          } else if (typeof result.detail === 'string') {
+            errorMessage = result.detail;
+          } else {
+            errorMessage = JSON.stringify(result.detail);
+          }
+        }
+        setError(errorMessage);
       }
     } catch (err) {
       console.error("Create event error:", err);
@@ -135,7 +193,7 @@ export default function EventCreatePage() {
 
       <div className="mx-auto max-w-4xl px-4 py-12">
         <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12">
-          <h1 className="text-4xl md:text-5xl font-extrabold text-center text-indigo-400 mb-2 ">
+          <h1 className="text-4xl md:text-5xl font-extrabold text-center text-indigo-400 mb-2">
             Create New Event
           </h1>
           <p className="text-center text-gray-800 mb-8">Fill in the details to create your event</p>
@@ -177,62 +235,83 @@ export default function EventCreatePage() {
               />
             </div>
 
-            {/* Date Range */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-black mb-2">
-                  Registration Start Date
-                </label>
-                <input
-                  type="datetime-local"
-                  value={data.startDate}
-                  onChange={(e) => setData({ ...data, startDate: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-black mb-2">
-                  Registration End Date
-                </label>
-                <input
-                  type="datetime-local"
-                  value={data.endDate}
-                  onChange={(e) => setData({ ...data, endDate: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black"
-                />
+            {/* Event Dates - NEW SECTION */}
+            <div className="bg-indigo-50 p-6 rounded-xl space-y-4">
+              <h3 className="font-bold text-black text-lg mb-3">📅 Event Dates <span className="text-red-500">*</span></h3>
+              <p className="text-sm text-gray-700 mb-4">When will your event take place? (Multi-day events will generate one ticket per day)</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-2">
+                    Event Start Date & Time <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={data.eventStartDate}
+                    onChange={(e) => setData({ ...data, eventStartDate: e.target.value })}
+                    required
+                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-2">
+                    Event End Date & Time <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={data.eventEndDate}
+                    onChange={(e) => setData({ ...data, eventEndDate: e.target.value })}
+                    required
+                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Category and Max Attendees */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-black mb-2">
-                  Category
-                </label>
-                <select
-                  value={data.eventCategory}
-                  onChange={(e) => setData({ ...data, eventCategory: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black"
-                >
-                  <option value="">Select a category</option>
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
+            {/* Registration Period - UPDATED LABELS */}
+            <div className="bg-gray-50 p-6 rounded-xl space-y-4">
+              <h3 className="font-bold text-black text-lg mb-3">📝 Registration Period (Optional)</h3>
+              <p className="text-sm text-gray-700 mb-4">When can people register? Leave empty to allow registration anytime before event.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-2">
+                    Registration Opens
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={data.registrationStartDate}
+                    onChange={(e) => setData({ ...data, registrationStartDate: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-black mb-2">
+                    Registration Closes
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={data.registrationEndDate}
+                    onChange={(e) => setData({ ...data, registrationEndDate: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-black mb-2">
-                  Max Attendees
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={data.maxAttendee}
-                  onChange={(e) => setData({ ...data, maxAttendee: e.target.value })}
-                  placeholder="e.g., 100"
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black placeholder-gray-400"
-                />
-              </div>
+            </div>
+
+            {/* Max Attendees */}
+            <div>
+              <label className="block text-sm font-semibold text-black mb-2">
+                Max Attendees
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={data.maxAttendee}
+                onChange={(e) => setData({ ...data, maxAttendee: e.target.value })}
+                placeholder="e.g., 100"
+                className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black placeholder-gray-400"
+              />
             </div>
 
             {/* Online/Offline Toggle */}
@@ -278,7 +357,7 @@ export default function EventCreatePage() {
               </div>
             )}
 
-            {/* Tags - NEW COMPONENT */}
+            {/* Tags */}
             <TagSelector 
               tags={data.tags} 
               setTags={(newTags) => setData({ ...data, tags: newTags })} 
@@ -291,14 +370,14 @@ export default function EventCreatePage() {
                 <input
                   type="email"
                   value={data.eventEmail}
-                  onChange={(e) => setData({ ...data, eventEmail: e.target.value })}
+                  onChange={(e) => setData({ ...data, eventEmail: e.target.value || "" })}
                   placeholder="contact@example.com"
                   className="px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black placeholder-gray-400"
                 />
                 <input
                   type="tel"
                   value={data.eventPhoneNumber}
-                  onChange={(e) => setData({ ...data, eventPhoneNumber: e.target.value })}
+                  onChange={(e) => setData({ ...data, eventPhoneNumber: e.target.value || "" })}
                   placeholder="+1 234 567 8900"
                   className="px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black placeholder-gray-400"
                 />
@@ -306,7 +385,7 @@ export default function EventCreatePage() {
               <input
                 type="url"
                 value={data.eventWebsiteUrl}
-                onChange={(e) => setData({ ...data, eventWebsiteUrl: e.target.value })}
+                onChange={(e) => setData({ ...data, eventWebsiteUrl: e.target.value || "" })}
                 placeholder="https://example.com"
                 className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black placeholder-gray-400"
               />

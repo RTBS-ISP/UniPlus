@@ -12,14 +12,16 @@ interface EventDetail {
   organizer_username: string;
   start_date_register: string;
   end_date_register: string;
+  event_start_date: string;
+  event_end_date: string;
   max_attendee: number;
   current_attendees: number;
   event_address: string;
   is_online: boolean;
   event_meeting_link: string;
   tags: string[];
-  event_category: string;
   event_image: string;
+  is_registered: boolean;
 }
 
 export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -63,8 +65,11 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
       const result = await response.json();
       if (response.ok) {
-        setMessage('✅ Successfully registered! Redirecting...');
-        setTimeout(() => router.push('/my-ticket'), 1500);
+        const ticketMessage = result.tickets_count > 1 
+          ? `✅ Successfully registered! You received ${result.tickets_count} tickets (one for each day). Redirecting...`
+          : '✅ Successfully registered! Redirecting...';
+        setMessage(ticketMessage);
+        setTimeout(() => router.push('/my-ticket'), 2000);
       } else {
         setMessage(result.error || 'Registration failed');
       }
@@ -74,6 +79,13 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     } finally {
       setRegistering(false);
     }
+  };
+
+  const getEventDays = () => {
+    if (!event) return 0;
+    const start = new Date(event.event_start_date);
+    const end = new Date(event.event_end_date);
+    return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
   };
 
   if (loading) {
@@ -101,6 +113,8 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
   const availableSpots = event.max_attendee - event.current_attendees;
   const registrationClosed = new Date() > new Date(event.end_date_register);
   const eventFull = availableSpots <= 0;
+  const isRegistered = event.is_registered;
+  const eventDays = getEventDays();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
@@ -121,20 +135,22 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           )}
 
           <div className="p-6 sm:p-10 text-gray-900">
-            {/* Title & Category */}
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-5">
-              <div>
-                <h1 className="text-3xl sm:text-4xl font-bold mb-1">
-                  {event.event_title}
-                </h1>
-                <p className="text-base sm:text-lg">
-                  Organized by <span className="font-semibold">{event.organizer_username}</span>
-                </p>
-              </div>
-              <span className="inline-block px-3 py-1 mt-2 sm:mt-0 bg-indigo-100 text-indigo-900 rounded-full font-semibold text-sm">
-                {event.event_category}
-              </span>
+            {/* Title */}
+            <div className="mb-5">
+              <h1 className="text-3xl sm:text-4xl font-bold mb-1">
+                {event.event_title}
+              </h1>
+              <p className="text-base sm:text-lg">
+                Organized by <span className="font-semibold">{event.organizer_username}</span>
+              </p>
             </div>
+
+            {/* Multi-day Badge */}
+            {eventDays > 1 && (
+              <div className="mb-4 inline-block px-4 py-2 bg-indigo-100 text-indigo-900 rounded-full font-semibold text-sm">
+                🗓️ {eventDays}-Day Event
+              </div>
+            )}
 
             {/* Tags */}
             <div className="flex flex-wrap gap-2 mb-6">
@@ -143,9 +159,45 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Info Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
+              <div className="md:col-span-2 bg-gray-50 p-4 rounded-lg">
+                <p className="text-gray-900 mb-1 font-medium text-lg">📅 Event Date</p>
+                {eventDays === 1 ? (
+                  <p className="font-semibold text-xl">
+                    {new Date(event.event_start_date).toLocaleString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                ) : (
+                  <>
+                    <p className="font-semibold text-lg">
+                      {new Date(event.event_start_date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </p>
+                    <p className="text-gray-600 text-sm mb-1">to</p>
+                    <p className="font-semibold text-lg">
+                      {new Date(event.event_end_date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </>
+                )}
+              </div>
+
               <div>
                 <p className="text-gray-900 mb-1 font-medium">Registration Period</p>
-                <p className="font-semibold">
+                <p className="font-semibold text-sm">
                   {new Date(event.start_date_register).toLocaleDateString()} - {new Date(event.end_date_register).toLocaleDateString()}
                 </p>
               </div>
@@ -190,28 +242,54 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
             {/* Message */}
             {message && (
-              <div className={`mb-6 p-4 rounded-lg text-base ${
-                message.includes('✅') ? 'bg-green-50 text-green-900' : 'bg-red-50 text-red-900'
-              }`}>
+              <div
+                className={`mb-6 p-4 rounded-lg text-center font-medium ${
+                  message.startsWith('✅')
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                }`}
+              >
                 {message}
               </div>
             )}
 
             {/* Register Button */}
-            <button
-              onClick={handleRegister}
-              disabled={registering || registrationClosed || eventFull}
-              className={`w-full py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg transition ${
-                registrationClosed || eventFull
-                  ? 'bg-gray-300 text-gray-800 cursor-not-allowed'
-                  : 'bg-indigo-600 text-white hover:bg-indigo-700'
-              }`}
-            >
-              {registering ? 'Registering...' : 
-               registrationClosed ? 'Registration Closed' :
-               eventFull ? 'Event Full' :
-               'Register for Event'}
-            </button>
+            <div className="flex justify-center">
+              {isRegistered ? (
+                <button
+                  disabled
+                  className="px-8 py-3 bg-gray-300 text-gray-700 rounded-full font-semibold cursor-not-allowed"
+                >
+                  Already Registered
+                </button>
+              ) : registrationClosed ? (
+                <button
+                  disabled
+                  className="px-8 py-3 bg-gray-300 text-gray-700 rounded-full font-semibold cursor-not-allowed"
+                >
+                  Registration Closed
+                </button>
+              ) : eventFull ? (
+                <button
+                  disabled
+                  className="px-8 py-3 bg-gray-300 text-gray-700 rounded-full font-semibold cursor-not-allowed"
+                >
+                  Event Full
+                </button>
+              ) : (
+                <button
+                  onClick={handleRegister}
+                  disabled={registering}
+                  className={`px-8 py-3 rounded-full font-semibold transition-all ${
+                    registering
+                      ? 'bg-indigo-300 cursor-wait'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  }`}
+                >
+                  {registering ? 'Registering...' : 'Register Now'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

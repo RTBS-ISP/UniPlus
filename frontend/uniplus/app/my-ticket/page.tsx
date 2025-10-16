@@ -9,7 +9,7 @@ interface TicketData {
   ticket_number: string;
   event_title: string;
   event_description: string;
-  date: string;
+  event_date: string;
   time: string;
   location: string;
   organizer: string;
@@ -49,9 +49,15 @@ export default function MyTicketsPage() {
     }
   };
 
+  // FIXED: Use event date + time to determine if event is past
   const categorizedTickets = tickets.map(ticket => {
-    const eventDate = new Date(ticket.date);
-    const isPast = eventDate < new Date();
+    // Combine date and time to get the actual event datetime
+    const eventDateTime = new Date(`${ticket.event_date}T${ticket.time || '00:00:00'}`);
+    const now = new Date();
+    
+    // Event is past only if the event datetime has already occurred
+    const isPast = eventDateTime < now;
+    
     return { ...ticket, status: isPast ? 'past' : 'upcoming' };
   });
 
@@ -182,7 +188,7 @@ export default function MyTicketsPage() {
                     </h3>
                     <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 rounded-2xl border-2 border-white/40">
                       <div className="text-center leading-tight">
-                        {formatShortDate(ticket.date).split('\n').map((line, i) => (
+                        {formatShortDate(ticket.event_date).split('\n').map((line, i) => (
                           <div
                             key={i}
                             className={i === 0 ? 'text-xs font-bold' : 'text-2xl font-bold'}
