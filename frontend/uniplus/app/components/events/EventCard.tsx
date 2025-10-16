@@ -1,8 +1,8 @@
-// app/components/events/EventCard.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
 
 // ---------- Types ----------
 export type EventItem = {
@@ -11,12 +11,12 @@ export type EventItem = {
   host: string[];
   tags: string[];
   excerpt: string;
-  date: string;        // ISO "YYYY-MM-DD" (registration/main date) | can be ""
+  date: string;
   createdAt: string;
   popularity: number;
   category?: string;
-  startDate?: string;  // ISO "YYYY-MM-DD"
-  endDate?: string;    // ISO "YYYY-MM-DD"
+  startDate?: string;
+  endDate?: string;
   location?: string;
 };
 
@@ -61,19 +61,17 @@ function BluePill({ children }: { children: React.ReactNode }) {
 
 function HostPill({ label }: { label: string }) {
   const normalized = label.toLowerCase();
-
-  // soft palette (your version)
   let bg = "#E8EEFF";
   let color = "#1F2A44";
 
   if (normalized === "organizer") {
-    bg = "#F3E8FF"; // soft purple
+    bg = "#F3E8FF";
     color = "#1F1F1F";
   } else if (normalized === "student") {
-    bg = "#E0F2FE"; // soft sky
+    bg = "#E0F2FE";
     color = "#1F1F1F";
   } else if (normalized === "university") {
-    bg = "#C7D2FE"; // soft indigo
+    bg = "#C7D2FE";
     color = "#1F1F1F";
   }
 
@@ -87,31 +85,26 @@ function HostPill({ label }: { label: string }) {
   );
 }
 
-// ---------- Component ----------
+// ---------- Main Component ----------
 export default function EventCard({ item }: { item: EventItem }) {
+  const shouldReduce = useReducedMotion();
   const hostBadge = item.host?.[0] ?? "Organizer";
 
-  // Stable “Registration end X days” (only show if valid date)
   const daysLeft = useMemo(() => {
     if (!isValidISODate(item.date)) return undefined;
-    const ms =
-      new Date(item.date + "T00:00:00Z").getTime() - Date.now();
+    const ms = new Date(item.date + "T00:00:00Z").getTime() - Date.now();
     return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
   }, [item.date]);
 
-  // Ensure order Host -> Category -> Tag
   const derivedCategory = item.category ?? inferCategory(item.tags);
   const tagList = useMemo(
     () => (item.tags || []).filter((t) => t !== derivedCategory),
     [item.tags, derivedCategory]
   );
 
-  // -------- Dynamic tag fitting (fit one line, rest into +N) --------------
-  // pills area the user sees
+  // --- dynamic tag fitting ---
   const pillsRef = useRef<HTMLDivElement>(null);
-  // hidden measurer with identical styles to compute widths
   const measureRef = useRef<HTMLDivElement>(null);
-
   const [visibleCount, setVisibleCount] = useState<number>(tagList.length);
 
   useEffect(() => {
@@ -126,23 +119,20 @@ export default function EventCard({ item }: { item: EventItem }) {
         return;
       }
 
-      // all tag pill widths (in same styling as visible)
       const tagSpans = Array.from(
         measure.querySelectorAll<HTMLElement>('[data-role="pill"]')
       );
       const widths = tagSpans.map((el) => el.offsetWidth);
 
-      // width for +N with the largest possible text (“+99”) as a safe max
       const plusSpan = measure.querySelector<HTMLElement>('[data-role="plus"]');
       const plusWidthBase = plusSpan ? plusSpan.offsetWidth : 40;
 
-      const GAP = 8; // tailwind gap-2 (0.5rem) between pills
+      const GAP = 8;
       let used = 0;
       let count = 0;
 
       for (let i = 0; i < widths.length; i++) {
         const w = widths[i] + (i > 0 ? GAP : 0);
-        // if there will be hidden items, reserve space for +N
         const remaining = widths.length - (i + 1);
         const reserve = remaining > 0 ? GAP + plusWidthBase : 0;
 
@@ -153,16 +143,11 @@ export default function EventCard({ item }: { item: EventItem }) {
           break;
         }
       }
-
-      // Edge case: first tag doesn't fit -> show none, only +N
       setVisibleCount(count);
     }
 
-    // initial + next frame (ensure layout settled)
     recalc();
     const t = setTimeout(recalc, 0);
-
-    // observe container size
     const ro = new ResizeObserver(recalc);
     if (pillsRef.current) ro.observe(pillsRef.current);
     window.addEventListener("resize", recalc);
@@ -177,10 +162,18 @@ export default function EventCard({ item }: { item: EventItem }) {
   const visibleTags = tagList.slice(0, visibleCount);
   const hiddenTags = tagList.slice(visibleCount);
 
+  // --- motion variants ---
+  const cardHover = shouldReduce ? {} : { scale: 1.015, y: -4 };
+  const cardTransition = shouldReduce
+    ? { duration: 0 }
+    : { type: "spring", stiffness: 320, damping: 22, mass: 0.6 };
+
   return (
-    <div
-      className="rounded-2xl border border-[#6CA8FF] bg-white p-5 shadow-sm
-                 transition-transform duration-300 hover:-translate-y-1 hover:shadow-lg"
+    <motion.div
+      whileHover={cardHover}
+      transition={cardTransition}
+      className="group rounded-2xl border border-[#6CA8FF] bg-white p-5 shadow-sm hover:shadow-lg
+                 [backface-visibility:hidden] [transform-style:preserve-3d]"
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -210,7 +203,7 @@ export default function EventCard({ item }: { item: EventItem }) {
             </div>
           )}
 
-          {/* Tag (auto-fit one line; rest behind +N) */}
+          {/* Tag */}
           {tagList.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="font-semibold text-[#0B1220]/80">Tag</span>
@@ -247,7 +240,7 @@ export default function EventCard({ item }: { item: EventItem }) {
                 )}
               </div>
 
-              {/* hidden measurer (same styles) */}
+              {/* hidden measurer */}
               <div
                 ref={measureRef}
                 className="invisible absolute left-[-9999px] top-0 -z-10 flex flex-wrap gap-2"
@@ -298,16 +291,61 @@ export default function EventCard({ item }: { item: EventItem }) {
         </p>
       )}
 
-      {/* Button */}
+      {/* Animated Detail Button */}
       <div className="mt-4 flex justify-end">
-        <button
-          data-role="more"
-          className="event-card-more inline-flex items-center gap-1 rounded-full bg-[#6366F1] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#4F46E5] transition"
-          onClick={() => (window.location.href = `/events/${item.id}`)}
-        >
-          Detail <ChevronRight className="h-4 w-4" />
-        </button>
+        <MotionDetailButton id={item.id} />
       </div>
-    </div>
+    </motion.div>
+  );
+}
+
+// ---------- Animated Button ----------
+function MotionDetailButton({ id }: { id: number }) {
+  const shouldReduce = useReducedMotion();
+  const [hovered, setHovered] = useState(false);
+
+  const spring = shouldReduce
+    ? { duration: 0 }
+    : { type: "spring", stiffness: 500, damping: 32, mass: 0.6 };
+
+  return (
+    <motion.button
+      type="button"
+      onClick={() => (window.location.href = `/events/${id}`)}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      className="inline-flex items-center rounded-full bg-[#6366F1] text-xs font-semibold text-white
+                 shadow-sm focus:outline-none hover:bg-[#4F46E5]"
+      style={{
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: 6,
+        paddingBottom: 6,
+        gap: 4,
+      }}
+      whileHover={
+        shouldReduce
+          ? {}
+          : {
+              paddingLeft: 16,
+              paddingRight: 20,
+              gap: 10,
+              boxShadow: "0 8px 22px rgba(99,102,241,0.35)",
+              scale: 1.02,
+            }
+      }
+      whileTap={shouldReduce ? {} : { scale: 0.98 }}
+      transition={spring}
+      aria-label="View detail"
+    >
+      <span>Detail</span>
+      <motion.span
+        animate={shouldReduce ? { x: 0 } : { x: hovered ? 6 : 0 }}
+        transition={spring}
+        className="ml-0.5 inline-flex"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </motion.span>
+    </motion.button>
   );
 }
