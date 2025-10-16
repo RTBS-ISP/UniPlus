@@ -1,224 +1,298 @@
-"use client";
+'use client';
 
-import { use, useState } from "react";
-import Link from "next/link";
+import { use, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Navbar from "../../components/navbar";
-import { TagAccent } from "../../components/shared/Tag";
-import { events } from "../../../lib/events/events-data";
+import { Tag } from "../../components/shared/Tag";
 
-// Augment base event type with optional detail fields (safe for mixed data)
-type EventWithOptionals = (typeof events)[number] & {
-  available?: number;
-  startDate?: string;
-  endDate?: string;
-  startTime?: string;
-  endTime?: string;
-  location?: string;
-  image?: string;
-};
+interface EventDetail {
+  id: number;
+  event_title: string;
+  event_description: string;
+  organizer_username: string;
+  start_date_register: string;
+  end_date_register: string;
+  event_start_date: string;
+  event_end_date: string;
+  max_attendee: number;
+  current_attendees: number;
+  event_address: string;
+  is_online: boolean;
+  event_meeting_link: string;
+  tags: string[];
+  event_image: string;
+  is_registered: boolean;
+}
 
-// Next.js 15: params is a Promise in client components
-type Params = { params: Promise<{ id: string }> };
-
-export default function EventDetailPage({ params }: Params) {
-  // ✅ unwrap params Promise on the client
+export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const numericId = Number(id);
+  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [registering, setRegistering] = useState(false);
+  const [message, setMessage] = useState('');
+  const router = useRouter();
 
-  const event = events.find((e) => e.id === numericId) as
-    | EventWithOptionals
-    | undefined;
+  useEffect(() => {
+    fetchEventDetail();
+  }, [id]);
 
-  if (!event) {
+  const fetchEventDetail = async () => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/events/${id}`, { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        setEvent(data);
+      }
+    } catch (error) {
+      console.error('Error fetching event:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    setRegistering(true);
+    setMessage('');
+    try {
+      const csrfRes = await fetch('http://localhost:8000/api/set-csrf-token', { credentials: 'include' });
+      const { csrftoken } = await csrfRes.json();
+
+      const response = await fetch(`http://localhost:8000/api/events/${id}/register`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'X-CSRFToken': csrftoken },
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        const ticketMessage = result.tickets_count > 1 
+          ? `✅ Successfully registered! You received ${result.tickets_count} tickets (one for each day). Redirecting...`
+          : '✅ Successfully registered! Redirecting...';
+        setMessage(ticketMessage);
+        setTimeout(() => router.push('/my-ticket'), 2000);
+      } else {
+        setMessage(result.error || 'Registration failed');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      setMessage('❌ Failed to register. Please try again.');
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  const getEventDays = () => {
+    if (!event) return 0;
+    const start = new Date(event.event_start_date);
+    const end = new Date(event.event_end_date);
+    return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-[#ece8f3]">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
         <Navbar />
-        <main className="mx-auto max-w-6xl px-4 py-16">
-          <p className="text-lg font-medium">Event not found.</p>
-        </main>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-xl text-gray-900">Loading event...</div>
+        </div>
       </div>
     );
   }
 
-  const [registered, setRegistered] = useState(false);
+  if (!event) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
+        <Navbar />
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-xl text-gray-900">Event not found</div>
+        </div>
+      </div>
+    );
+  }
 
-  // Safe fallbacks
-  const hostLabel = event.host?.[0] ?? "Organizer";
-  const available = event.available ?? 200;
-  const startDate = event.startDate ?? "2025-09-01";
-  const endDate = event.endDate ?? "2025-09-05";
-  const startTime = event.startTime ?? "19:00";
-  const endTime = event.endTime ?? "20:00";
-  const location = event.location ?? "KU";
-  const image =
-    event.image ??
-    "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
-
-  const related = events.filter((e) => e.id !== numericId).slice(0, 6);
-
-  const handleRegister = () => {
-    if (registered) return;
-    alert("✅ Registered!");
-    setRegistered(true);
-  };
+  const availableSpots = event.max_attendee - event.current_attendees;
+  const registrationClosed = new Date() > new Date(event.end_date_register);
+  const eventFull = availableSpots <= 0;
+  const isRegistered = event.is_registered;
+  const eventDays = getEventDays();
 
   return (
-    <div className="min-h-screen bg-[#ece8f3]">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
       <Navbar />
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-          {/* left: big image */}
-          <div className="md:col-span-6">
-            <div className="overflow-hidden rounded-xl bg-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={image}
-                alt={event.title}
-                className="h-[420px] w-full object-cover"
+      <div className="max-w-4xl mx-auto px-6 py-12">
+        <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
+
+          {/* Event Image */}
+          {event.event_image && (
+            <div className="h-64 sm:h-80 overflow-hidden">
+              <img 
+                src={`http://localhost:8000${event.event_image}`}
+                alt={event.event_title}
+                className="w-full h-full object-cover"
               />
             </div>
-          </div>
+          )}
 
-          {/* right: details */}
-          <div className="md:col-span-6">
-            <h1 className="text-3xl text-black font-bold">{event.title}</h1>
-
-            <div className="mt-3">
-              <TagAccent label={hostLabel} />
+          <div className="p-6 sm:p-10 text-gray-900">
+            {/* Title */}
+            <div className="mb-5">
+              <h1 className="text-3xl sm:text-4xl font-bold mb-1">
+                {event.event_title}
+              </h1>
+              <p className="text-base sm:text-lg">
+                Organized by <span className="font-semibold">{event.organizer_username}</span>
+              </p>
             </div>
 
-            <p className="mt-4 text-sm text-black font-semibold">
-              Available: {available} students
-            </p>
+            {/* Multi-day Badge */}
+            {eventDays > 1 && (
+              <div className="mb-4 inline-block px-4 py-2 bg-indigo-100 text-indigo-900 rounded-full font-semibold text-sm">
+                🗓️ {eventDays}-Day Event
+              </div>
+            )}
 
-            <div className="mt-3 rounded-xl bg-white p-4 shadow-sm">
-              <dl className="space-y-2 text-sm text-gray-800">
-                <div className="flex gap-2">
-                  <dt className="w-24 font-medium">Date</dt>
-                  <dd>
-                    {formatDate(startDate)} - {formatDate(endDate)}
-                  </dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="w-24 font-medium">Time</dt>
-                  <dd>
-                    {startTime} - {endTime}
-                  </dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="w-24 font-medium">Location</dt>
-                  <dd>{location}</dd>
-                </div>
-                <div className="flex gap-2">
-                  <dt className="w-24 font-medium">Info</dt>
-                  <dd className="text-gray-600">{event.excerpt}</dd>
-                </div>
-              </dl>
+            {/* Tags */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              {event.tags.map((tag, idx) => <Tag key={idx} label={tag} />)}
             </div>
 
-            {/* Mock registration */}
-            <button
-              onClick={handleRegister}
-              disabled={registered}
-              className={`mt-4 block w-full rounded-lg px-4 py-3 text-center font-medium transition
-                ${
-                  registered
-                    ? "bg-gray-300 text-gray-700 cursor-default"
-                    : "bg-black text-white hover:bg-gray-800"
+            {/* Info Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
+              <div className="md:col-span-2 bg-gray-50 p-4 rounded-lg">
+                <p className="text-gray-900 mb-1 font-medium text-lg">📅 Event Date</p>
+                {eventDays === 1 ? (
+                  <p className="font-semibold text-xl">
+                    {new Date(event.event_start_date).toLocaleString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </p>
+                ) : (
+                  <>
+                    <p className="font-semibold text-lg">
+                      {new Date(event.event_start_date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </p>
+                    <p className="text-gray-600 text-sm mb-1">to</p>
+                    <p className="font-semibold text-lg">
+                      {new Date(event.event_end_date).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </p>
+                  </>
+                )}
+              </div>
+
+              <div>
+                <p className="text-gray-900 mb-1 font-medium">Registration Period</p>
+                <p className="font-semibold text-sm">
+                  {new Date(event.start_date_register).toLocaleDateString()} - {new Date(event.end_date_register).toLocaleDateString()}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-gray-900 mb-1 font-medium">Available Spots</p>
+                <p className="font-semibold text-lg">
+                  <span className={availableSpots > 10 ? 'text-green-700' : 'text-orange-700'}>
+                    {availableSpots}
+                  </span> / {event.max_attendee}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-gray-900 mb-1 font-medium">Location</p>
+                <p className="font-semibold">
+                  {event.is_online ? '🌐 Online Event' : event.event_address}
+                </p>
+              </div>
+
+              {event.is_online && event.event_meeting_link && (
+                <div>
+                  <p className="text-gray-900 mb-1 font-medium">Meeting Link</p>
+                  <a 
+                    href={event.event_meeting_link}
+                    target="_blank"
+                    className="text-blue-800 hover:underline break-all"
+                  >
+                    Join Meeting
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold mb-2">About This Event</h2>
+              <p className="leading-relaxed whitespace-pre-line text-base sm:text-lg">
+                {event.event_description}
+              </p>
+            </div>
+
+            {/* Message */}
+            {message && (
+              <div
+                className={`mb-6 p-4 rounded-lg text-center font-medium ${
+                  message.startsWith('✅')
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
                 }`}
-            >
-              {registered ? "Registered" : "Register"}
-            </button>
+              >
+                {message}
+              </div>
+            )}
 
-            <p className="mt-2 text-center text-xs text-gray-500">
-              Text box for additional details or fine print
-            </p>
-          </div>
-        </div>
-
-        {/* Related */}
-        <section className="mt-10">
-          <h2 className="text-xl font-semibold">Related Events</h2>
-          <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {related.map((r) => (
-              <RelatedCard key={r.id} item={r} />
-            ))}
-          </div>
-        </section>
-      </main>
-
-      <footer className="border-t border-black/10 bg-white/60 py-10">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 md:grid-cols-4">
-          <div>
-            <p className="text-sm text-gray-700">Site name</p>
-            <div className="mt-3 flex items-center gap-3 text-gray-500">
-              <div className="h-5 w-5 rounded-full border" />
-              <div className="h-5 w-5 rounded-full border" />
-              <div className="h-5 w-5 rounded-full border" />
-              <div className="h-5 w-5 rounded-full border" />
+            {/* Register Button */}
+            <div className="flex justify-center">
+              {isRegistered ? (
+                <button
+                  disabled
+                  className="px-8 py-3 bg-gray-300 text-gray-700 rounded-full font-semibold cursor-not-allowed"
+                >
+                  Already Registered
+                </button>
+              ) : registrationClosed ? (
+                <button
+                  disabled
+                  className="px-8 py-3 bg-gray-300 text-gray-700 rounded-full font-semibold cursor-not-allowed"
+                >
+                  Registration Closed
+                </button>
+              ) : eventFull ? (
+                <button
+                  disabled
+                  className="px-8 py-3 bg-gray-300 text-gray-700 rounded-full font-semibold cursor-not-allowed"
+                >
+                  Event Full
+                </button>
+              ) : (
+                <button
+                  onClick={handleRegister}
+                  disabled={registering}
+                  className={`px-8 py-3 rounded-full font-semibold transition-all ${
+                    registering
+                      ? 'bg-indigo-300 cursor-wait'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  }`}
+                >
+                  {registering ? 'Registering...' : 'Register Now'}
+                </button>
+              )}
             </div>
           </div>
-          {["Topic", "Topic", "Topic"].map((t, i) => (
-            <div key={i}>
-              <p className="text-sm font-medium text-gray-800">{t}</p>
-              <ul className="mt-3 space-y-1 text-sm text-gray-600">
-                <li><a href="#" className="hover:underline">Page</a></li>
-                <li><a href="#" className="hover:underline">Page</a></li>
-                <li><a href="#" className="hover:underline">Page</a></li>
-                <li><a href="#" className="hover:underline">Page</a></li>
-              </ul>
-            </div>
-          ))}
         </div>
-        <div className="mx-auto mt-8 max-w-6xl px-4 text-xs text-gray-500">
-          © {new Date().getFullYear()} UniPLUS
-        </div>
-      </footer>
-    </div>
-  );
-}
-
-/** SSR/CSR-stable date formatting */
-function formatDate(s: string) {
-  try {
-    const d = new Date(s);
-    return new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      timeZone: "UTC", // ensures same output on server & client
-    }).format(d);
-  } catch {
-    return s;
-  }
-}
-
-function RelatedCard({ item }: { item: EventWithOptionals }) {
-  const img =
-    item.image ??
-    "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
-
-  // Deterministic fallback (no Math.random to avoid hydration mismatch)
-  const available = item.available ?? 20 + ((item.id * 37) % 120);
-  const badge = item.host?.[0] ?? item.tags?.[0] ?? "Organizer";
-
-  return (
-    <Link
-      href={`/events/${item.id}`}
-      className="block rounded-xl bg-white shadow-sm transition hover:shadow-md"
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={img} alt={item.title} className="h-40 w-full rounded-t-xl object-cover" />
-      <div className="p-4">
-        <h3 className="font-medium text-black">{item.title}</h3>
-        <div className="mt-2">
-          <TagAccent label={badge} />
-        </div>
-        <p className="mt-1 text-sm text-gray-600">
-          Available: {available} students
-        </p>
       </div>
-    </Link>
+    </div>
   );
 }
