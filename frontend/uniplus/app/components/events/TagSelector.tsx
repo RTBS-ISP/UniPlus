@@ -23,7 +23,7 @@ const AVAILABLE_TAGS = [
 ];
 
 export default function TagSelector({ tags, setTags }: TagSelectorProps) {
-  const toast = useAlert(); // ✅
+  const toast = useAlert();
 
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -50,7 +50,7 @@ export default function TagSelector({ tags, setTags }: TagSelectorProps) {
     }
 
     if (tags.length >= MAX_TAGS) {
-      toast({ text: `You can only add up to ${MAX_TAGS} tags.`, variant: 'error' }); // ✅
+      toast({ text: `You can only add up to ${MAX_TAGS} tags.`, variant: 'error' });
       return;
     }
 
@@ -64,11 +64,11 @@ export default function TagSelector({ tags, setTags }: TagSelectorProps) {
     if (!custom) return;
 
     if (custom.length > MAX_CUSTOM_LEN) {
-      toast({ text: `Custom tag is too long (max ${MAX_CUSTOM_LEN} characters).`, variant: 'warning' }); // ✅
+      toast({ text: `Custom tag is too long (max ${MAX_CUSTOM_LEN} characters).`, variant: 'warning' });
       return;
     }
     if (tags.length >= MAX_TAGS) {
-      toast({ text: `You can only add up to ${MAX_TAGS} tags.`, variant: 'error' }); // ✅
+      toast({ text: `You can only add up to ${MAX_TAGS} tags.`, variant: 'error' });
       return;
     }
     if (!tags.includes(custom)) setTags([...tags, custom]);
