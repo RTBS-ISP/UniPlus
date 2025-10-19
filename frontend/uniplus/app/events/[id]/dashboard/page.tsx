@@ -70,32 +70,26 @@ export default function DashBoardPage() {
 
         {/* Stats Cards */}
         <div className="flex flex-col items-center justify-center rounded-lg mt-10 mx-52 bg-white">
-          <div className="grid grid-cols-2 gap-6 w-full p-10">
+          <div className="grid grid-cols-4 gap-6 w-full p-10">
             {/* Total Registered */}
-            <div className="bg-indigo-500 rounded-lg p-6 flex flex-row shadow-md">
-              <div className="flex flex-col items-start gap-y-2.5 ml-4 w-full">
-                <User size={32} className="font-extrabold"/>
-                <div className="text-white font-extrabold mt-2">Total Registered</div>
-              </div>
-              <div className="flex text-white text-3xl font-extrabold w-full justify-end">{totalRegistered}</div>
+            <div className="bg-indigo-500 rounded-lg p-6 flex flex-col shadow-md">
+              <User size={32} className="font-extrabold mb-3"/>
+              <div className="flex text-white text-3xl font-extrabold mb-1">{totalRegistered}</div>
+              <div className="text-white font-extrabold">Total Registered</div>
             </div>
 
             {/* Checked In */}
-            <div className="bg-lime-500 rounded-lg p-6 flex flex-rowshadow-md">
-              <div className="flex flex-col items-start gap-y-2.5 ml-4 w-full">
-                <UserCheck size={32} className="font-extrabold"/>
-                <div className="text-white font-extrabold mt-2">Checked In</div>
-              </div>
-              <div className="flex text-white text-3xl font-extrabold w-full justify-end">{checkedIn}</div>
+            <div className="bg-lime-500 rounded-lg p-6 flex flex-col shadow-md">
+              <UserCheck size={32} className="font-extrabold mb-3"/>
+              <div className="flex text-white text-3xl font-extrabold mb-1">{checkedIn}</div>
+              <div className="text-white font-extrabold">Checked In</div>
             </div>
 
             {/* Pending */}
-            <div className="bg-yellow-400 rounded-lg p-6 flex flex-row shadow-md">
-              <div className="flex flex-col items-start gap-y-2.5 ml-4 w-full">
-                <Clock size={32} className="font-extrabold"/>
-                <div className="text-white font-extrabold mt-2">Pending Check-In</div>
-              </div>
-              <div className="flex text-white text-3xl font-extrabold w-full justify-end">{pending}</div>
+            <div className="bg-yellow-400 rounded-lg p-6 flex flex-col shadow-md">
+              <Clock size={32} className="font-extrabold mb-3"/>
+              <div className="flex text-white text-3xl font-extrabold mb-1">{pending}</div>
+              <div className="text-white font-extrabold">Pending Check-In</div>
             </div>
 
             {/* Attendance Rate */}
