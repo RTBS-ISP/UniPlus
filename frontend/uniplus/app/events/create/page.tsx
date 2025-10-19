@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "../../components/navbar";
 import TagSelector from "../../components/events/TagSelector";
 import EventScheduleDays, { DaySlot } from "../../components/events/EventScheduleDays";
 import { useAlert } from "../../components/ui/AlertProvider";
+import { Trash2 } from "lucide-react";
 
 // ---- Categories (edit this list as needed) ----
 const CATEGORIES = [
@@ -24,9 +25,6 @@ type FormData = {
   eventDescription: string;
   category: string;
   maxAttendee: string;
-  eventAddress: string;
-  isOnline: boolean;
-  eventMeetingLink: string;
   tags: string[];
   eventEmail: string;
   eventPhoneNumber: string;
@@ -35,7 +33,7 @@ type FormData = {
   registrationStartDate: string;
   registrationEndDate: string;
   eventStartDate: string;
-  eventEndDate: string; 
+  eventEndDate: string;
   imageFile: File | null;
   imagePreview: string;
 };
@@ -57,9 +55,6 @@ export default function EventCreatePage() {
     eventDescription: "",
     category: "",
     maxAttendee: "",
-    eventAddress: "",
-    isOnline: false,
-    eventMeetingLink: "",
     tags: [],
     eventEmail: "",
     eventPhoneNumber: "",
@@ -73,12 +68,14 @@ export default function EventCreatePage() {
     imagePreview: "",
   });
 
+  // schedule is fully controlled here and edited inside EventScheduleDays
   const [scheduleDays, setScheduleDays] = useState<DaySlot[]>([
-    { date: "", startTime: "", endTime: "" },
+    { date: "", startTime: "", endTime: "", isOnline: false, address: "", meetingLink: "" },
   ]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -91,22 +88,43 @@ export default function EventCreatePage() {
     }
   };
 
+  const removeImage = () => {
+    if (data.imagePreview) URL.revokeObjectURL(data.imagePreview);
+    setData((s) => ({ ...s, imageFile: null, imagePreview: "" }));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const summary = useMemo(() => {
     const first = scheduleDays.find((d) => d.date && d.startTime);
     const last = [...scheduleDays].reverse().find((d) => d.date && d.endTime);
+
     const when =
       first && last
         ? `${first.date} • ${first.startTime} → ${last.date} • ${last.endTime}`
         : "TBD";
+
+    const firstWithLoc = scheduleDays.find(
+      (d) => d.date && (d.isOnline || d.address.trim())
+    );
+
+    const where = firstWithLoc
+      ? firstWithLoc.isOnline
+        ? firstWithLoc.meetingLink
+          ? "Online • Link provided"
+          : "Online • Link TBD"
+        : firstWithLoc.address || "Location TBD"
+      : "Location TBD";
+
+    const capacity = data.maxAttendee ? `${data.maxAttendee} people` : "Unlimited";
+
     return {
       when,
-      where: data.isOnline
-        ? (data.eventMeetingLink ? "Online • Link provided" : "Online • Link TBD")
-        : (data.eventAddress ? data.eventAddress : "Location TBD"),
-      capacity: data.maxAttendee ? `${data.maxAttendee} people` : "Unlimited",
+      where,
+      capacity,
       tags: data.tags.length ? data.tags.join(", ") : "—",
+      modeLabel: firstWithLoc ? (firstWithLoc.isOnline ? "Online event" : "In-person event") : "",
     };
-  }, [scheduleDays, data.isOnline, data.eventMeetingLink, data.eventAddress, data.maxAttendee, data.tags]);
+  }, [scheduleDays, data.maxAttendee, data.tags]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,6 +199,7 @@ export default function EventCreatePage() {
       formData.append("event_start_date", overallStartISO);
       formData.append("event_end_date", overallEndISO);
 
+      // include per-day location fields
       formData.append(
         "schedule_days",
         JSON.stringify(
@@ -188,16 +207,16 @@ export default function EventCreatePage() {
             date: d.date,
             start_time: d.startTime,
             end_time: d.endTime,
+            is_online: d.isOnline,
+            address: d.address,
+            meeting_link: d.meetingLink,
             start_iso: toISO(d.date, d.startTime),
             end_iso: toISO(d.date, d.endTime),
           }))
         )
       );
 
-      formData.append("is_online", String(data.isOnline));
       if (data.maxAttendee.trim()) formData.append("max_attendee", data.maxAttendee);
-      if (!data.isOnline && data.eventAddress.trim()) formData.append("event_address", data.eventAddress);
-      if (data.isOnline && data.eventMeetingLink.trim()) formData.append("event_meeting_link", data.eventMeetingLink);
       if (data.tags.length) formData.append("tags", JSON.stringify(data.tags));
       if (data.eventEmail.trim()) formData.append("event_email", data.eventEmail);
       if (data.eventPhoneNumber.trim()) formData.append("event_phone_number", data.eventPhoneNumber);
@@ -279,13 +298,14 @@ export default function EventCreatePage() {
                 {/* Category dropdown */}
                 <div>
                   <label htmlFor="category" className="mb-1 block text-sm font-medium text-gray-700">
-                    Category
+                    Category <span className="text-red-500">*</span>
                   </label>
                   <select
                     id="category"
                     value={data.category}
                     onChange={(e) => setData({ ...data, category: e.target.value })}
                     className={`${inputBase} pr-8`}
+                    required
                   >
                     <option value="">Select category</option>
                     {CATEGORIES.map((c) => (
@@ -313,58 +333,12 @@ export default function EventCreatePage() {
               </div>
             </section>
 
-            {/* Schedule & Location */}
+            {/* Schedule & per-day location */}
             <section className={sectionCard}>
               <h2 className="text-lg font-semibold text-gray-900">Schedule & Location</h2>
-              <p className="mt-1 text-sm text-gray-600">Add one or more days. Each has start and end times.</p>
+              <p className="mt-1 text-sm text-gray-600">Add one or more days. Each has start/end times and its own location.</p>
               <div className="mt-4">
                 <EventScheduleDays value={scheduleDays} onChange={setScheduleDays} />
-              </div>
-
-              <div className="mt-6 grid gap-4">
-                <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">
-                  <input
-                    id="isOnline"
-                    type="checkbox"
-                    checked={data.isOnline}
-                    onChange={(e) => setData({ ...data, isOnline: e.target.checked })}
-                    className="h-5 w-5 rounded text-indigo-600 focus:ring-2 focus:ring-indigo-500"
-                  />
-                  <label htmlFor="isOnline" className="text-sm font-medium text-gray-800">
-                    This is an online event
-                  </label>
-                </div>
-
-                {data.isOnline ? (
-                  <div>
-                    <label htmlFor="meet" className="mb-1 block text-sm font-medium text-gray-700">
-                      Meeting Link
-                    </label>
-                    <input
-                      id="meet"
-                      type="url"
-                      value={data.eventMeetingLink}
-                      onChange={(e) => setData({ ...data, eventMeetingLink: e.target.value })}
-                      placeholder="https://zoom.us/j/..."
-                      className={inputBase}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">Share a Zoom/Google Meet/Teams link.</p>
-                  </div>
-                ) : (
-                  <div>
-                    <label htmlFor="address" className="mb-1 block text-sm font-medium text-gray-700">
-                      Event Address
-                    </label>
-                    <input
-                      id="address"
-                      type="text"
-                      value={data.eventAddress}
-                      onChange={(e) => setData({ ...data, eventAddress: e.target.value })}
-                      placeholder="123 Main St, City, Country"
-                      className={inputBase}
-                    />
-                  </div>
-                )}
               </div>
             </section>
 
@@ -399,7 +373,7 @@ export default function EventCreatePage() {
               <h2 className="text-lg font-semibold text-gray-900">Capacity & Tags</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Max Attendees</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Max Attendees <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     min="1"
@@ -407,6 +381,7 @@ export default function EventCreatePage() {
                     onChange={(e) => setData({ ...data, maxAttendee: e.target.value })}
                     placeholder="e.g., 120"
                     className={inputBase}
+                    required
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -462,9 +437,32 @@ export default function EventCreatePage() {
             <section className={sectionCard}>
               <h2 className="text-lg font-semibold text-gray-900">Media</h2>
               <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Event Image</label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label htmlFor="imageUpload" className="block text-sm font-medium text-gray-700">
+                    Event Image
+                  </label>
+
+                  {data.imagePreview && (
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remove
+                    </button>
+                  )}
+                </div>
+
                 <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center hover:border-indigo-400 transition">
-                  <input id="imageUpload" type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                  <input
+                    id="imageUpload"
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
                   <label htmlFor="imageUpload" className="cursor-pointer block">
                     {data.imagePreview ? (
                       <img
@@ -528,9 +526,9 @@ export default function EventCreatePage() {
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-gray-500">Where</dt>
                   <dd className="text-sm text-gray-900">{summary.where || "Location TBD"}</dd>
-                  <p className="text-xs text-gray-500">
-                    {data.isOnline ? "Online event" : "In-person event"}
-                  </p>
+                  {summary.modeLabel && (
+                    <p className="text-xs text-gray-500">{summary.modeLabel}</p>
+                  )}
                 </div>
 
                 <div>
