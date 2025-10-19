@@ -14,6 +14,7 @@ class Ticket(models.Model):
     qr_code = models.CharField(max_length=255, unique=True)
     purchase_date = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='active')
+    event_date = models.DateTimeField(null=True, blank=True)
     
     # Add these fields for the ticket page:
     user_name = models.CharField(max_length=255, default='Unknown') 

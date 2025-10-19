@@ -5,6 +5,11 @@ import Link from "next/link";
 import Navbar from "../../components/navbar";
 import TagSelector from "../../components/TagSelector";
 
+type EventDate = {
+  date: string;
+  time: string;
+};
+
 type FormData = {
   eventTitle: string;
   eventDescription: string;
@@ -17,10 +22,9 @@ type FormData = {
   eventPhoneNumber: string;
   eventWebsiteUrl: string;
   termsAndConditions: string;
-  registrationStartDate: string;  
-  registrationEndDate: string;    
-  eventStartDate: string;         
-  eventEndDate: string;           
+  registrationStartDate: string;
+  registrationEndDate: string;
+  eventDates: EventDate[];  // NEW: Array of dates with times
   imageFile: File | null;
   imagePreview: string;
 };
@@ -40,8 +44,7 @@ export default function EventCreatePage() {
     termsAndConditions: "",
     registrationStartDate: "",
     registrationEndDate: "",
-    eventStartDate: "",      
-    eventEndDate: "",        
+    eventDates: [{ date: "", time: "14:00" }],  // Start with one date
     imageFile: null,
     imagePreview: "",
   });
@@ -56,136 +59,136 @@ export default function EventCreatePage() {
     }
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+  const addEventDate = () => {
+    const lastDate = data.eventDates[data.eventDates.length - 1];
+    setData({
+      ...data,
+      eventDates: [...data.eventDates, { date: "", time: lastDate.time }]  // Copy time from last
+    });
+  };
 
-    try {
-      // Validation
-      if (!data.eventTitle || !data.eventDescription) {
-        setError("Event title and description are required");
-        setLoading(false);
-        return;
-      }
-
-      if (!data.eventStartDate || !data.eventEndDate) {
-        setError("Event start and end dates are required");
-        setLoading(false);
-        return;
-      }
-
-      // Get CSRF token
-      const csrfRes = await fetch("http://localhost:8000/api/set-csrf-token", {
-        method: "GET",
-        credentials: "include",
+  const removeEventDate = (index: number) => {
+    if (data.eventDates.length > 1) {
+      setData({
+        ...data,
+        eventDates: data.eventDates.filter((_, i) => i !== index)
       });
-
-      if (!csrfRes.ok) throw new Error("Failed to get CSRF token");
-      const csrfData = await csrfRes.json();
-
-      // Prepare FormData for file upload
-      const formData = new FormData();
-      formData.append("event_title", data.eventTitle);
-      formData.append("event_description", data.eventDescription);
-      
-      // Registration dates (when people can register)
-      const regStartDate = data.registrationStartDate 
-        ? new Date(data.registrationStartDate).toISOString() 
-        : new Date().toISOString();
-      const regEndDate = data.registrationEndDate 
-        ? new Date(data.registrationEndDate).toISOString() 
-        : new Date(data.eventStartDate).toISOString(); // Default to event start
-      
-      formData.append("start_date_register", regStartDate);
-      formData.append("end_date_register", regEndDate);
-
-      // Event dates (when event actually happens) - NEW
-      formData.append("event_start_date", new Date(data.eventStartDate).toISOString());
-      formData.append("event_end_date", new Date(data.eventEndDate).toISOString());
-
-      formData.append("is_online", String(data.isOnline));
-
-      // Optional fields - only append if they have actual non-empty values
-      if (data.maxAttendee && data.maxAttendee.trim()) {
-        formData.append("max_attendee", data.maxAttendee);
-      }
-      if (data.eventAddress && data.eventAddress.trim()) {
-        formData.append("event_address", data.eventAddress);
-      }
-      if (data.isOnline && data.eventMeetingLink && data.eventMeetingLink.trim()) {
-        formData.append("event_meeting_link", data.eventMeetingLink);
-      }
-      if (data.tags.length > 0) {
-        formData.append("tags", JSON.stringify(data.tags));
-      }
-      if (data.eventEmail && data.eventEmail.trim()) {
-        formData.append("event_email", data.eventEmail);
-      }
-      if (data.eventPhoneNumber && data.eventPhoneNumber.trim()) {
-        formData.append("event_phone_number", data.eventPhoneNumber);
-      }
-      if (data.eventWebsiteUrl && data.eventWebsiteUrl.trim()) {
-        formData.append("event_website_url", data.eventWebsiteUrl);
-      }
-      if (data.termsAndConditions && data.termsAndConditions.trim()) {
-        formData.append("terms_and_conditions", data.termsAndConditions);
-      }
-      if (data.imageFile) {
-        formData.append("event_image", data.imageFile);
-      }
-
-      // Debug: Log what we're sending
-      console.log("=== FormData being sent ===");
-      for (let [key, value] of formData.entries()) {
-        console.log(key, ":", typeof value === 'object' ? 'File' : value);
-      }
-      console.log("=========================");
-
-      // Send request
-      const res = await fetch("http://localhost:8000/api/events/create", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "X-CSRFToken": csrfData.csrftoken,
-        },
-        body: formData,
-      });
-
-      const result = await res.json();
-
-      if (res.ok && result.success) {
-        alert("Event created successfully!");
-        window.location.href = "/events";
-      } else {
-        // Log detailed error for debugging
-        console.error("Server response:", result);
-        
-        // Handle different error formats
-        let errorMessage = "Failed to create event";
-        if (result.error) {
-          errorMessage = result.error;
-        } else if (result.detail) {
-          // Django Ninja validation errors
-          if (Array.isArray(result.detail)) {
-            errorMessage = result.detail.map((err: any) => 
-              `${err.loc.join('.')}: ${err.msg}`
-            ).join(', ');
-          } else if (typeof result.detail === 'string') {
-            errorMessage = result.detail;
-          } else {
-            errorMessage = JSON.stringify(result.detail);
-          }
-        }
-        setError(errorMessage);
-      }
-    } catch (err) {
-      console.error("Create event error:", err);
-      setError("Failed to create event. Make sure you're logged in.");
-    } finally {
-      setLoading(false);
     }
   };
+
+  const updateEventDate = (index: number, field: 'date' | 'time', value: string) => {
+    const newDates = [...data.eventDates];
+    newDates[index][field] = value;
+    setData({ ...data, eventDates: newDates });
+  };
+
+  const submit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
+  setLoading(true);
+
+  try {
+    // Required validation
+    if (!data.eventTitle || !data.eventDescription) {
+      setError("Event title and description are required");
+      setLoading(false);
+      return;
+    }
+
+        // All event dates must have a date
+    if (data.eventDates.some(d => !d.date)) {
+      setError("Please fill in all event dates");
+      setLoading(false);
+      return;
+    }
+
+    // Sort event dates chronologically
+    const sortedDates = [...data.eventDates].sort((a, b) => {
+      const timeA = a.time || "00:00";
+      const timeB = b.time || "00:00";
+      return new Date(a.date + "T" + timeA).getTime() - new Date(b.date + "T" + timeB).getTime();
+    });
+
+    // Get CSRF token
+    const csrfRes = await fetch("http://localhost:8000/api/set-csrf-token", {
+      method: "GET",
+      credentials: "include",
+    });
+    if (!csrfRes.ok) throw new Error("Failed to get CSRF token");
+    const csrfData = await csrfRes.json();
+
+    // Prepare FormData
+    const formData = new FormData();
+    formData.append("event_title", data.eventTitle);
+    formData.append("event_description", data.eventDescription);
+
+    // Registration dates
+    const regStart = data.registrationStartDate || new Date().toISOString();
+    const regEnd = data.registrationEndDate || new Date(sortedDates[0].date + "T" + sortedDates[0].time).toISOString();
+    formData.append("start_date_register", new Date(regStart).toISOString());
+    formData.append("end_date_register", new Date(regEnd).toISOString());
+
+    // Event dates as JSON with ISO strings
+    formData.append(
+      "event_dates",
+      JSON.stringify(sortedDates.map(d => ({ date: new Date(d.date + "T" + d.time).toISOString() })))
+    );
+
+    // Online status
+    formData.append("is_online", String(data.isOnline));
+
+    // Optional fields (send empty string if undefined)
+    formData.append("max_attendee", data.maxAttendee?.trim() || "");
+    formData.append("event_address", data.isOnline ? "" : data.eventAddress?.trim() || "");
+    formData.append("event_meeting_link", data.isOnline ? data.eventMeetingLink?.trim() || "" : "");
+    formData.append("tags", JSON.stringify(data.tags || []));
+    formData.append("event_email", data.eventEmail?.trim() || "");
+    formData.append("event_phone_number", data.eventPhoneNumber?.trim() || "");
+    formData.append("event_website_url", data.eventWebsiteUrl?.trim() || "");
+    formData.append("terms_and_conditions", data.termsAndConditions?.trim() || "");
+
+    // Image
+    if (data.imageFile) formData.append("event_image", data.imageFile);
+
+    // Debug log
+    console.log("FormData being sent:");
+    for (let [key, value] of formData.entries()) {
+      console.log(key, ":", value instanceof File ? "File" : value);
+    }
+
+    // Send request
+    const res = await fetch("http://localhost:8000/api/events/create", {
+      method: "POST",
+      credentials: "include",
+      headers: { "X-CSRFToken": csrfData.csrftoken },
+      body: formData,
+    });
+
+    const result = await res.json();
+
+    if (res.ok && result.success) {
+      alert("Event created successfully!");
+      window.location.href = "/events";
+    } else {
+      let errorMessage = "Failed to create event";
+      if (result.error) errorMessage = result.error;
+      else if (result.detail) {
+        if (Array.isArray(result.detail)) {
+          errorMessage = result.detail.map((err: any) => `${err.loc.join(".")}: ${err.msg}`).join(", ");
+        } else if (typeof result.detail === "string") {
+          errorMessage = result.detail;
+        }
+      }
+      setError(errorMessage);
+    }
+  } catch (err) {
+    console.error("Create event error:", err);
+    setError("Failed to create event. Make sure you're logged in.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
@@ -237,38 +240,62 @@ export default function EventCreatePage() {
 
             {/* Event Dates - NEW SECTION */}
             <div className="bg-indigo-50 p-6 rounded-xl space-y-4">
-              <h3 className="font-bold text-black text-lg mb-3">📅 Event Dates <span className="text-red-500">*</span></h3>
-              <p className="text-sm text-gray-700 mb-4">When will your event take place? (Multi-day events will generate one ticket per day)</p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex items-center justify-between mb-3">
                 <div>
-                  <label className="block text-sm font-semibold text-black mb-2">
-                    Event Start Date & Time <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={data.eventStartDate}
-                    onChange={(e) => setData({ ...data, eventStartDate: e.target.value })}
-                    required
-                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black"
-                  />
+                  <h3 className="font-bold text-black text-lg">📅 Event Dates & Times <span className="text-red-500">*</span></h3>
+                  <p className="text-sm text-gray-700 mt-1">Add multiple dates for multi-day events. Time will copy from first date if left unchanged.</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-black mb-2">
-                    Event End Date & Time <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={data.eventEndDate}
-                    onChange={(e) => setData({ ...data, eventEndDate: e.target.value })}
-                    required
-                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-black"
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={addEventDate}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold text-sm"
+                >
+                  + Add Date
+                </button>
               </div>
+
+              {data.eventDates.map((eventDate, index) => (
+                <div key={index} className="bg-white p-4 rounded-lg border-2 border-indigo-200">
+                  <div className="flex items-center gap-4">
+                    <span className="font-bold text-indigo-600 text-lg min-w-[60px]">
+                      Day {index + 1}
+                    </span>
+                    <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
+                        <input
+                          type="date"
+                          value={eventDate.date}
+                          onChange={(e) => updateEventDate(index, 'date', e.target.value)}
+                          required
+                          className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none text-black"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Time</label>
+                        <input
+                          type="time"
+                          value={eventDate.time}
+                          onChange={(e) => updateEventDate(index, 'time', e.target.value)}
+                          className="w-full px-3 py-2 rounded-lg border-2 border-gray-200 focus:border-indigo-500 outline-none text-black"
+                        />
+                      </div>
+                    </div>
+                    {data.eventDates.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeEventDate(index)}
+                        className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
 
-            {/* Registration Period - UPDATED LABELS */}
+            {/* Registration Period */}
             <div className="bg-gray-50 p-6 rounded-xl space-y-4">
               <h3 className="font-bold text-black text-lg mb-3">📝 Registration Period (Optional)</h3>
               <p className="text-sm text-gray-700 mb-4">When can people register? Leave empty to allow registration anytime before event.</p>

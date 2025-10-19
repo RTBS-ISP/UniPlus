@@ -14,7 +14,7 @@ from api.model.user import AttendeeUser
 from api.model.event import Event
 from api.model.ticket import Ticket
 from api import schemas
-from typing import List, Optional
+from typing import List, Optional, Union
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
@@ -193,8 +193,7 @@ def create_event(
     event_description: str = Form(...),
     start_date_register: str = Form(...),
     end_date_register: str = Form(...),
-    event_start_date: str = Form(...),
-    event_end_date: str = Form(...),
+    event_dates: str = Form(...),
     is_online: str = Form(default="false"),
     max_attendee: Optional[str] = Form(default=None),
     event_address: Optional[str] = Form(default=None),
@@ -208,6 +207,12 @@ def create_event(
 ):
     try:
         from datetime import datetime
+        import json
+        
+        # Parse event dates
+        dates_array = json.loads(event_dates)
+        first_date = datetime.fromisoformat(f"{dates_array[0]['date']}T{dates_array[0]['time']}")
+        last_date = datetime.fromisoformat(f"{dates_array[-1]['date']}T{dates_array[-1]['time']}")
         
         event = Event.objects.create(
             organizer=request.user,
@@ -215,23 +220,24 @@ def create_event(
             event_description=event_description,
             start_date_register=datetime.fromisoformat(start_date_register.replace('Z', '+00:00')),
             end_date_register=datetime.fromisoformat(end_date_register.replace('Z', '+00:00')),
-            event_start_date=datetime.fromisoformat(event_start_date.replace('Z', '+00:00')),
-            event_end_date=datetime.fromisoformat(event_end_date.replace('Z', '+00:00')),
+            event_start_date=first_date,
+            event_end_date=last_date,
             max_attendee=int(max_attendee) if max_attendee else None,
-            event_address=event_address,
+            event_address=event_address if event_address and event_address.strip() else None,
             is_online=(is_online.lower() == 'true'),
-            event_meeting_link=event_meeting_link if event_meeting_link else None,
-            tags=tags,
-            event_email=event_email if event_email else None,
-            event_phone_number=event_phone_number if event_phone_number else None,
-            event_website_url=event_website_url if event_website_url else None,
-            terms_and_conditions=terms_and_conditions,
+            event_meeting_link=event_meeting_link if event_meeting_link and event_meeting_link.strip() else None,
+            tags=tags if tags and tags.strip() else None,
+            event_email=event_email if event_email and event_email.strip() else None,
+            event_phone_number=event_phone_number if event_phone_number and event_phone_number.strip() else None,
+            event_website_url=event_website_url if event_website_url and event_website_url.strip() else None,
+            terms_and_conditions=terms_and_conditions if terms_and_conditions and terms_and_conditions.strip() else None,
             event_image=event_image if event_image else None,
         )
         
         return 200, {
             "success": True,
             "message": "Event created successfully",
+            "event_dates": dates_array
         }
         
     except Exception as e:
