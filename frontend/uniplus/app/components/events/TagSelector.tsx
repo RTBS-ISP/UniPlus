@@ -88,7 +88,7 @@ export default function TagSelector({ tags, setTags }: TagSelectorProps) {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <label className="block text-sm font-semibold text-black mb-2">Tags</label>
+      <label className="block text-sm font-semibold text-black mb-2">Tags <span className="text-red-500">*</span></label>
 
       {/* Selected */}
       <div className="mb-2 min-h-[42px] p-2 border-2 border-gray-200 rounded-xl bg-white flex flex-wrap gap-2">
