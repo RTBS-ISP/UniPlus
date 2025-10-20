@@ -15,6 +15,8 @@ from api.model.event import Event
 from api.model.ticket import Ticket
 from api import schemas
 from typing import List, Optional, Union
+import json
+from datetime import datetime
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
@@ -44,7 +46,6 @@ def register(request, payload: schemas.RegisterSchema):
 
         about_me_str = None
         if payload.about_me:
-            import json
             about_me_str = json.dumps(payload.about_me)
 
         user = AttendeeUser.objects.create_user(
@@ -63,7 +64,6 @@ def register(request, payload: schemas.RegisterSchema):
         
         about_me_response = None
         if about_me_str:
-            import json
             about_me_response = json.loads(about_me_str)
         
         return 200, {
@@ -126,7 +126,6 @@ def logout_view(request):
 @api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
 def get_user(request):
     if request.user.is_authenticated:
-        import json
         about_me_data = None
         if request.user.about_me:
             try:
@@ -191,56 +190,86 @@ def create_event(
     request,
     event_title: str = Form(...),
     event_description: str = Form(...),
+    category: Optional[str] = Form(default=""),
     start_date_register: str = Form(...),
     end_date_register: str = Form(...),
-    event_dates: str = Form(...),
-    is_online: str = Form(default="false"),
-    max_attendee: Optional[str] = Form(default=None),
-    event_address: Optional[str] = Form(default=None),
-    event_meeting_link: Optional[str] = Form(default=None),
-    tags: Optional[str] = Form(default=None),
-    event_email: Optional[str] = Form(default=None),
-    event_phone_number: Optional[str] = Form(default=None),
-    event_website_url: Optional[str] = Form(default=None),
-    terms_and_conditions: Optional[str] = Form(default=None),
+    schedule_days: str = Form(...),  # Changed from event_dates
+    max_attendee: Optional[str] = Form(default=""),
+    tags: Optional[str] = Form(default=""),
+    event_email: Optional[str] = Form(default=""),
+    event_phone_number: Optional[str] = Form(default=""),
+    event_website_url: Optional[str] = Form(default=""),
+    terms_and_conditions: Optional[str] = Form(default=""),
     event_image: Optional[UploadedFile] = File(default=None),
 ):
     try:
-        from datetime import datetime
-        import json
+        # Parse schedule days from frontend
+        schedule = json.loads(schedule_days)
         
-        # Parse event dates
-        dates_array = json.loads(event_dates)
-        first_date = datetime.fromisoformat(f"{dates_array[0]['date']}T{dates_array[0]['time']}")
-        last_date = datetime.fromisoformat(f"{dates_array[-1]['date']}T{dates_array[-1]['time']}")
+        # Helper function to clean empty strings
+        def clean_empty_string(value):
+            if value and isinstance(value, str) and value.strip():
+                return value.strip()
+            return None
+        
+        # Determine overall online status and location
+        first_day = schedule[0] if schedule else {}
+        is_online = first_day.get('is_online', False)
+        event_address = None if is_online else clean_empty_string(first_day.get('address'))
+        event_meeting_link = clean_empty_string(first_day.get('meeting_link')) if is_online else None
+        
+        # Parse registration dates
+        start_reg = datetime.fromisoformat(start_date_register.replace('Z', '+00:00'))
+        end_reg = datetime.fromisoformat(end_date_register.replace('Z', '+00:00'))
+        
+        # Get event start and end dates from schedule
+        event_start = datetime.fromisoformat(schedule[0]['start_iso'].replace('Z', '+00:00'))
+        event_end = datetime.fromisoformat(schedule[-1]['end_iso'].replace('Z', '+00:00'))
+        
+        # Parse tags - ensure they include category
+        tags_list = json.loads(tags) if tags and tags.strip() else []
+        if category and category.strip() and category not in tags_list:
+            tags_list.insert(0, category)
+        
+        # Clean optional fields
+        event_email_clean = clean_empty_string(event_email)
+        event_phone_clean = clean_empty_string(event_phone_number)
+        event_website_clean = clean_empty_string(event_website_url)
+        terms_clean = clean_empty_string(terms_and_conditions)
         
         event = Event.objects.create(
             organizer=request.user,
             event_title=event_title,
             event_description=event_description,
-            start_date_register=datetime.fromisoformat(start_date_register.replace('Z', '+00:00')),
-            end_date_register=datetime.fromisoformat(end_date_register.replace('Z', '+00:00')),
-            event_start_date=first_date,
-            event_end_date=last_date,
-            max_attendee=int(max_attendee) if max_attendee else None,
-            event_address=event_address if event_address and event_address.strip() else None,
-            is_online=(is_online.lower() == 'true'),
-            event_meeting_link=event_meeting_link if event_meeting_link and event_meeting_link.strip() else None,
-            tags=tags if tags and tags.strip() else None,
-            event_email=event_email if event_email and event_email.strip() else None,
-            event_phone_number=event_phone_number if event_phone_number and event_phone_number.strip() else None,
-            event_website_url=event_website_url if event_website_url and event_website_url.strip() else None,
-            terms_and_conditions=terms_and_conditions if terms_and_conditions and terms_and_conditions.strip() else None,
+            start_date_register=start_reg,
+            end_date_register=end_reg,
+            event_start_date=event_start,
+            event_end_date=event_end,
+            max_attendee=int(max_attendee) if max_attendee and max_attendee.strip() else None,
+            event_address=event_address,
+            is_online=is_online,
+            event_meeting_link=event_meeting_link,
+            tags=json.dumps(tags_list),  # Store as JSON
+            event_email=event_email_clean,
+            event_phone_number=event_phone_clean,
+            event_website_url=event_website_clean,
+            terms_and_conditions=terms_clean,
             event_image=event_image if event_image else None,
         )
+        
+        # Store schedule information in a new field or related model if needed
+        # For now, we'll store it in the event model as JSON
+        event.schedule = json.dumps(schedule)
+        event.save()
         
         return 200, {
             "success": True,
             "message": "Event created successfully",
-            "event_dates": dates_array
+            "event_id": event.id
         }
         
     except Exception as e:
+        print(f"Error creating event: {str(e)}")
         return 400, {"error": str(e)}
 
 
@@ -258,17 +287,26 @@ def get_events_list(request):
             # Get organizer info
             organizer_name = f"{event.organizer.first_name} {event.organizer.last_name}".strip()
             if not organizer_name:
-                organizer_name = event.organizer.email
+                organizer_name = event.organizer.username or event.organizer.email
             
-            # Parse attendee list (stored as JSON array of user IDs)
+            # Parse tags
+            tags_list = []
+            if event.tags:
+                try:
+                    tags_list = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    tags_list = [event.tags] if event.tags else []
+            
+            # Calculate attendee count
             attendee_count = len(event.attendee) if event.attendee else 0
             
-            # Get event dates if using EventDate model
-            event_dates_list = []
-            if hasattr(event, 'event_dates'):
-                event_dates_list = list(
-                    event.event_dates.all().values_list('event_datetime', flat=True)
-                )
+            # Parse schedule if available
+            schedule = []
+            if hasattr(event, 'schedule') and event.schedule:
+                try:
+                    schedule = json.loads(event.schedule)
+                except:
+                    pass
             
             events_data.append({
                 "id": event.id,
@@ -277,21 +315,21 @@ def get_events_list(request):
                 "event_create_date": event.event_create_date.isoformat(),
                 "start_date_register": event.start_date_register.isoformat(),
                 "end_date_register": event.end_date_register.isoformat(),
-                "event_start_date": event.event_start_date.isoformat(),
-                "event_end_date": event.event_end_date.isoformat(),
-                "event_dates": [d.isoformat() for d in event_dates_list] if event_dates_list else [],
+                "event_start_date": event.event_start_date.isoformat() if event.event_start_date else None,
+                "event_end_date": event.event_end_date.isoformat() if event.event_end_date else None,
+                "schedule": schedule,
                 "max_attendee": event.max_attendee,
                 "event_address": event.event_address,
                 "event_image": event.event_image.url if event.event_image else None,
                 "is_online": event.is_online,
                 "event_meeting_link": event.event_meeting_link,
-                "tags": event.tags,
+                "tags": tags_list,
                 "status_registration": event.status_registration,
                 "event_email": event.event_email,
                 "event_phone_number": event.event_phone_number,
                 "event_website_url": event.event_website_url,
                 "organizer_name": organizer_name,
-                "organizer_role": "Organizer",  
+                "organizer_role": event.organizer.role or "Organizer",
                 "organizer_id": event.organizer.id,
                 "attendee": event.attendee,
                 "attendee_count": attendee_count,
@@ -321,7 +359,6 @@ def update_user(
     if phone:
         user.phone_number = phone
     if aboutMe:
-        import json
         user.about_me = aboutMe 
 
     if profilePic:
@@ -329,7 +366,6 @@ def update_user(
 
     user.save()
 
-    import json
     about_me_data = json.loads(user.about_me) if user.about_me else None
 
     return 200, {
@@ -366,52 +402,66 @@ def register_for_event(request, event_id: int):
         if event.status_registration != "OPEN":
             return 400, {"error": "Event registration is not open"}
 
-        event_start = event.event_start_date.date()
-        event_end = event.event_end_date.date()  
-        num_days = (event_end - event_start).days + 1  
-
+        # Parse schedule to determine number of days
+        schedule = []
+        if hasattr(event, 'schedule') and event.schedule:
+            try:
+                schedule = json.loads(event.schedule)
+            except:
+                pass
+        
+        # If no schedule, create single ticket
+        if not schedule:
+            schedule = [{
+                'date': event.event_start_date.date().isoformat() if event.event_start_date else timezone.now().date().isoformat(),
+                'is_online': event.is_online,
+                'address': event.event_address,
+                'meeting_link': event.event_meeting_link
+            }]
+        
         tickets_created = []
-        for day_offset in range(num_days):
-            ticket_date = event_start + timedelta(days=day_offset)
-            
+        for day_info in schedule:
             qr_code_value = str(uuid.uuid4())
             
             ticket = Ticket.objects.create(
                 event=event,
                 attendee=user,
                 qr_code=qr_code_value,
-                event_date=ticket_date,  
-                is_online=event.is_online,
-                meeting_link=event.event_meeting_link if event.is_online else None,
+                event_date=datetime.fromisoformat(day_info['date']) if isinstance(day_info.get('date'), str) else event.event_start_date,
+                is_online=day_info.get('is_online', event.is_online),
+                meeting_link=day_info.get('meeting_link', event.event_meeting_link) if day_info.get('is_online', event.is_online) else None,
                 user_name=f"{user.first_name} {user.last_name}",
                 user_email=user.email,
                 event_title=event.event_title,
-                start_date=event.event_start_date,  
-                location=event.event_address if not event.is_online else "Online",
+                start_date=event.event_start_date,
+                location=day_info.get('address', event.event_address) if not day_info.get('is_online', event.is_online) else "Online",
             )
             tickets_created.append(qr_code_value)
 
+        # Update attendee list
         attendees = event.attendee if isinstance(event.attendee, list) else []
         if user.id not in attendees:
             attendees.append(user.id)
         event.attendee = attendees
         event.save()
 
-        if num_days == 1:
+        num_tickets = len(tickets_created)
+        if num_tickets == 1:
             message = "Successfully registered for the event"
         else:
-            message = f"Successfully registered! You received {num_days} tickets (one for each day)"
+            message = f"Successfully registered! You received {num_tickets} tickets (one for each day)"
 
         return 200, {
             "success": True,
             "message": message,
-            "tickets_count": num_days,
+            "tickets_count": num_tickets,
             "ticket_numbers": tickets_created
         }
 
     except Event.DoesNotExist:
         return 400, {"error": "Event not found"}
     except Exception as e:
+        print(f"Error registering for event: {str(e)}")
         return 400, {"error": str(e)}
 
 
@@ -419,14 +469,30 @@ def register_for_event(request, event_id: int):
 def get_event_detail(request, event_id: int):
     event = get_object_or_404(Event, id=event_id)
     
-    tags_list = event.tags
-    if isinstance(event.tags, str):
-        import json
+    # Parse tags
+    tags_list = []
+    if event.tags:
         try:
-            tags_list = json.loads(event.tags)
+            tags_list = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
         except:
-            tags_list = []
+            tags_list = [event.tags] if event.tags else []
     
+    # Parse schedule
+    schedule = []
+    if hasattr(event, 'schedule') and event.schedule:
+        try:
+            schedule_data = json.loads(event.schedule)
+            # Transform to frontend format
+            for day in schedule_data:
+                schedule.append({
+                    "date": day.get('date', ''),
+                    "startTime": day.get('start_time', ''),
+                    "endTime": day.get('end_time', ''),
+                })
+        except:
+            pass
+    
+    # Check if user is registered
     is_registered = False
     if request.user.is_authenticated:
         is_registered = Ticket.objects.filter(
@@ -434,23 +500,35 @@ def get_event_detail(request, event_id: int):
             attendee=request.user
         ).exists()
     
+    # Calculate available spots
+    attendee_count = len(event.attendee) if event.attendee else 0
+    available = (event.max_attendee - attendee_count) if event.max_attendee else 100
+    
     return {
         "id": event.id,
-        "event_title": event.event_title,
+        "title": event.event_title,  # Changed from event_title to title
+        "event_title": event.event_title,  # Keep both for compatibility
         "event_description": event.event_description,
+        "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
         "organizer_username": event.organizer.username if event.organizer else "Unknown",
+        "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
         "start_date_register": event.start_date_register,
         "end_date_register": event.end_date_register,
         "event_start_date": event.event_start_date or event.start_date_register,
         "event_end_date": event.event_end_date or event.end_date_register,
         "max_attendee": event.max_attendee or 0,
-        "current_attendees": len(event.attendee) if event.attendee else 0,
+        "capacity": event.max_attendee or 100,
+        "current_attendees": attendee_count,
+        "available": available,
         "event_address": event.event_address or "",
+        "location": event.event_address or "Online" if event.is_online else "TBA",
         "is_online": event.is_online,
         "event_meeting_link": event.event_meeting_link or "",
-        "tags": tags_list if tags_list else [],
+        "tags": tags_list,
         "event_image": event.event_image.url if event.event_image else None,
+        "image": event.event_image.url if event.event_image else None,
         "is_registered": is_registered,
+        "schedule": schedule,
     }
 
 
@@ -462,6 +540,7 @@ def get_ticket_detail(request, ticket_id: int):
         "event_title": ticket.event.event_title,
         "event_description": ticket.event.event_description,
         "start_date": ticket.event.start_date_register,
+        "event_date": ticket.event_date.isoformat() if ticket.event_date else "",
         "location": ticket.event.event_address if not ticket.is_online else "Online",
         "meeting_link": ticket.meeting_link,
         "is_online": ticket.is_online,

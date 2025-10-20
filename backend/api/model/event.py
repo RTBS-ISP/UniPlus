@@ -1,3 +1,4 @@
+
 from django.db import models
 from .socials import Social
 from .user import AttendeeUser
@@ -28,9 +29,12 @@ class Event(models.Model):
     terms_and_conditions = models.TextField(blank=True, null=True)
     event_updated_at = models.DateTimeField(auto_now=True)
     attendee = models.JSONField(default=list, blank=True)
+    
+    # New field to store schedule information
+    schedule = models.JSONField(default=list, blank=True, null=True)
 
     def __str__(self):
         return self.event_title
     
-class Meta:
-    ordering = ['-event_create_date']
+    class Meta:
+        ordering = ['-event_create_date']
