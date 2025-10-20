@@ -244,43 +244,64 @@ def create_event(
         return 400, {"error": str(e)}
 
 
-@api.get("/events", response=List[schemas.EventSchema])
-def get_list_events(request):
-    import json
-    events = Event.objects.all().select_related('organizer')
-    
-    result = []
-    for e in events:
-        tags_list = e.tags
-        if isinstance(e.tags, str):
-            try:
-                tags_list = json.loads(e.tags)
-            except:
-                tags_list = []
-        elif not isinstance(e.tags, list):
-            tags_list = []
+@api.get("/events")
+def get_events_list(request):
+    """
+    Get all events with organizer information
+    Returns events sorted by creation date (newest first)
+    """
+    try:
+        events = Event.objects.select_related('organizer').all().order_by('-event_create_date')
         
-        result.append({
-            "id": e.id,
-            "event_title": e.event_title,
-            "event_description": e.event_description,
-            "organizer_username": e.organizer.username if e.organizer else "Unknown",
-            "event_create_date": e.event_create_date,
-            "start_date_register": e.start_date_register,
-            "end_date_register": e.end_date_register,
-            "event_start_date": e.event_start_date or e.start_date_register,
-            "event_end_date": e.event_end_date or e.end_date_register,
-            "max_attendee": e.max_attendee,
-            "current_attendees": len(e.attendee) if e.attendee else 0,
-            "event_address": e.event_address,
-            "is_online": e.is_online,
-            "status_registration": e.status_registration,
-            "attendee": e.attendee,
-            "tags": tags_list,
-            "event_image": e.event_image.url if e.event_image else None,
-        })
-    
-    return result
+        events_data = []
+        for event in events:
+            # Get organizer info
+            organizer_name = f"{event.organizer.first_name} {event.organizer.last_name}".strip()
+            if not organizer_name:
+                organizer_name = event.organizer.email
+            
+            # Parse attendee list (stored as JSON array of user IDs)
+            attendee_count = len(event.attendee) if event.attendee else 0
+            
+            # Get event dates if using EventDate model
+            event_dates_list = []
+            if hasattr(event, 'event_dates'):
+                event_dates_list = list(
+                    event.event_dates.all().values_list('event_datetime', flat=True)
+                )
+            
+            events_data.append({
+                "id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_create_date": event.event_create_date.isoformat(),
+                "start_date_register": event.start_date_register.isoformat(),
+                "end_date_register": event.end_date_register.isoformat(),
+                "event_start_date": event.event_start_date.isoformat(),
+                "event_end_date": event.event_end_date.isoformat(),
+                "event_dates": [d.isoformat() for d in event_dates_list] if event_dates_list else [],
+                "max_attendee": event.max_attendee,
+                "event_address": event.event_address,
+                "event_image": event.event_image.url if event.event_image else None,
+                "is_online": event.is_online,
+                "event_meeting_link": event.event_meeting_link,
+                "tags": event.tags,
+                "status_registration": event.status_registration,
+                "event_email": event.event_email,
+                "event_phone_number": event.event_phone_number,
+                "event_website_url": event.event_website_url,
+                "organizer_name": organizer_name,
+                "organizer_role": "Organizer",  
+                "organizer_id": event.organizer.id,
+                "attendee": event.attendee,
+                "attendee_count": attendee_count,
+            })
+        
+        return events_data
+        
+    except Exception as e:
+        print(f"Error fetching events: {str(e)}")
+        return {"error": str(e)}
 
     
 @api.patch("/user", auth=django_auth, response={200: schemas.UserSchema, 400: schemas.ErrorSchema})

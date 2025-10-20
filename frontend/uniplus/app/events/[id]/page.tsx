@@ -1,36 +1,219 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
+import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import Navbar from "../../components/navbar";
-import { Tag } from "../../components/shared/Tag";
+import { TagAccent } from "../../components/shared/Tag";
+import { events } from "../../../lib/events/events-data";
+import { useAlert } from "../../components/ui/AlertProvider";
+import { ChevronDown } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
-interface EventDetail {
-  id: number;
-  event_title: string;
-  event_description: string;
-  organizer_username: string;
-  start_date_register: string;
-  end_date_register: string;
-  event_start_date: string;
-  event_end_date: string;
-  max_attendee: number;
-  current_attendees: number;
-  event_address: string;
-  is_online: boolean;
-  event_meeting_link: string;
-  tags: string[];
-  event_image: string;
-  is_registered: boolean;
+/* ---------- Types ---------- */
+type EventSession = {
+  date: string;      // "YYYY-MM-DD"
+  startTime: string; // "HH:mm"
+  endTime: string;   // "HH:mm"
+};
+
+type EventWithOptionals = (typeof events)[number] & {
+  available?: number;
+  capacity?: number;
+  startDate?: string;
+  endDate?: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  address2?: string;
+  image?: string;
+  schedule?: EventSession[];
+};
+
+type Params = { params: Promise<{ id: string }> };
+
+/* ---------- Helpers ---------- */
+function formatDateGB(s: string) {
+  try {
+    const d = new Date(s);
+    return new Intl.DateTimeFormat("en-GB", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      timeZone: "UTC",
+    }).format(d);
+  } catch {
+    return s;
+  }
+}
+function dateKey(d: string) {
+  return new Date(d + "T00:00:00Z").getTime();
 }
 
-export default function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
+function groupConsecutiveSessions(sessions: EventSession[]) {
+  if (!sessions?.length) return [];
+  const sorted = [...sessions].sort((a, b) => dateKey(a.date) - dateKey(b.date));
+
+  const groups: Array<{
+    start: string;
+    end: string;
+    startTime: string;
+    endTime: string;
+    items: EventSession[];
+  }> = [];
+
+  let cur = {
+    start: sorted[0].date,
+    end: sorted[0].date,
+    startTime: sorted[0].startTime,
+    endTime: sorted[0].endTime,
+    items: [sorted[0]],
+  };
+
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = cur.items[cur.items.length - 1];
+    const s = sorted[i];
+    const prevDay = dateKey(prev.date);
+    const thisDay = dateKey(s.date);
+    const isConsecutive = thisDay - prevDay === 24 * 60 * 60 * 1000;
+    const sameTime = s.startTime === cur.startTime && s.endTime === cur.endTime;
+
+    if (isConsecutive && sameTime) {
+      cur.end = s.date;
+      cur.items.push(s);
+    } else {
+      groups.push(cur);
+      cur = {
+        start: s.date,
+        end: s.date,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        items: [s],
+      };
+    }
+  }
+  groups.push(cur);
+  return groups;
+}
+
+/* ---------- Small components ---------- */
+function EventDateSummary({ schedule }: { schedule: EventSession[] }) {
+  if (!schedule?.length) return null;
+
+  const sorted = [...schedule].sort((a, b) => dateKey(a.date) - dateKey(b.date));
+  const first = sorted[0].date;
+  const last = sorted[sorted.length - 1].date;
+
+  if (sorted.length === 1) {
+    return <span className="text-[#0B1220]">{formatDateGB(first)}</span>;
+  }
+
+  const visibleDates = sorted.slice(0, 3);
+  const hiddenDates = sorted.slice(3);
+
+  return (
+    <div className="text-[#0B1220]">
+      <p className="font-medium">
+        {formatDateGB(first)} – {formatDateGB(last)}
+      </p>
+
+      <ul className="list-disc list-inside mt-1 text-sm text-[#0B1220]/90 space-y-0.5">
+        {visibleDates.map((s) => (
+          <li key={s.date}>{formatDateGB(s.date)}</li>
+        ))}
+
+        {hiddenDates.length > 0 && (
+          <li className="relative group text-[#0B1220]/60 hover:text-[#0B1220] transition">
+            + {hiddenDates.length} more
+            <div
+              className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(260px,90vw)]
+                         -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
+                         shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
+                         group-hover:opacity-100 group-hover:scale-100"
+            >
+              <ul className="list-disc list-inside space-y-0.5 text-sm text-[#0B1220]/80">
+                {hiddenDates.map((s) => (
+                  <li key={s.date}>{formatDateGB(s.date)}</li>
+                ))}
+              </ul>
+            </div>
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
+function ScheduleList({ schedule }: { schedule: EventSession[] }) {
+  const [open, setOpen] = useState(true);
+  if (!schedule?.length) return null;
+  const groups = groupConsecutiveSessions(schedule);
+
+  return (
+    <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between"
+      >
+        <h3 className="text-lg font-bold text-[#0B1220]">Schedule &amp; Location</h3>
+        <ChevronDown
+          className={`h-5 w-5 text-[#0B1220]/60 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 28 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-4 space-y-3">
+              {groups.map((g, idx) => {
+                const sameDay = g.start === g.end;
+                const dateLabel = sameDay
+                  ? formatDateGB(g.start)
+                  : `${formatDateGB(g.start)} – ${formatDateGB(g.end)}`;
+
+                return (
+                  <div
+                    key={`${g.start}-${g.end}-${idx}`}
+                    className="rounded-xl border border-black/10 bg-gray-50 p-4"
+                  >
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="inline-flex h-6 items-center rounded-md bg-white px-2 text-xs font-semibold text-[#0B1220]">
+                        {sameDay
+                          ? `Day ${idx + 1}`
+                          : `Days ${idx + 1}–${idx + g.items.length}`}
+                      </span>
+                      <span className="text-sm font-semibold text-[#0B1220]">{dateLabel}</span>
+                      <span className="text-sm text-[#0B1220]/80">
+                        — {g.startTime}–{g.endTime}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
+/* ---------- Page ---------- */
+export default function EventDetailPage({ params }: Params) {
   const { id } = use(params);
-  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [event, setEvent] = useState<EventWithOptionals | null>(null);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [message, setMessage] = useState('');
   const router = useRouter();
+  const toast = useAlert();
 
   useEffect(() => {
     fetchEventDetail();
@@ -69,24 +252,23 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
           ? `✅ Successfully registered! You received ${result.tickets_count} tickets (one for each day). Redirecting...`
           : '✅ Successfully registered! Redirecting...';
         setMessage(ticketMessage);
+        toast({ text: ticketMessage, variant: "success" });
         setTimeout(() => router.push('/my-ticket'), 2000);
       } else {
         setMessage(result.error || 'Registration failed');
+        toast({ text: result.error || 'Registration failed', variant: "error" });
       }
     } catch (error) {
       console.error('Registration error:', error);
       setMessage('❌ Failed to register. Please try again.');
+      toast({ text: '❌ Failed to register. Please try again.', variant: "error" });
     } finally {
       setRegistering(false);
     }
   };
 
-  const getEventDays = () => {
-    if (!event) return 0;
-    const start = new Date(event.event_start_date);
-    const end = new Date(event.event_end_date);
-    return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  };
+  const numericId = Number(id);
+  const related = events.filter((e) => e.id !== numericId).slice(0, 6);
 
   if (loading) {
     return (
@@ -101,7 +283,7 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
 
   if (!event) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
+      <div className="min-h-screen bg-[#E8ECFF]">
         <Navbar />
         <div className="flex items-center justify-center h-screen">
           <div className="text-xl text-gray-900">Event not found</div>
@@ -110,189 +292,96 @@ export default function EventDetailPage({ params }: { params: Promise<{ id: stri
     );
   }
 
-  const availableSpots = event.max_attendee - event.current_attendees;
-  const registrationClosed = new Date() > new Date(event.end_date_register);
-  const eventFull = availableSpots <= 0;
-  const isRegistered = event.is_registered;
-  const eventDays = getEventDays();
+  const available = event.available ?? 0;
+  const capacity = event.capacity ?? 100;
+  const isClosed = available <= 0;
+  const schedule = event.schedule ?? [];
+
+  const image = event.image ?? "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+  const location = event.location ?? "Room 203, Building 15, Faculty of Engineering";
+  const address2 = event.address2 ?? "Kasetsart University";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
+    <div className="min-h-screen bg-[#E8ECFF]">
       <Navbar />
+      <main className="mx-auto max-w-6xl px-4 py-10">
+        <div className="mx-auto w-[420px] max-w-full overflow-hidden rounded-xl bg-white shadow-sm">
+          <img src={image} alt={event.title} className="h-[420px] w-full object-cover" />
+        </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <div className="bg-white rounded-3xl shadow-lg overflow-hidden">
+        <h1 className="mt-8 text-5xl font-extrabold tracking-tight text-[#0B1220]">{event.title}</h1>
 
-          {/* Event Image */}
-          {event.event_image && (
-            <div className="h-64 sm:h-80 overflow-hidden">
-              <img 
-                src={`http://localhost:8000${event.event_image}`}
-                alt={event.event_title}
-                className="w-full h-full object-cover"
-              />
-            </div>
-          )}
+        <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold text-[#0B1220]">About this event</h2>
 
-          <div className="p-6 sm:p-10 text-gray-900">
-            {/* Title */}
-            <div className="mb-5">
-              <h1 className="text-3xl sm:text-4xl font-bold mb-1">
-                {event.event_title}
-              </h1>
-              <p className="text-base sm:text-lg">
-                Organized by <span className="font-semibold">{event.organizer_username}</span>
-              </p>
-            </div>
+          <div className="mt-6">
+            <p className="text-sm font-semibold text-[#0B1220]">Description</p>
+            <p className="mt-2 text-sm text-[#0B1220]">{event.excerpt ?? "No description available."}</p>
+          </div>
+        </section>
 
-            {/* Multi-day Badge */}
-            {eventDays > 1 && (
-              <div className="mb-4 inline-block px-4 py-2 bg-indigo-100 text-indigo-900 rounded-full font-semibold text-sm">
-                🗓️ {eventDays}-Day Event
-              </div>
-            )}
+        {schedule.length > 0 && <ScheduleList schedule={schedule} />}
 
-            {/* Tags */}
-            <div className="flex flex-wrap gap-2 mb-6">
-              {event.tags.map((tag, idx) => <Tag key={idx} label={tag} />)}
-            </div>
+        <button
+          onClick={handleRegister}
+          disabled={registering || isClosed}
+          className={`mt-6 block w-full rounded-lg px-4 py-3 text-center text-sm font-semibold ${
+            isClosed
+              ? "bg-[#C7CBE0] text-[#3A3F55] cursor-default"
+              : "bg-[#6366F1] text-white hover:bg-[#4F46E5] transition-colors"
+          }`}
+        >
+          {isClosed ? "Closed" : registering ? "Registering..." : "Register"}
+        </button>
 
-            {/* Info Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
-              <div className="md:col-span-2 bg-gray-50 p-4 rounded-lg">
-                <p className="text-gray-900 mb-1 font-medium text-lg">📅 Event Date</p>
-                {eventDays === 1 ? (
-                  <p className="font-semibold text-xl">
-                    {new Date(event.event_start_date).toLocaleString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </p>
-                ) : (
-                  <>
-                    <p className="font-semibold text-lg">
-                      {new Date(event.event_start_date).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
-                    <p className="text-gray-600 text-sm mb-1">to</p>
-                    <p className="font-semibold text-lg">
-                      {new Date(event.event_end_date).toLocaleDateString('en-US', {
-                        weekday: 'long',
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
-                  </>
-                )}
-              </div>
+        {message && <p className="mt-3 text-center text-sm text-[#0B1220]">{message}</p>}
 
-              <div>
-                <p className="text-gray-900 mb-1 font-medium">Registration Period</p>
-                <p className="font-semibold text-sm">
-                  {new Date(event.start_date_register).toLocaleDateString()} - {new Date(event.end_date_register).toLocaleDateString()}
-                </p>
-              </div>
+        <section className="mt-12">
+          <h3 className="text-xl font-semibold text-[#0B1220]">Related Events</h3>
+          <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {related.map((r) => (
+              <RelatedCard key={r.id} item={r} />
+            ))}
+          </div>
+        </section>
+      </main>
 
-              <div>
-                <p className="text-gray-900 mb-1 font-medium">Available Spots</p>
-                <p className="font-semibold text-lg">
-                  <span className={availableSpots > 10 ? 'text-green-700' : 'text-orange-700'}>
-                    {availableSpots}
-                  </span> / {event.max_attendee}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-gray-900 mb-1 font-medium">Location</p>
-                <p className="font-semibold">
-                  {event.is_online ? '🌐 Online Event' : event.event_address}
-                </p>
-              </div>
-
-              {event.is_online && event.event_meeting_link && (
-                <div>
-                  <p className="text-gray-900 mb-1 font-medium">Meeting Link</p>
-                  <a 
-                    href={event.event_meeting_link}
-                    target="_blank"
-                    className="text-blue-800 hover:underline break-all"
-                  >
-                    Join Meeting
-                  </a>
-                </div>
-              )}
-            </div>
-
-            {/* Description */}
-            <div className="mb-6">
-              <h2 className="text-2xl font-semibold mb-2">About This Event</h2>
-              <p className="leading-relaxed whitespace-pre-line text-base sm:text-lg">
-                {event.event_description}
-              </p>
-            </div>
-
-            {/* Message */}
-            {message && (
-              <div
-                className={`mb-6 p-4 rounded-lg text-center font-medium ${
-                  message.startsWith('✅')
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-red-100 text-red-800'
-                }`}
-              >
-                {message}
-              </div>
-            )}
-
-            {/* Register Button */}
-            <div className="flex justify-center">
-              {isRegistered ? (
-                <button
-                  disabled
-                  className="px-8 py-3 bg-gray-300 text-gray-700 rounded-full font-semibold cursor-not-allowed"
-                >
-                  Already Registered
-                </button>
-              ) : registrationClosed ? (
-                <button
-                  disabled
-                  className="px-8 py-3 bg-gray-300 text-gray-700 rounded-full font-semibold cursor-not-allowed"
-                >
-                  Registration Closed
-                </button>
-              ) : eventFull ? (
-                <button
-                  disabled
-                  className="px-8 py-3 bg-gray-300 text-gray-700 rounded-full font-semibold cursor-not-allowed"
-                >
-                  Event Full
-                </button>
-              ) : (
-                <button
-                  onClick={handleRegister}
-                  disabled={registering}
-                  className={`px-8 py-3 rounded-full font-semibold transition-all ${
-                    registering
-                      ? 'bg-indigo-300 cursor-wait'
-                      : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                  }`}
-                >
-                  {registering ? 'Registering...' : 'Register Now'}
-                </button>
-              )}
-            </div>
+      <footer className="border-t border-black/10 bg-white/60 py-10">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 md:grid-cols-4">
+          <div>
+            <p className="text-sm text-gray-700">Site name</p>
           </div>
         </div>
-      </div>
+      </footer>
     </div>
+  );
+}
+
+/* ---------- Related card ---------- */
+function RelatedCard({ item }: { item: EventWithOptionals }) {
+  const img =
+    item.image ??
+    "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+
+  const available = item.available ?? 20 + ((item.id * 37) % 120);
+  const capacity = item.capacity ?? 100;
+  const badge = item.host?.[0] ?? item.tags?.[0] ?? "Organizer";
+
+  return (
+    <Link
+      href={`/events/${item.id}`}
+      className="block rounded-xl bg-white shadow-sm transition hover:shadow-md"
+    >
+      <img src={img} alt={item.title} className="h-40 w-full rounded-t-xl object-cover" />
+      <div className="p-4">
+        <h4 className="font-medium text-[#0B1220]">{item.title}</h4>
+        <div className="mt-2">
+          <TagAccent label={badge} />
+        </div>
+        <p className="mt-1 text-sm text-gray-600">
+          Available: {available}/{capacity}
+        </p>
+      </div>
+    </Link>
   );
 }
