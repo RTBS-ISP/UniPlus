@@ -7,18 +7,7 @@ import TagSelector from "../../components/events/TagSelector";
 import EventScheduleDays, { DaySlot } from "../../components/events/EventScheduleDays";
 import { useAlert } from "../../components/ui/AlertProvider";
 import { Trash2 } from "lucide-react";
-
-// ---- Categories (edit this list as needed) ----
-const CATEGORIES = [
-  "Engineering",
-  "Science",
-  "Business",
-  "Humanities",
-  "Architecture",
-  "Arts",
-  "Sports",
-  "Technology",
-];
+import { CATEGORIES } from "../../../lib/events/categories";
 
 type FormData = {
   eventTitle: string;
