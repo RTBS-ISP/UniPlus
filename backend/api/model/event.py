@@ -4,6 +4,7 @@ from .socials import Social
 from .user import AttendeeUser
 
 class Event(models.Model):
+    schedule = models.JSONField(default=list, blank=True)
     organizer = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="events")
     social = models.ForeignKey(Social, on_delete=models.SET_NULL, null=True, blank=True, related_name="events")
     event_title = models.CharField(max_length=200)

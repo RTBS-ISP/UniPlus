@@ -6,23 +6,81 @@ import Navbar from "../components/navbar";
 import EditPopup from "../components/profile/EditPopup";
 import Tabs from '../components/profile/Tabs';
 import { useUser } from "../context/UserContext"; 
-import { Calendar } from 'lucide-react';
+import { Calendar, Zap } from 'lucide-react';
+
+interface EventData {
+  event_id: number;
+  event_title: string;
+  event_date: string;
+  location: string;
+  organizer: string;
+  status: string;
+}
+
+interface StatisticsData {
+  total_events: number;
+  upcoming_events: number;
+  attended_events: number;
+  total_registrations: number;
+}
 
 function ProfilePage() {
   const { user, setUser } = useUser(); 
   const [editOpen, setEditOpen] = useState(false);
+  const [eventHistory, setEventHistory] = useState<EventData[]>([]);
+  const [statistics, setStatistics] = useState<StatisticsData | null>(null);
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [loadingStats, setLoadingStats] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    // If user is not logged in, redirect to login
     if (user === null) {
       router.push('/login');
+    } else if (user) {
+      fetchEventHistory();
+      fetchStatistics();
     }
   }, [user, router]);
 
-  if (!user) {
-    return <div className="text-center mt-10">Loading...</div>;
-  }
+  const fetchEventHistory = async () => {
+    try {
+      setLoadingEvents(true);
+      const response = await fetch('http://localhost:8000/api/user/event-history', {
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setEventHistory(data.events || []);
+      } else {
+        console.error('Failed to fetch event history');
+      }
+    } catch (error) {
+      console.error('Error fetching event history:', error);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  const fetchStatistics = async () => {
+    try {
+      setLoadingStats(true);
+      const response = await fetch('http://localhost:8000/api/user/statistics', {
+        credentials: 'include',
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setStatistics(data);
+      } else {
+        console.error('Failed to fetch statistics');
+      }
+    } catch (error) {
+      console.error('Error fetching statistics:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
 
   function getCookie(name: string): string | undefined {
     if (typeof document === "undefined") return undefined;
@@ -62,6 +120,115 @@ function ProfilePage() {
   };
 
   if (!user) return <p>Loading.....</p>
+
+  const items = [
+    {
+      title: "Event History",
+      content: (
+        <div className="bg-white p-6 rounded-xl shadow-md">
+          {loadingEvents ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-gray-500">Loading events...</div>
+            </div>
+          ) : eventHistory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-800">
+              <Calendar className="mb-2.5" size={52} />
+              <p className="font-semibold text-xl">No registered events yet</p>
+              <p className="text-sm text-gray-600 mt-2">
+                Register for events to see them here
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {eventHistory.map((event, idx) => (
+                <div
+                  key={idx}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-semibold text-lg text-gray-900">
+                        {event.event_title}
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {new Date(event.event_date).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        📍 {event.location}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        👤 Organized by {event.organizer}
+                      </p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                      event.status === 'active'
+                        ? 'bg-green-100 text-green-800'
+                        : event.status === 'used'
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {event.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: "Statistics",
+      content: (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {loadingStats ? (
+            <div className="col-span-full flex items-center justify-center h-40 text-gray-500">
+              Loading statistics...
+            </div>
+          ) : (
+            <>
+              {/* Total Events */}
+              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
+                <div className="font-medium text-lg mb-2.5">Total Events</div>
+                <div className="font-extrabold text-indigo-500 text-3xl">
+                  {statistics?.total_events || 0}
+                </div>
+              </div>
+
+              {/* Upcoming */}
+              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
+                <div className="font-medium text-lg mb-2.5">Upcoming</div>
+                <div className="font-extrabold text-green-500 text-3xl">
+                  {statistics?.upcoming_events || 0}
+                </div>
+              </div>
+
+              {/* Attended */}
+              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
+                <div className="font-medium text-lg mb-2.5">Attended</div>
+                <div className="font-extrabold text-blue-500 text-3xl">
+                  {statistics?.attended_events || 0}
+                </div>
+              </div>
+
+              {/* Total Registrations */}
+              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
+                <div className="font-medium text-lg mb-2.5">Registrations</div>
+                <div className="font-extrabold text-purple-500 text-3xl">
+                  {statistics?.total_registrations || 0}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
     <main>
@@ -174,45 +341,3 @@ function ProfilePage() {
 }
 
 export default ProfilePage;
-
-const items = [
-  {
-      title: "Event History",
-      content: (
-        <div className="flex items-center justify-center bg-white p-4 rounded-xl shadow-md h-128">
-          <div className="flex flex-col items-center text-gray-800 font-semibold text-xl">
-            <Calendar className="mb-2.5" size={52} />
-            No registered events yet
-          </div>
-        </div>
-      ),
-    },
-    {
-      title: "Statistics",
-      content: (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Total Events */}
-          <div className="flex flex-row items-centers bg-white text-gray-800 p-6 rounded-xl shadow-md">
-            <div className="flex flex-col">
-              <div className="font-medium text-lg mb-2.5">Total Events</div>
-              <div className="font-extrabold text-indigo-500 text-3xl">3</div>
-            </div>
-            <Calendar className="ml-auto mt-2 w-10 h-10 text-indigo-500" />
-          </div>
-
-          {/* Upcoming */}
-          <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-            <div className="font-medium text-lg mb-2.5">Upcoming</div>
-            <div className="font-extrabold text-indigo-500 text-3xl">1</div>
-          </div>
-
-          {/* Attended */}
-          <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-            <div className="font-medium text-lg mb-2.5">Attended</div>
-            <div className="font-extrabold text-indigo-500 text-3xl">2</div>
-          </div>
-        </div>
-      ),
-    },
-];
-
