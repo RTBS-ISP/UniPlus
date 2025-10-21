@@ -5,28 +5,30 @@ import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import Navbar from "../../components/navbar";
 import { TagAccent } from "../../components/shared/Tag";
-import { events } from "../../../lib/events/events-data";
 import { useAlert } from "../../components/ui/AlertProvider";
 import { ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 /* ---------- Types ---------- */
 type EventSession = {
-  date: string;      // "YYYY-MM-DD"
-  startTime: string; // "HH:mm"
-  endTime: string;   // "HH:mm"
+  date: string;
+  startTime: string;
+  endTime: string;
 };
 
-type EventWithOptionals = (typeof events)[number] & {
+type EventWithOptionals = {
+  id: number;
+  title: string;
+  excerpt?: string;
+  image?: string;
   available?: number;
   capacity?: number;
   startDate?: string;
   endDate?: string;
-  startTime?: string;
-  endTime?: string;
   location?: string;
   address2?: string;
-  image?: string;
+  host?: string[];
+  tags?: string[];
   schedule?: EventSession[];
 };
 
@@ -46,6 +48,7 @@ function formatDateGB(s: string) {
     return s;
   }
 }
+
 function dateKey(d: string) {
   return new Date(d + "T00:00:00Z").getTime();
 }
@@ -209,6 +212,7 @@ function ScheduleList({ schedule }: { schedule: EventSession[] }) {
 export default function EventDetailPage({ params }: Params) {
   const { id } = use(params);
   const [event, setEvent] = useState<EventWithOptionals | null>(null);
+  const [relatedEvents, setRelatedEvents] = useState<EventWithOptionals[]>([]);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [message, setMessage] = useState('');
@@ -217,14 +221,19 @@ export default function EventDetailPage({ params }: Params) {
 
   useEffect(() => {
     fetchEventDetail();
+    fetchRelatedEvents();
   }, [id]);
 
   const fetchEventDetail = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/events/${id}`, { credentials: 'include' });
+      const response = await fetch(`http://localhost:8000/api/events/${id}`, { 
+        credentials: 'include' 
+      });
       if (response.ok) {
         const data = await response.json();
         setEvent(data);
+      } else {
+        console.error('Failed to fetch event:', response.status);
       }
     } catch (error) {
       console.error('Error fetching event:', error);
@@ -233,11 +242,30 @@ export default function EventDetailPage({ params }: Params) {
     }
   };
 
+  const fetchRelatedEvents = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/events/', { 
+        credentials: 'include' 
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const filtered = Array.isArray(data) 
+          ? data.filter((e: EventWithOptionals) => e.id !== Number(id)).slice(0, 6)
+          : [];
+        setRelatedEvents(filtered);
+      }
+    } catch (error) {
+      console.error('Error fetching related events:', error);
+    }
+  };
+
   const handleRegister = async () => {
     setRegistering(true);
     setMessage('');
     try {
-      const csrfRes = await fetch('http://localhost:8000/api/set-csrf-token', { credentials: 'include' });
+      const csrfRes = await fetch('http://localhost:8000/api/set-csrf-token', { 
+        credentials: 'include' 
+      });
       const { csrftoken } = await csrfRes.json();
 
       const response = await fetch(`http://localhost:8000/api/events/${id}/register`, {
@@ -267,12 +295,9 @@ export default function EventDetailPage({ params }: Params) {
     }
   };
 
-  const numericId = Number(id);
-  const related = events.filter((e) => e.id !== numericId).slice(0, 6);
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
+      <div className="min-h-screen bg-[#E8ECFF]">
         <Navbar />
         <div className="flex items-center justify-center h-screen">
           <div className="text-xl text-gray-900">Loading event...</div>
@@ -296,60 +321,151 @@ export default function EventDetailPage({ params }: Params) {
   const capacity = event.capacity ?? 100;
   const isClosed = available <= 0;
   const schedule = event.schedule ?? [];
+  const hostLabel = event.host?.[0] ?? "Student";
 
-  const image = event.image ?? "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
-  const location = event.location ?? "Room 203, Building 15, Faculty of Engineering";
-  const address2 = event.address2 ?? "Kasetsart University";
+  // IMAGE FIX: Ensure proper image URL handling
+  const image = event.image 
+    ? (event.image.startsWith('http') ? event.image : `http://localhost:8000${event.image}`)
+    : "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+
+  const location = event.location ?? "TBD";
+  const address2 = event.address2 ?? "TBD";
 
   return (
     <div className="min-h-screen bg-[#E8ECFF]">
       <Navbar />
       <main className="mx-auto max-w-6xl px-4 py-10">
+        {/* Hero image */}
         <div className="mx-auto w-[420px] max-w-full overflow-hidden rounded-xl bg-white shadow-sm">
-          <img src={image} alt={event.title} className="h-[420px] w-full object-cover" />
+          <img 
+            src={image} 
+            alt={event.title} 
+            className="h-[420px] w-full object-cover"
+            onError={(e) => {
+              console.error('Image failed to load:', image);
+              e.currentTarget.src = "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+            }}
+          />
         </div>
 
-        <h1 className="mt-8 text-5xl font-extrabold tracking-tight text-[#0B1220]">{event.title}</h1>
+        {/* Title */}
+        <h1 className="mt-8 text-5xl font-extrabold tracking-tight text-[#0B1220]">
+          {event.title}
+        </h1>
 
+        {/* Tags */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <span className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]">
+            {hostLabel}
+          </span>
+          {(event.tags ?? []).slice(0, 3).map((t) => (
+            <span
+              key={t}
+              className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]"
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+
+        {/* About card */}
         <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-[#0B1220]">About this event</h2>
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <h2 className="text-xl font-bold text-[#0B1220]">About this event</h2>
+            <p className="text-sm text-[#0B1220]/70">
+              Organized by <span className="font-semibold">{hostLabel}</span>
+            </p>
+          </div>
 
+          {/* Top info grid */}
+          <div className="mt-5 grid gap-6 md:grid-cols-3">
+            <div>
+              <p className="text-sm font-semibold text-[#0B1220]">Available Spot</p>
+              <p className="mt-1 text-sm">
+                <span
+                  className={
+                    isClosed
+                      ? "font-bold text-[#E11D48]"
+                      : "font-bold text-[#0B1220]"
+                  }
+                >
+                  {available}
+                </span>
+                <span className="text-[#0B1220]">/{capacity}</span>
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold text-[#0B1220]">
+                Event Date{schedule.length > 1 ? "s" : ""}
+              </p>
+              <div className="mt-1 text-sm">
+                {schedule.length > 0 ? (
+                  <EventDateSummary schedule={schedule} />
+                ) : (
+                  <span className="text-[#0B1220]">TBD</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Location */}
+          <div className="mt-6">
+            <p className="text-sm font-semibold text-[#0B1220]">Location</p>
+            <p className="mt-1 text-sm font-semibold text-[#0B1220]">
+              {location}
+            </p>
+            <p className="text-sm text-[#0B1220]">{address2}</p>
+          </div>
+
+          {/* Description */}
           <div className="mt-6">
             <p className="text-sm font-semibold text-[#0B1220]">Description</p>
-            <p className="mt-2 text-sm text-[#0B1220]">{event.excerpt ?? "No description available."}</p>
+            <p className="mt-2 text-sm text-[#0B1220]">
+              {event.excerpt ?? "No description available."}
+            </p>
           </div>
         </section>
 
+        {/* Detailed Schedule (collapsible) */}
         {schedule.length > 0 && <ScheduleList schedule={schedule} />}
 
+        {/* Register button */}
         <button
           onClick={handleRegister}
           disabled={registering || isClosed}
-          className={`mt-6 block w-full rounded-lg px-4 py-3 text-center text-sm font-semibold ${
-            isClosed
-              ? "bg-[#C7CBE0] text-[#3A3F55] cursor-default"
-              : "bg-[#6366F1] text-white hover:bg-[#4F46E5] transition-colors"
-          }`}
+          className={`mt-6 block w-full rounded-lg px-4 py-3 text-center text-sm font-semibold
+            ${
+              isClosed
+                ? "bg-[#C7CBE0] text-[#3A3F55] cursor-default"
+                : "bg-[#6366F1] text-white hover:bg-[#4F46E5] transition-colors"
+            }`}
         >
           {isClosed ? "Closed" : registering ? "Registering..." : "Register"}
         </button>
 
-        {message && <p className="mt-3 text-center text-sm text-[#0B1220]">{message}</p>}
+        {message && (
+          <p className="mt-3 text-center text-sm text-[#0B1220]">{message}</p>
+        )}
 
-        <section className="mt-12">
-          <h3 className="text-xl font-semibold text-[#0B1220]">Related Events</h3>
-          <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {related.map((r) => (
-              <RelatedCard key={r.id} item={r} />
-            ))}
-          </div>
-        </section>
+        {/* Related Events */}
+        {relatedEvents.length > 0 && (
+          <section className="mt-12">
+            <h3 className="text-xl font-semibold text-[#0B1220]">Related Events</h3>
+            <div className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {relatedEvents.map((r) => (
+                <RelatedCard key={r.id} item={r} />
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
+      {/* Footer */}
       <footer className="border-t border-black/10 bg-white/60 py-10">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 md:grid-cols-4">
-          <div>
-            <p className="text-sm text-gray-700">Site name</p>
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="text-xs text-gray-500">
+            © {new Date().getFullYear()} UniPLUS
           </div>
         </div>
       </footer>
@@ -359,11 +475,12 @@ export default function EventDetailPage({ params }: Params) {
 
 /* ---------- Related card ---------- */
 function RelatedCard({ item }: { item: EventWithOptionals }) {
-  const img =
-    item.image ??
-    "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+  // IMAGE FIX: Ensure proper image URL handling for related cards
+  const img = item.image 
+    ? (item.image.startsWith('http') ? item.image : `http://localhost:8000${item.image}`)
+    : "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
 
-  const available = item.available ?? 20 + ((item.id * 37) % 120);
+  const available = item.available ?? 0;
   const capacity = item.capacity ?? 100;
   const badge = item.host?.[0] ?? item.tags?.[0] ?? "Organizer";
 
@@ -372,7 +489,14 @@ function RelatedCard({ item }: { item: EventWithOptionals }) {
       href={`/events/${item.id}`}
       className="block rounded-xl bg-white shadow-sm transition hover:shadow-md"
     >
-      <img src={img} alt={item.title} className="h-40 w-full rounded-t-xl object-cover" />
+      <img 
+        src={img} 
+        alt={item.title} 
+        className="h-40 w-full rounded-t-xl object-cover"
+        onError={(e) => {
+          e.currentTarget.src = "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+        }}
+      />
       <div className="p-4">
         <h4 className="font-medium text-[#0B1220]">{item.title}</h4>
         <div className="mt-2">

@@ -477,19 +477,44 @@ def get_event_detail(request, event_id: int):
         except:
             tags_list = [event.tags] if event.tags else []
     
-    # Parse schedule
+    # Parse and transform schedule to frontend format
     schedule = []
     if hasattr(event, 'schedule') and event.schedule:
         try:
             schedule_data = json.loads(event.schedule)
-            # Transform to frontend format
+            
+            # Transform backend schedule format to frontend format
             for day in schedule_data:
+                # Extract date and times from the schedule
+                date_str = day.get('date', '')
+                
+                # Try to extract time from start_iso if available
+                start_iso = day.get('start_iso', '')
+                end_iso = day.get('end_iso', '')
+                
+                start_time = '00:00'
+                end_time = '00:00'
+                
+                if start_iso:
+                    try:
+                        # Extract time from ISO format: "2025-10-07T14:00:00Z" -> "14:00"
+                        start_time = start_iso.split('T')[1].split(':')[0] + ':' + start_iso.split('T')[1].split(':')[1]
+                    except:
+                        pass
+                
+                if end_iso:
+                    try:
+                        end_time = end_iso.split('T')[1].split(':')[0] + ':' + end_iso.split('T')[1].split(':')[1]
+                    except:
+                        pass
+                
                 schedule.append({
-                    "date": day.get('date', ''),
-                    "startTime": day.get('start_time', ''),
-                    "endTime": day.get('end_time', ''),
+                    "date": date_str,
+                    "startTime": start_time,
+                    "endTime": end_time,
                 })
-        except:
+        except Exception as e:
+            print(f"Error parsing schedule: {e}")
             pass
     
     # Check if user is registered
@@ -506,8 +531,8 @@ def get_event_detail(request, event_id: int):
     
     return {
         "id": event.id,
-        "title": event.event_title,  # Changed from event_title to title
-        "event_title": event.event_title,  # Keep both for compatibility
+        "title": event.event_title,
+        "event_title": event.event_title,
         "event_description": event.event_description,
         "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
         "organizer_username": event.organizer.username if event.organizer else "Unknown",
@@ -522,6 +547,7 @@ def get_event_detail(request, event_id: int):
         "available": available,
         "event_address": event.event_address or "",
         "location": event.event_address or "Online" if event.is_online else "TBA",
+        "address2": getattr(event, 'address2', "") or "",  # Add this field - add to Event model too
         "is_online": event.is_online,
         "event_meeting_link": event.event_meeting_link or "",
         "tags": tags_list,

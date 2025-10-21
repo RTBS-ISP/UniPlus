@@ -6,10 +6,31 @@ import QRCode from 'qrcode';
 import { MapPin, Clock, Calendar, Download, Share2, ArrowLeft } from 'lucide-react';
 import Navbar from '../../components/navbar';
 
+type Ticket = {
+  ticket_number: string;
+  event_title: string;
+  event_description?: string;
+  date: string;
+  time: string;
+  location: string;
+  organizer: string;
+  user_information?: {
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+  };
+  is_online?: boolean;
+  event_meeting_link?: string;
+  event_image?: string;
+};
+
 export default function TicketPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [ticket, setTicket] = useState<any>(null);
+  const [ticket, setTicket] = useState<Ticket | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
@@ -24,34 +45,95 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
 
       if (response.ok) {
         const data = await response.json();
+        
+        // Find ticket by ticket_number (which is the QR code)
         const foundTicket = data.tickets?.find((t: any) => t.ticket_number === id);
 
         if (foundTicket) {
-          setTicket(foundTicket);
-          QRCode.toDataURL(foundTicket.ticket_number).then(setQrCodeUrl);
+          // Map backend response to ticket type
+          const mappedTicket: Ticket = {
+            ticket_number: foundTicket.ticket_number,
+            event_title: foundTicket.event_title,
+            event_description: foundTicket.event_description,
+            date: foundTicket.date,
+            time: foundTicket.time,
+            location: foundTicket.location,
+            organizer: foundTicket.organizer,
+            user_information: foundTicket.user_information,
+            is_online: foundTicket.is_online,
+            event_meeting_link: foundTicket.event_meeting_link,
+            event_image: foundTicket.event_image,
+          };
+          
+          setTicket(mappedTicket);
+          
+          // Generate QR code from ticket number
+          if (foundTicket.ticket_number) {
+            QRCode.toDataURL(foundTicket.ticket_number)
+              .then(setQrCodeUrl)
+              .catch(err => console.error('QR code generation error:', err));
+          }
+        } else {
+          console.error('Ticket not found with ID:', id);
         }
+      } else {
+        console.error('Failed to fetch user data:', response.status);
       }
     } catch (error) {
       console.error('Error fetching ticket:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
   };
+
+  const formatTime = (timeStr: string) => {
+    if (!timeStr) return 'TBD';
+    // If it's already formatted like "14:30:00", extract just "14:30"
+    if (timeStr.includes(':')) {
+      return timeStr.substring(0, 5);
+    }
+    return timeStr;
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-indigo-50">
+        <Navbar />
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-2xl text-gray-600">Loading ticket...</div>
+        </div>
+      </div>
+    );
+  }
 
   if (!ticket) {
     return (
       <div className="min-h-screen bg-indigo-50">
         <Navbar />
         <div className="flex items-center justify-center h-screen">
-          <div className="text-2xl text-gray-600">Loading ticket...</div>
+          <div className="text-center">
+            <div className="text-2xl text-gray-600 mb-4">Ticket not found</div>
+            <button
+              onClick={() => router.push('/my-tickets')}
+              className="text-indigo-600 hover:text-indigo-700 font-medium"
+            >
+              Return to My Tickets
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -74,52 +156,61 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
         {/* Ticket Card */}
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
           {/* Event Image Header */}
-          {ticket.event_image ? (
-            <div className="relative h-64 overflow-hidden">
-              <img
-                src={`http://localhost:8000${ticket.event_image}`}
-                alt={ticket.event_title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-black/30"></div>
-              <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="bg-indigo-600 px-4 py-2 rounded-xl text-sm font-bold">
-                    Event Ticket
-                  </div>
-                  <div className="flex gap-2">
-                    <button className="p-2 bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors">
-                      <Share2 size={20} />
-                    </button>
-                    <button className="p-2 bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors">
-                      <Download size={20} />
-                    </button>
-                  </div>
-                </div>
-                <h1 className="text-3xl font-bold">{ticket.event_title}</h1>
-                <p className="text-white/90 mt-1">{formatDate(ticket.date)}</p>
-              </div>
-            </div>
-          ) : (
-            // Fallback Indigo Header (if no image)
-            <div className="bg-indigo-500 p-8 text-white text-center">
-              <div className="flex items-center justify-between mb-4">
+          <div className="relative h-64 overflow-hidden bg-gradient-to-b from-indigo-400 to-indigo-600">
+            {ticket.event_image ? (
+              <>
+                <img
+                  src={
+                    ticket.event_image.startsWith('http')
+                      ? ticket.event_image
+                      : `http://localhost:8000${ticket.event_image}`
+                  }
+                  alt={ticket.event_title}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback to gradient if image fails
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <div className="absolute inset-0 bg-black/30"></div>
+              </>
+            ) : null}
+            
+            <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+              <div className="flex items-center justify-between mb-2">
                 <div className="bg-indigo-600 px-4 py-2 rounded-xl text-sm font-bold">
                   Event Ticket
                 </div>
                 <div className="flex gap-2">
-                  <button className="p-2 bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors">
+                  <button
+                    onClick={() => {
+                      // Share functionality
+                      if (navigator.share) {
+                        navigator.share({
+                          title: ticket.event_title,
+                          text: `Check out my ticket for ${ticket.event_title}`,
+                        });
+                      }
+                    }}
+                    className="p-2 bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors"
+                  >
                     <Share2 size={20} />
                   </button>
-                  <button className="p-2 bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors">
+                  <button
+                    onClick={() => {
+                      // Download functionality - print to PDF
+                      window.print();
+                    }}
+                    className="p-2 bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors"
+                  >
                     <Download size={20} />
                   </button>
                 </div>
               </div>
-              <h1 className="text-4xl font-bold mb-2">{ticket.event_title}</h1>
-              <p className="text-indigo-100 text-lg">{formatDate(ticket.date)}</p>
+              <h1 className="text-3xl font-bold">{ticket.event_title}</h1>
+              <p className="text-white/90 mt-1">{formatDate(ticket.date)}</p>
             </div>
-          )}
+          </div>
 
           {/* Perforated Line */}
           <div className="flex items-center justify-center -my-3 relative z-10">
@@ -138,12 +229,18 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
               {/* Left Side - QR Code */}
               <div className="flex flex-col items-center justify-center">
                 <div className="bg-gray-50 p-8 rounded-3xl shadow-lg">
-                  {qrCodeUrl && <img src={qrCodeUrl} alt="QR Code" className="w-64 h-64" />}
+                  {qrCodeUrl ? (
+                    <img src={qrCodeUrl} alt="QR Code" className="w-64 h-64" />
+                  ) : (
+                    <div className="w-64 h-64 bg-gray-200 flex items-center justify-center rounded">
+                      <span className="text-gray-500">Generating QR Code...</span>
+                    </div>
+                  )}
                 </div>
                 <div className="mt-6 text-center">
                   <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Ticket Number</p>
-                  <p className="font-mono font-bold text-2xl text-gray-900">
-                    {ticket.ticket_number.slice(0, 8).toUpperCase()}
+                  <p className="font-mono font-bold text-xl text-gray-900 break-all">
+                    {ticket.ticket_number.substring(0, 12).toUpperCase()}
                   </p>
                 </div>
               </div>
@@ -161,7 +258,9 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500 mb-1">Time</p>
-                        <p className="font-semibold text-gray-900">{ticket.time}</p>
+                        <p className="font-semibold text-gray-900">
+                          {formatTime(ticket.time)}
+                        </p>
                       </div>
                     </div>
 
@@ -190,29 +289,33 @@ export default function TicketPage({ params }: { params: Promise<{ id: string }>
                 </div>
 
                 {/* Attendee Info */}
-                <div className="bg-gray-50 rounded-2xl p-6">
-                  <h3 className="font-bold text-gray-900 mb-4">Attendee Information</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Name</p>
-                      <p className="font-semibold text-gray-900">
-                        {ticket.user_information?.name || 'N/A'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Email</p>
-                      <p className="font-semibold text-gray-900">
-                        {ticket.user_information?.email || 'N/A'}
-                      </p>
-                    </div>
-                    {ticket.user_information?.phone && (
+                {ticket.user_information && (
+                  <div className="bg-gray-50 rounded-2xl p-6">
+                    <h3 className="font-bold text-gray-900 mb-4">Attendee Information</h3>
+                    <div className="space-y-3">
                       <div>
-                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Phone</p>
-                        <p className="font-semibold text-gray-900">{ticket.user_information.phone}</p>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Name</p>
+                        <p className="font-semibold text-gray-900">
+                          {ticket.user_information.name || 'N/A'}
+                        </p>
                       </div>
-                    )}
+                      <div>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Email</p>
+                        <p className="font-semibold text-gray-900">
+                          {ticket.user_information.email || 'N/A'}
+                        </p>
+                      </div>
+                      {ticket.user_information.phone && (
+                        <div>
+                          <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Phone</p>
+                          <p className="font-semibold text-gray-900">
+                            {ticket.user_information.phone}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Online Meeting Link */}
                 {ticket.is_online && ticket.event_meeting_link && (
