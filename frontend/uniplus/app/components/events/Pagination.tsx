@@ -1,13 +1,12 @@
-// app/components/events/Pagination.tsx
 "use client";
+
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 type Props = {
   page: number;
   totalPages: number;
   onChange: (p: number) => void;
-  /** how many numbers to show on each side of the current page (default 1) */
   siblingCount?: number;
-  /** how many numbers to always show at the start & end (default 1) */
   boundaryCount?: number;
 };
 
@@ -22,6 +21,8 @@ export default function Pagination({
 }: Props) {
   if (totalPages <= 1) return null;
 
+  const shouldReduceMotion = useReducedMotion();
+
   const clamped = (n: number) => Math.min(totalPages, Math.max(1, n));
 
   const range = (start: number, end: number) =>
@@ -29,7 +30,6 @@ export default function Pagination({
 
   /**
    * Build items like: [1] … [4,5,6] … [10]
-   * Center window moves when you click a page (e.g. clicking 3 -> show 2 3 4).
    */
   const paginationItems = () => {
     const leftBoundary = range(1, Math.min(boundaryCount, totalPages));
@@ -47,87 +47,133 @@ export default function Pagination({
     const middle = range(leftSibling, rightSibling);
 
     const items: (number | typeof DOTS)[] = [];
-
-    // left boundary
     items.push(...leftBoundary);
 
-    // left dots
     if (shouldShowLeftDots) {
-      // optional “jump” hint number (just a nicer UX)
       const jumpLeft = Math.max(page - (siblingCount + 1), boundaryCount + 1);
       if (jumpLeft > leftBoundary[leftBoundary.length - 1] + 1) items.push(DOTS);
     }
 
-    // middle sliding window
     items.push(...middle);
 
-    // right dots
     if (shouldShowRightDots) {
       const jumpRight = Math.min(page + (siblingCount + 1), totalPages - boundaryCount);
       if (jumpRight < rightBoundary[0] - 1) items.push(DOTS);
     }
 
-    // right boundary
-    // avoid duplicating numbers if windows touch
     for (const n of rightBoundary) {
       if (!items.includes(n)) items.push(n);
     }
 
-    // de-dup possible overlaps
     return items.filter((v, i, a) => a.indexOf(v) === i);
   };
 
   const items = paginationItems();
 
+  // ----- Styles to match your SortPanel indigo scheme -----
   const baseBtn =
-    "inline-flex h-9 min-w-9 items-center justify-center rounded-lg px-3 text-sm transition";
-  const numberBtn =
-    "bg-white hover:bg-gray-50 ring-1 ring-black/10 text-black";
-  const activeBtn =
-    "bg-black text-white ring-0 hover:bg-black";
+    "inline-flex h-9 min-w-9 items-center justify-center rounded-full px-3 text-sm shadow-sm transition font-medium " +
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-200";
+
+  const numberBtnActive =
+    "bg-[#6366F1] border border-[#6366F1] text-white hover:bg-[#4F46E5]";
+
+  const numberBtnInactive =
+    "border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50";
+
   const arrowBtn =
-    "text-gray-700 hover:text-black";
+    "border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50";
+
+  const arrowBtnDisabled =
+    "border border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed hover:bg-gray-50";
+
+  // ----- Motion variants -----
+  const itemVariants = {
+    initial: (dir: number) =>
+      shouldReduceMotion ? {} : { opacity: 0, y: dir > 0 ? 6 : -6, scale: 0.95 },
+    animate: shouldReduceMotion ? {} : { opacity: 1, y: 0, scale: 1 },
+    exit: (dir: number) =>
+      shouldReduceMotion ? {} : { opacity: 0, y: dir > 0 ? -6 : 6, scale: 0.95 },
+  } as const;
+
+  const transition = shouldReduceMotion
+    ? { duration: 0 }
+    : { type: "spring", stiffness: 500, damping: 30, mass: 0.6 };
+
+  // Direction helps dots/numbers slide subtly in the direction of navigation
+  const dir = 0; // keep neutral; set to Math.sign(nextPage - page) if you track previous page in parent
 
   return (
     <nav className="flex items-center justify-center gap-2" aria-label="Pagination">
-      <button
-        className={`${baseBtn} ${arrowBtn}`}
+      {/* Prev */}
+      <motion.button
+        whileHover={page === 1 ? undefined : { scale: 1.02 }}
+        whileTap={page === 1 ? undefined : { scale: 0.98 }}
+        className={`${baseBtn} ${page === 1 ? arrowBtnDisabled : arrowBtn}`}
         onClick={() => onChange(clamped(page - 1))}
         disabled={page === 1}
         aria-label="Previous page"
+        aria-disabled={page === 1}
       >
         ← Previous
-      </button>
+      </motion.button>
 
-      {items.map((it, idx) =>
-        it === DOTS ? (
-          <span
-            key={`dots-${idx}`}
-            className="inline-flex h-9 min-w-9 items-center justify-center px-1 text-gray-500"
-            aria-hidden
-          >
-            {DOTS}
-          </span>
-        ) : (
-          <button
-            key={it}
-            aria-current={it === page ? "page" : undefined}
-            className={`${baseBtn} ${it === page ? activeBtn : numberBtn}`}
-            onClick={() => onChange(it)}
-          >
-            {it}
-          </button>
-        )
-      )}
+      {/* Numbers + Dots */}
+      <AnimatePresence initial={false} mode="popLayout" custom={dir}>
+        {items.map((it, idx) =>
+          it === DOTS ? (
+            <motion.span
+              key={`dots-${idx}`}
+              layout
+              custom={dir}
+              variants={itemVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={transition}
+              className="inline-flex h-9 min-w-9 items-center justify-center px-1 text-indigo-400 select-none"
+              aria-hidden
+            >
+              {DOTS}
+            </motion.span>
+          ) : (
+            <motion.button
+              key={`p-${it}`}
+              layout
+              custom={dir}
+              variants={itemVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={transition}
+              aria-current={it === page ? "page" : undefined}
+              aria-pressed={it === page}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.98 }}
+              className={[
+                baseBtn,
+                it === page ? numberBtnActive : numberBtnInactive,
+              ].join(" ")}
+              onClick={() => onChange(it)}
+            >
+              {it}
+            </motion.button>
+          )
+        )}
+      </AnimatePresence>
 
-      <button
-        className={`${baseBtn} ${arrowBtn}`}
+      {/* Next */}
+      <motion.button
+        whileHover={page === totalPages ? undefined : { scale: 1.02 }}
+        whileTap={page === totalPages ? undefined : { scale: 0.98 }}
+        className={`${baseBtn} ${page === totalPages ? arrowBtnDisabled : arrowBtn}`}
         onClick={() => onChange(clamped(page + 1))}
         disabled={page === totalPages}
         aria-label="Next page"
+        aria-disabled={page === totalPages}
       >
         Next →
-      </button>
+      </motion.button>
     </nav>
   );
 }
