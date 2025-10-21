@@ -17,7 +17,7 @@ export type EventItemPlus = EventItem & {
 };
 
 /** --------- Static pools --------- */
-const hostTypes = [["Organizer"], ["University"], ["Club"], ["Student"]];
+const hostTypes = [["Organizer"], ["Professor"], ["Student"]];
 
 const tagSets = [
   ["Engineer", "Club", "Workshop"],
