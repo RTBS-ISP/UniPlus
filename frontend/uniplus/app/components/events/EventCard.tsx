@@ -26,7 +26,7 @@ function formatMDY(dateStr?: string): string {
   const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return dateStr;
   const [, y, mo, d] = m;
-  return `${mo}/${d}/${y}`;
+  return `${d}/${mo}/${y}`;
 }
 
 const KNOWN_CATEGORIES = [
@@ -70,7 +70,7 @@ function HostPill({ label }: { label: string }) {
   } else if (normalized === "student") {
     bg = "#E0F2FE";
     color = "#1F1F1F";
-  } else if (normalized === "university") {
+  } else if (normalized === "professor") {
     bg = "#C7D2FE";
     color = "#1F1F1F";
   }
@@ -86,7 +86,16 @@ function HostPill({ label }: { label: string }) {
 }
 
 // ---------- Main Component ----------
-export default function EventCard({ item }: { item: EventItem }) {
+// NEW: optional index/stagger props to cascade cards from parent lists
+export default function EventCard({
+  item,
+  index = 0,
+  stagger = 0.06,
+}: {
+  item: EventItem;
+  index?: number;
+  stagger?: number;
+}) {
   const shouldReduce = useReducedMotion();
   const hostBadge = item.host?.[0] ?? "Organizer";
 
@@ -162,16 +171,33 @@ export default function EventCard({ item }: { item: EventItem }) {
   const visibleTags = tagList.slice(0, visibleCount);
   const hiddenTags = tagList.slice(visibleCount);
 
-  // --- motion variants ---
+  // --- motion: entrance + hover ---
+  const entranceDelay = shouldReduce ? 0 : index * stagger;
+  const entranceInitial = shouldReduce
+    ? { opacity: 0 }
+    : { opacity: 0, y: 10, scale: 0.98 };
+  const entranceWhileInView = shouldReduce
+    ? { opacity: 1 }
+    : { opacity: 1, y: 0, scale: 1 };
+
   const cardHover = shouldReduce ? {} : { scale: 1.015, y: -4 };
-  const cardTransition = shouldReduce
+  const transition = shouldReduce
     ? { duration: 0 }
-    : { type: "spring", stiffness: 320, damping: 22, mass: 0.6 };
+    : {
+        type: "spring",
+        stiffness: 320,
+        damping: 22,
+        mass: 0.6,
+        delay: entranceDelay,
+      };
 
   return (
     <motion.div
+      initial={entranceInitial}
+      whileInView={entranceWhileInView}
+      viewport={{ once: true, amount: 0.25 }}
       whileHover={cardHover}
-      transition={cardTransition}
+      transition={transition}
       className="group rounded-2xl border border-[#6CA8FF] bg-white p-5 shadow-sm hover:shadow-lg
                  [backface-visibility:hidden] [transform-style:preserve-3d]"
     >
@@ -316,13 +342,7 @@ function MotionDetailButton({ id }: { id: number }) {
       onHoverEnd={() => setHovered(false)}
       className="inline-flex items-center rounded-full bg-[#6366F1] text-xs font-semibold text-white
                  shadow-sm focus:outline-none hover:bg-[#4F46E5]"
-      style={{
-        paddingLeft: 12,
-        paddingRight: 12,
-        paddingTop: 6,
-        paddingBottom: 6,
-        gap: 4,
-      }}
+      style={{ paddingLeft: 12, paddingRight: 12, paddingTop: 6, paddingBottom: 6, gap: 4 }}
       whileHover={
         shouldReduce
           ? {}
