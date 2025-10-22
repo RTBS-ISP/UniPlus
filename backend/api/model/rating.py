@@ -5,17 +5,13 @@ from .event import Event
 
 # class for leaving ratings like stars to events
 class Rating(models.Model):
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="ratings")
-    organizer = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="organized_id")
-    user = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name='ratings', null=True, blank=True)
-
+    event_id = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="ratings", db_column='event_id')
+    reviewer_id = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="ratings", db_column='reviewer_id')
     rates = models.PositiveIntegerField()
-    liked_date = models.DateTimeField(auto_now_add=True)
+    liked_datetime = models.DateTimeField(auto_now_add=True, db_column='liked_datetime')
+
+    class Meta:
+        db_table = 'api_rating'
 
     def __str__(self):
-        return f"{self.rates} by {self.user.email if self.user else 'Anonymous'} for {self.event.event_title}"
-
-    
-
-
-    
+        return f"{self.rates} stars by {self.reviewer_id.email} for {self.event_id.event_title}"

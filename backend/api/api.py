@@ -13,10 +13,13 @@ from django.shortcuts import get_object_or_404
 from api.model.user import AttendeeUser
 from api.model.event import Event
 from api.model.ticket import Ticket
+from api.model.comment import Comment
+from api.model.rating import Rating
 from api import schemas
-from typing import List, Optional, Union
+from typing import List, Optional
 import json
 from datetime import datetime
+from django.db.models import Count
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
@@ -383,7 +386,6 @@ def update_user(
 @api.post("/events/{event_id}/register", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
 def register_for_event(request, event_id: int):
     try:
-        from datetime import timedelta
         import uuid
 
         event = get_object_or_404(Event, id=event_id)
@@ -574,3 +576,42 @@ def get_ticket_detail(request, ticket_id: int):
         "user_name": f"{request.user.first_name} {request.user.last_name}",
         "user_email": request.user.email,
     }
+
+#Comments and Ratings Endpoints
+
+@api.post("/events/{event_id}/comments", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def add_comment(request, event_id: int, payload: schemas.CommentCreateSchema):
+    """
+    Add a comment to an event
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        user = request.user
+
+        # Check if user has attended the event (has a ticket)
+        has_ticket = Ticket.objects.filter(event=event, attendee=user).exists()
+        if not has_ticket:
+            return 400, {"error": "You must have attended this event to leave a comment"}
+
+        # Validate content is not empty
+        if not payload.content or not payload.content.strip():
+            return 400, {"error": "Comment content cannot be empty"}
+
+        # Create comment using the CORRECT field names
+        comment = Comment.objects.create(
+            event_id=event,      # Use event_id
+            author_id=user,      # Use author_id
+            content=payload.content.strip()
+        )
+
+        return 200, {
+            "success": True,
+            "message": "Comment added successfully",
+            "comment_id": comment.id
+        }
+
+    except Event.DoesNotExist:
+        return 400, {"error": "Event not found"}
+    except Exception as e:
+        print(f"Error adding comment: {str(e)}")
+        return 400, {"error": str(e)}

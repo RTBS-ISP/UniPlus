@@ -63,7 +63,7 @@ class MessageSchema(Schema):
 class ErrorSchema(Schema):
     error: str
 
-# Standard success response (optionally with user info)
+# Standard success response schema
 class SuccessSchema(Schema):
     success: bool
     message: str = None
@@ -170,3 +170,30 @@ class TicketDetailSchema(Schema):
     organizer: str
     user_name: str
     user_email: str
+
+
+class CommentCreateSchema(Schema):
+    content: str
+
+class RatingCreateSchema(Schema):
+    rates: int
+
+class CommentResponseSchema(Schema):
+    id: int
+    event_id: int          
+    user_id: int
+    organizer_id: int
+    content: str
+    content_created_at: datetime
+    content_updated_at: datetime
+    user_name: str
+    user_profile_pic: Optional[str] = None
+
+class RatingResponseSchema(Schema):
+    id: int
+    event_id: int          
+    organizer_id: int
+    user_id: Optional[int] = None
+    rates: int
+    liked_date: datetime
+    user_name: str
