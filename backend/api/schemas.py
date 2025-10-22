@@ -197,3 +197,8 @@ class RatingResponseSchema(Schema):
     rates: int
     liked_date: datetime
     user_name: str
+
+class EventCommentsResponse(Schema):
+    comments: List[CommentResponseSchema]
+    average_rating: float
+    total_ratings: int
