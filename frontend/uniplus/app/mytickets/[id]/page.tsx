@@ -3,6 +3,21 @@ import Navbar from "../../components/navbar"
 import { Calendar, Clock, MapPin, ArrowLeft, User, Mail } from "lucide-react"
 import Link from "next/link"
 
+const mockTicket = {
+  title: "Test 1",
+  code: "63DA6DE0",
+  date: "13 October 2025",
+  time: "2:00 PM - 5:00 PM",
+  location: "Room 203, Building 15, Faculty of Engineering",
+  tags: ["Year 1", "Technology", "Web Development"],
+  holder: {
+    name: "John Doe",
+    email: "john@example.com"
+  },
+  organizer: "Test Account",
+  registeredOn: "8 October 2025"
+};
+
 function TicketDetailPage () {
   return (
     <main>
@@ -21,17 +36,16 @@ function TicketDetailPage () {
           <div className="rounded-lg shadow-sm bg-white overflow-hidden">
             {/* Header Section with Tags */}
             <div className="bg-indigo-500 p-8">
-              <h1 className="text-white text-4xl font-bold mb-4">Test 1</h1>
+              <h1 className="text-white text-4xl font-bold mb-4">{mockTicket.title}</h1>
               <div className="flex flex-wrap gap-2">
-                <span className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg">
-                  Year 1
-                </span>
-                <span className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg">
-                  Technology
-                </span>
-                <span className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg">
-                  Web Development
-                </span>
+                {mockTicket.tags.map((tag, idx) => (
+                  <span
+                    key={idx}
+                    className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
+                  >
+                    {tag}
+                  </span>
+                ))}
               </div>
             </div>
 
@@ -50,7 +64,7 @@ function TicketDetailPage () {
                       </div>
                       <div>
                         <p className="text-gray-800 text-sm">Date</p>
-                        <p className="text-gray-800 font-semibold">13 October 2025</p>
+                        <p className="text-gray-800 font-semibold">{mockTicket.date}</p>
                       </div>
                     </div>
 
@@ -60,7 +74,7 @@ function TicketDetailPage () {
                       </div>
                       <div>
                         <p className="text-gray-800 text-sm">Time</p>
-                        <p className="text-gray-800 font-semibold">2:00 PM - 5:00 PM</p>
+                        <p className="text-gray-800 font-semibold">{mockTicket.time}</p>
                       </div>
                     </div>
 
@@ -70,7 +84,7 @@ function TicketDetailPage () {
                       </div>
                       <div>
                         <p className="text-gray-800 text-sm">Location</p>
-                        <p className="text-gray-800 font-semibold">Room 203, Building 15, Faculty of Engineering</p>
+                        <p className="text-gray-800 font-semibold">{mockTicket.location}</p>
                       </div>
                     </div>
                   </div>
@@ -83,12 +97,12 @@ function TicketDetailPage () {
                   <div className="space-y-3">
                     <div className="flex items-center gap-3">
                       <User size={20} className="text-gray-800"/>
-                      <p className="text-gray-800 font-semibold">John Doe</p>
+                      <p className="text-gray-800 font-semibold">{mockTicket.holder.name}</p>
                     </div>
 
                     <div className="flex items-center gap-3">
                       <Mail size={20} className="text-gray-800"/>
-                      <p className="text-gray-800">john@example.com</p>
+                      <p className="text-gray-800">{mockTicket.holder.email}</p>
                     </div>
                   </div>
                 </div>
@@ -97,15 +111,15 @@ function TicketDetailPage () {
                 <div className="bg-indigo-100 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-800">Organized by</span>
-                    <span className="text-gray-800 font-semibold">Test Account</span>
+                    <span className="text-gray-800 font-semibold">{mockTicket.organizer}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-800">Registered on</span>
-                    <span className="text-gray-800 font-semibold">8 October 2025</span>
+                    <span className="text-gray-800 font-semibold">{mockTicket.registeredOn}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-800">Ticket ID</span>
-                    <span className="text-gray-800 font-semibold">63DA6DE0</span>
+                    <span className="text-gray-800 font-semibold">{mockTicket.code}</span>
                   </div>
                 </div>
               </div>
@@ -114,7 +128,7 @@ function TicketDetailPage () {
               <div className="flex flex-col items-center justify-start">
                 <div className="w-full max-w-sm aspect-square bg-gray-200 rounded-lg flex items-center justify-center">
                   {/* Placeholder for QR Code */}
-                  <div className="text-gray-800 text-center">
+                  <div className="text-gray-400 text-center">
                     <p className="text-sm">QR Code</p>
                   </div>
                 </div>
