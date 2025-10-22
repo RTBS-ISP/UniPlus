@@ -588,7 +588,7 @@ def add_comment(request, event_id: int, payload: schemas.CommentCreateSchema):
         event = get_object_or_404(Event, id=event_id)
         user = request.user
 
-        # Check if user has attended the event (has a ticket)
+        # Check if user has attended the event 
         has_ticket = Ticket.objects.filter(event=event, attendee=user).exists()
         if not has_ticket:
             return 400, {"error": "You must have attended this event to leave a comment"}
@@ -597,10 +597,9 @@ def add_comment(request, event_id: int, payload: schemas.CommentCreateSchema):
         if not payload.content or not payload.content.strip():
             return 400, {"error": "Comment content cannot be empty"}
 
-        # Create comment using the CORRECT field names
         comment = Comment.objects.create(
-            event_id=event,      # Use event_id
-            author_id=user,      # Use author_id
+            event_id=event,      
+            author_id=user,      
             content=payload.content.strip()
         )
 
@@ -614,4 +613,47 @@ def add_comment(request, event_id: int, payload: schemas.CommentCreateSchema):
         return 400, {"error": "Event not found"}
     except Exception as e:
         print(f"Error adding comment: {str(e)}")
+        return 400, {"error": str(e)}
+
+
+@api.post("/events/{event_id}/ratings", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def add_rating(request, event_id: int, payload: schemas.RatingCreateSchema):
+    """
+    Add or update a rating for an event
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        user = request.user
+
+
+        # Check if user has attended the event 
+        has_ticket = Ticket.objects.filter(event=event, attendee=user).exists()
+        if not has_ticket:
+            return 400, {"error": "You must have attended this event to leave a rating"}
+
+        # Check if user already rated this event
+        existing_rating = Rating.objects.filter(event_id=event, reviewer_id=user).first()
+        
+        if existing_rating:
+            # Update existing rating
+            existing_rating.rates = payload.rates
+            existing_rating.save()
+            message = "Rating updated successfully"
+        else:
+            rating = Rating.objects.create(
+                event_id=event,      
+                reviewer_id=user,    
+                rates=payload.rates
+            )
+            message = "Rating added successfully"
+
+        return 200, {
+            "success": True,
+            "message": message
+        }
+
+    except Event.DoesNotExist:
+        return 400, {"error": "Event not found"}
+    except Exception as e:
+        print(f"Error adding rating: {str(e)}")
         return 400, {"error": str(e)}
