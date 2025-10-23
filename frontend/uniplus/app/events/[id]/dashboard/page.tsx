@@ -19,7 +19,7 @@ export default function DashBoardPage() {
   ];
 
   // Mock-up attendee data with dates and approval status
-  const allAttendees = [
+  const [allAttendees, setAllAttendees] = useState([
     // Day 1
     {
       ticketId: "T123456",
@@ -93,7 +93,18 @@ export default function DashBoardPage() {
       checkedIn: "2025-10-09 10:30",
       eventDate: "2025-10-09"
     }
-  ];
+  ]);
+
+  // Handle approve/reject
+  const handleApproval = (ticketId, status) => {
+    setAllAttendees(prev =>
+      prev.map(a =>
+        a.ticketId === ticketId
+          ? { ...a, approvalStatus: status }
+          : a
+      )
+    );
+  };
 
   // Filter attendees
   const attendees = tableView === "attendance" 
@@ -471,10 +482,10 @@ export default function DashBoardPage() {
                           <td className="px-6 py-4">
                             {attendee.approvalStatus === "pending" ? (
                               <div className="flex justify-center gap-2">
-                                <button className="p-2 bg-lime-500 hover:bg-lime-600 rounded-lg transition-colors">
+                                <button onClick={() => handleApproval(attendee.ticketId, "approved")} className="p-2 bg-lime-500 hover:bg-lime-600 rounded-lg transition-colors">
                                   <CheckCircle size={20} className="text-white" />
                                 </button>
-                                <button className="p-2 bg-red-400 hover:bg-red-500 rounded-lg transition-colors">
+                                <button onClick={() => handleApproval(attendee.ticketId, "rejected")} className="p-2 bg-red-400 hover:bg-red-500 rounded-lg transition-colors">
                                   <XCircle size={20} className="text-white" />
                                 </button>
                               </div>
