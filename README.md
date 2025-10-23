@@ -3,9 +3,9 @@
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)  
 ![Django](https://img.shields.io/badge/django-5.0-green.svg)  
 ![Next.js](https://img.shields.io/badge/next.js-14-black.svg)  
-![MySQL](https://img.shields.io/badge/mysql-8.0-orange.svg)  
+![PostgreSQL](https://img.shields.io/badge/postgresql-16-blue.svg)
 
-Next.js · Django · MySQL · Docker  
+Next.js · Django · PostgreSQL · Docker  
 
 
 ---
@@ -30,7 +30,6 @@ You can find all project documentation in our [GitHub Wiki](https://github.com/R
 ### Prerequisites
 - **Python 3.11+**  
 - **Node.js**  
-- **MySQL** (running locally or via Docker)  
 - **pip** and **npm** package managers  
 
 ---
@@ -46,19 +45,21 @@ cd UniPlus
 ### 2. Backend Setup (Django)
 
 ```bash
+#docker for everything
+start docker-desktop
+
+docker-
+
+
 # Create and activate virtual environment
 python -m venv env
 source env/bin/activate      # macOS/Linux
 env\Scripts\activate         # Windows
 
-# Install dependencies
-pip install django django-ninja django-cors-headers
-
-# Enter backend folder
+# Install dependencies(manual install if you have issue with docker compose)
 cd backend
+pip install -r .\requirements.txt
 
-# Run server
-python manage.py runserver
 ```
 
 ---
@@ -74,6 +75,7 @@ npm install
 
 # Install lucide react icon library
 npm install lucide-react
+npm install framer-motion 
 
 # Run development server
 npm run dev
@@ -81,7 +83,20 @@ npm run dev
 
 The frontend will run locally on **[http://localhost:3000](http://localhost:3000)**
 The backend will run locally on **[http://127.0.0.1:8000](http://127.0.0.1:8000)**
+the database will run locally on **[http://localhost:5050](http://127.0.0.1:8000)**
 
+---
+
+---
+the passwords for the database will be these.
+- PGADMIN_DEFAULT_EMAIL: admin@admin.com
+- PGADMIN_DEFAULT_PASSWORD: admin
+- DB_HOST=db
+- DB_PORT=5432
+- DB_NAME=uniplus_db
+- DB_USER=postgres
+- DB_PASSWORD=Password
+  
 ---
 
 ## ▶️ Run the Project
@@ -91,8 +106,12 @@ You will need **two terminals**:
 **Terminal 1 (Backend)**
 
 ```bash
-cd backend
-python manage.py runserver
+(if composed already)
+docker-compose down
+docker-compose up --build
+
+(if not composed already)
+docker-compose up --build
 ```
 
 **Terminal 2 (Frontend)**
