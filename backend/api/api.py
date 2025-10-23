@@ -692,12 +692,13 @@ def get_event_comments(request, event_id: int):
                 "user_id": comment.author_id.id,
                 "organizer_id": event.organizer.id,
                 "content": comment.content,
-                "content_created_at": comment.content_created_at,
-                "content_updated_at": comment.content_updated_at,
+                "content_created_at": comment.content_created_at.isoformat() if comment.content_created_at else None,
+                "content_updated_at": comment.content_updated_at.isoformat() if comment.content_updated_at else None,
                 "user_name": user_name,
                 "user_profile_pic": comment.author_id.profile_picture.url if comment.author_id.profile_picture else DEFAULT_PROFILE_PIC,
             })
 
+        # Calculate average rating - FIXED: default to 0 when no ratings exist
         ratings_agg = Rating.objects.filter(event_id=event).aggregate(
             average_rating=Avg('rates'),
             total_ratings=Count('id')
@@ -706,16 +707,21 @@ def get_event_comments(request, event_id: int):
         average_rating = ratings_agg['average_rating']
         if average_rating is not None:
             average_rating = round(average_rating, 1)
-        
+        else:
+            average_rating = 0.0  # FIX: Default to 0.0 instead of None
+
+        total_ratings = ratings_agg['total_ratings'] or 0  # Ensure 0 if no ratings
 
         return {
             "comments": comments_data,
-            "average_rating": average_rating,
-            "total_ratings": ratings_agg['total_ratings']
+            "average_rating": average_rating,  # Now always a number (never null)
+            "total_ratings": total_ratings
         }
 
     except Event.DoesNotExist:
         return {"error": "Event not found"}
     except Exception as e:
-        print(f"Error fetching comments: {str(e)}")
+        print(f"Error fetching comments for event {event_id}: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return {"error": str(e)}
