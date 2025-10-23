@@ -463,7 +463,7 @@ function CommentsRatingsSection({
         {comments.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <MessageCircle className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>No comments yet. Be the first to share your thoughts!</p>
+            <p>No comments yet.</p>
           </div>
         ) : (
           comments.map((comment) => (
