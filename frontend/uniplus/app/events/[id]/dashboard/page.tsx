@@ -1,21 +1,33 @@
 "use client";
 import Navbar from "../../../components/navbar"; 
-import { QrCode, UserCheck, User, Clock } from "lucide-react";
+import { QrCode, UserCheck, User, Clock, Calendar, ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 export default function DashBoardPage() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDate, setSelectedDate] = useState("2025-10-07");
 
-  // Mock-up attendee data
-  const attendees = [
+  // Event dates
+  const eventDates = [
+    { date: "2025-10-07", label: "Day 1 - Oct 7, 2025" },
+    { date: "2025-10-08", label: "Day 2 - Oct 8, 2025" },
+    { date: "2025-10-09", label: "Day 3 - Oct 9, 2025" },
+    { date: "2025-10-10", label: "Day 4 - Oct 10, 2025" },
+    { date: "2025-10-11", label: "Day 5 - Oct 11, 2025" }
+  ];
+
+  // Mock-up attendee data with dates
+  const allAttendees = [
+    // Day 1 
     {
       ticketId: "T123456",
       name: "John Doe",
       email: "john@example.com",
       status: "present",
       registered: "2025-10-05 22:00",
-      checkedIn: "2025-10-07 22:00"
+      checkedIn: "2025-10-07 22:00",
+      eventDate: "2025-10-07"
     },
     {
       ticketId: "T123457",
@@ -23,7 +35,8 @@ export default function DashBoardPage() {
       email: "charlie@example.com",
       status: "pending",
       registered: "2025-10-05 22:30",
-      checkedIn: "—"
+      checkedIn: "—",
+      eventDate: "2025-10-07"
     },
     {
       ticketId: "T123458",
@@ -31,9 +44,42 @@ export default function DashBoardPage() {
       email: "jane@example.com",
       status: "present",
       registered: "2025-10-06 10:00",
-      checkedIn: "2025-10-07 21:30"
+      checkedIn: "2025-10-07 21:30",
+      eventDate: "2025-10-07"
+    },
+    // Day 2
+    {
+      ticketId: "T123459",
+      name: "Alice Johnson",
+      email: "alice@example.com",
+      status: "present",
+      registered: "2025-10-05 14:00",
+      checkedIn: "2025-10-08 09:15",
+      eventDate: "2025-10-08"
+    },
+    {
+      ticketId: "T123460",
+      name: "Bob Wilson",
+      email: "bob@example.com",
+      status: "pending",
+      registered: "2025-10-06 16:00",
+      checkedIn: "—",
+      eventDate: "2025-10-08"
+    },
+    // Day 3
+    {
+      ticketId: "T123461",
+      name: "Emma Davis",
+      email: "emma@example.com",
+      status: "present",
+      registered: "2025-10-04 11:00",
+      checkedIn: "2025-10-09 10:30",
+      eventDate: "2025-10-09"
     }
   ];
+
+  // Filter attendees by selected date
+  const attendees = allAttendees.filter(a => a.eventDate === selectedDate);
 
   // Filter and search logic
   const filteredAttendees = attendees.filter(attendee => {
@@ -48,7 +94,7 @@ export default function DashBoardPage() {
   const totalRegistered = attendees.length;
   const checkedIn = attendees.filter(a => a.status === "present").length;
   const pending = attendees.filter(a => a.status === "pending").length;
-  const attendanceRate = (checkedIn / totalRegistered) * 100;
+  const attendanceRate = totalRegistered > 0 ? (checkedIn / totalRegistered) * 100 : 0;
 
   return (
     <main>
@@ -71,8 +117,37 @@ export default function DashBoardPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-8 py-8">
-            {/* Stats Cards */}
+          {/* Stats Cards and Date Selector */}
           <div className="rounded-lg shadow-sm p-8 mb-8 bg-white">
+            {/* Date Selector Section */}
+            <div className="flex items-center justify-between mb-6 pb-6 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <Calendar size={24} className="text-indigo-500" />
+                </div>
+                <div>
+                  <h2 className="text-gray-800 text-lg font-bold">Event Date</h2>
+                  <p className="text-gray-600 text-sm">Select a date to view attendance</p>
+                </div>
+              </div>
+              
+              <div className="relative">
+                <select
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="appearance-none px-6 py-3 pr-12 rounded-lg font-semibold text-sm bg-indigo-500 text-white shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 transition-all min-w-[250px]"
+                >
+                  {eventDates.map((eventDay) => (
+                    <option key={eventDay.date} value={eventDay.date}>
+                      {eventDay.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={20} className="absolute right-4 top-1/2 -translate-y-1/2 text-white pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Stats Cards Grid */}
             <div className="grid grid-cols-4 gap-6">
               {/* Total Registered */}
               <div className="bg-indigo-500 rounded-lg p-6 flex flex-col shadow-md">
@@ -146,7 +221,7 @@ export default function DashBoardPage() {
 
           {/* Attendee Table */}
           <div className="rounded-lg shadow-sm p-8 bg-white">
-            {/* Title and Search in same row */}
+            {/* Title and Search */}
             <div className="flex justify-between items-center mb-4">
               <div className="text-gray-800 text-2xl font-bold">Attendee Table</div>
               <div className="relative">
@@ -239,7 +314,6 @@ export default function DashBoardPage() {
             </div>
           </div>
         </div>
-        
       </div>
     </main>
   );
