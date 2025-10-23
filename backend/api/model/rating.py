@@ -5,8 +5,8 @@ from .event import Event
 
 # class for leaving ratings like stars to events
 class Rating(models.Model):
-    event_id = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="ratings", db_column='event_id')
-    reviewer_id = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="ratings", db_column='reviewer_id')
+    event_id = models.ForeignKey(Event,on_delete=models.CASCADE, related_name="ratings", db_column='event_id',null=True,blank=True)
+    reviewer_id = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="ratings", db_column='reviewer_id',null=True,blank=True)
     rates = models.PositiveIntegerField()
     liked_datetime = models.DateTimeField(auto_now_add=True, db_column='liked_datetime')
 

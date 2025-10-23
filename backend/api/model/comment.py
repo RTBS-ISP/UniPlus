@@ -3,8 +3,8 @@ from .user import AttendeeUser
 from .event import Event
 
 class Comment(models.Model):
-    event_id = models.ForeignKey(Event, on_delete=models.CASCADE, related_name="comments", db_column='event_id')
-    author_id = models.ForeignKey(AttendeeUser, on_delete=models.CASCADE, related_name="comments", db_column='author_id')
+    event_id = models.ForeignKey(Event,on_delete=models.CASCADE, related_name="comments", db_column='event_id',null=True,blank=True)
+    author_id = models.ForeignKey(AttendeeUser,on_delete=models.CASCADE, related_name="comments", db_column='author_id',null=True,blank=True)
     content = models.TextField()
     content_created_at = models.DateTimeField(auto_now_add=True)
     content_updated_at = models.DateTimeField(auto_now=True)

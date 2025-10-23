@@ -202,3 +202,8 @@ class EventCommentsResponse(Schema):
     comments: List[CommentResponseSchema]
     average_rating: float
     total_ratings: int
+
+class ExportSuccessSchema(Schema):
+    success: bool
+    google_sheet: str
+    total_count: int

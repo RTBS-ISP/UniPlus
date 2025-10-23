@@ -594,7 +594,7 @@ def add_comment(request, event_id: int, payload: schemas.CommentCreateSchema):
         if not has_ticket:
             return 400, {"error": "You must have attended this event to leave a comment"}
 
-        # Validate content is not empty
+        # Content is not empty
         if not payload.content or not payload.content.strip():
             return 400, {"error": "Comment content cannot be empty"}
         
@@ -698,7 +698,6 @@ def get_event_comments(request, event_id: int):
                 "user_profile_pic": comment.author_id.profile_picture.url if comment.author_id.profile_picture else DEFAULT_PROFILE_PIC,
             })
 
-        # Calculate average rating - FIXED: default to 0 when no ratings exist
         ratings_agg = Rating.objects.filter(event_id=event).aggregate(
             average_rating=Avg('rates'),
             total_ratings=Count('id')
@@ -708,13 +707,13 @@ def get_event_comments(request, event_id: int):
         if average_rating is not None:
             average_rating = round(average_rating, 1)
         else:
-            average_rating = 0.0  # FIX: Default to 0.0 instead of None
+            average_rating = 0.0 
 
-        total_ratings = ratings_agg['total_ratings'] or 0  # Ensure 0 if no ratings
+        total_ratings = ratings_agg['total_ratings'] or 0  
 
         return {
             "comments": comments_data,
-            "average_rating": average_rating,  # Now always a number (never null)
+            "average_rating": average_rating, 
             "total_ratings": total_ratings
         }
 
