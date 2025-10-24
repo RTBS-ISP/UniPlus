@@ -28,77 +28,38 @@ const emptyDay: DaySlot = {
   meetingLink: "",
 };
 
-/* ---------- Helpers (match detail page formats) ---------- */
-function formatDateGB(s: string) {
-  try {
-    const d = new Date(s);
-    return new Intl.DateTimeFormat("en-GB", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      timeZone: "UTC",
-    }).format(d);
-  } catch {
-    return s;
-  }
-}
-const dateKey = (d: string) => new Date(d + "T00:00:00Z").getTime();
+/* ---------- Helpers ---------- */
+const todayStr = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+/** current local time as HH:mm (zero-padded) */
+const nowTimeStr = () => {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+};
 
-/** group consecutive days sharing identical time window & mode */
-function groupConsecutiveDays(sessions: DaySlot[]) {
-  const valid = sessions.filter((s) => s.date && s.startTime && s.endTime);
-  if (!valid.length) return [];
-  const sorted = [...valid].sort((a, b) => dateKey(a.date) - dateKey(b.date));
+const cmpDate = (a = "", b = "") => (a < b ? -1 : a > b ? 1 : 0);
+/* HH:mm strings compare lexicographically */
+const cmpTime = (a = "", b = "") => (a < b ? -1 : a > b ? 1 : 0);
+const maxDate = (a: string, b: string) => (cmpDate(a, b) >= 0 ? a : b);
+const maxTime = (a?: string, b?: string) => (!a ? b : !b ? a : (a >= b ? a : b));
+const minTime = (a?: string, b?: string) => (!a ? b : !b ? a : (a <= b ? a : b));
 
-  type Group = {
-    start: string;
-    end: string;
-    startTime: string;
-    endTime: string;
-    isOnline: boolean;
-    items: DaySlot[];
-  };
+/** Add minutes safely and wrap around 24h */
+const addMinutes = (time: string, minutes: number) => {
+  const [hh, mm] = time.split(":").map(Number);
+  const total = hh * 60 + mm + minutes;
+  const h = Math.floor(total / 60) % 24;
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+};
 
-  const groups: Group[] = [];
-  let cur: Group = {
-    start: sorted[0].date,
-    end: sorted[0].date,
-    startTime: sorted[0].startTime,
-    endTime: sorted[0].endTime,
-    isOnline: sorted[0].isOnline,
-    items: [sorted[0]],
-  };
-
-  for (let i = 1; i < sorted.length; i++) {
-    const s = sorted[i];
-    const prevDay = dateKey(cur.end);
-    const thisDay = dateKey(s.date);
-    const isConsecutive = thisDay - prevDay === 24 * 60 * 60 * 1000;
-    const sameWindow =
-      s.startTime === cur.startTime &&
-      s.endTime === cur.endTime &&
-      s.isOnline === cur.isOnline;
-
-    if (isConsecutive && sameWindow) {
-      cur.end = s.date;
-      cur.items.push(s);
-    } else {
-      groups.push(cur);
-      cur = {
-        start: s.date,
-        end: s.date,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        isOnline: s.isOnline,
-        items: [s],
-      };
-    }
-  }
-  groups.push(cur);
-  return groups;
-}
-
-/* ---------- Component ---------- */
 export default function EventScheduleDays({
   value,
   onChange,
@@ -111,36 +72,193 @@ export default function EventScheduleDays({
       : Array.from({ length: minDays }, () => ({ ...emptyDay }))
   );
 
-  // sync in value from parent
+  // sync from parent
   useEffect(() => {
     if (!value) return;
-    const same = JSON.stringify(value) === JSON.stringify(days);
-    if (!same) setDays(value);
+    if (JSON.stringify(value) !== JSON.stringify(days)) setDays(value);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(value)]);
 
-  // push out to parent
+  // push out
   useEffect(() => {
     onChange?.(days);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(days)]);
 
+  const today = todayStr();
+
+  /* ---- Date bounds ---- */
+  const minDateForIndex = (i: number): string => {
+    let min = today;
+    if (i > 0 && days[i - 1]?.date) min = maxDate(min, days[i - 1].date);
+    return min;
+  };
+  const maxDateForIndex = (i: number): string | undefined => {
+    if (i < days.length - 1 && days[i + 1]?.date) return days[i + 1].date;
+    return undefined;
+  };
+
+  /* ---- Neighbor times if SAME DATE ---- */
+  const prevEndIfSameDate = (i: number): string | undefined => {
+    const cur = days[i];
+    const prev = days[i - 1];
+    if (cur?.date && prev?.date && cur.date === prev.date) return prev.endTime || undefined;
+    return undefined;
+  };
+  const nextStartIfSameDate = (i: number): string | undefined => {
+    const cur = days[i];
+    const next = days[i + 1];
+    if (cur?.date && next?.date && cur.date === next.date) return next.startTime || undefined;
+    return undefined;
+  };
+
+  /* ---- Clamp helpers ---- */
+  const clampDate = (i: number, val: string) => {
+    if (!val) return "";
+    const min = minDateForIndex(i);
+    const max = maxDateForIndex(i);
+    if (cmpDate(val, min) < 0) val = min;
+    if (max && cmpDate(val, max) > 0) val = max;
+    return val;
+  };
+
+  /* ---- Time change handlers ---- */
+  const patchDay = (i: number, patch: Partial<DaySlot>) =>
+    setDays((prev) => prev.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
+
+  const handleStartChange = (i: number, raw: string) => {
+    if (!raw) return patchDay(i, { startTime: "" });
+    if (!days[i]?.date) return; // no time without date
+
+    const isToday = days[i].date === today;
+    const now = isToday ? nowTimeStr() : undefined;
+
+    const prevEnd = prevEndIfSameDate(i);
+    const nextStart = nextStartIfSameDate(i);
+
+    let newStart = raw;
+    if (prevEnd && cmpTime(newStart, prevEnd) < 0) newStart = prevEnd;
+    if (now && cmpTime(newStart, now) < 0) newStart = now;
+
+    let newEnd = days[i].endTime;
+
+    if (newEnd) {
+      // cap end to nextStart if it exceeds neighbor
+      if (nextStart && cmpTime(newEnd, nextStart) > 0) newEnd = nextStart;
+
+      // ensure end ≥ start (+1 min minimum)
+      if (cmpTime(newEnd, newStart) <= 0) newEnd = addMinutes(newStart, 1);
+
+      // ensure not before 'now' when today (+1 min)
+      const minValidEnd = [addMinutes(newStart, 1), now].filter(Boolean).reduce(maxTime, undefined);
+      if (minValidEnd && cmpTime(newEnd, minValidEnd) < 0) {
+        // if minValidEnd is a time (string), it's safe to pass to addMinutes
+        newEnd = typeof minValidEnd === "string" ? minValidEnd : newEnd;
+      }
+    }
+
+    patchDay(i, { startTime: newStart, endTime: newEnd ?? days[i].endTime });
+  };
+
+  const handleEndChange = (i: number, raw: string) => {
+    if (!raw) return patchDay(i, { endTime: "" });
+    if (!days[i]?.date) return;
+
+    const isToday = days[i].date === today;
+    const now = isToday ? nowTimeStr() : undefined;
+
+    const prevEnd = prevEndIfSameDate(i);
+    const nextStart = nextStartIfSameDate(i);
+    const curStart = days[i].startTime;
+
+    let newEnd = raw;
+
+    // Compute minimum acceptable end: > start (start+1), ≥ prevEnd, ≥ now(if today)
+    const startPlus1 = curStart ? addMinutes(curStart, 1) : undefined;
+    const minEnd = [startPlus1, prevEnd, now].filter(Boolean).reduce(maxTime, undefined);
+    if (minEnd && cmpTime(newEnd, minEnd) < 0) newEnd = minEnd;
+
+    // end ≤ next.start if same date with next
+    if (nextStart && cmpTime(newEnd, nextStart) > 0) newEnd = nextStart;
+
+    // guard again in case nextStart == curStart (conflict) → try keep > start
+    if (curStart && cmpTime(newEnd, curStart) <= 0) newEnd = addMinutes(curStart, 1);
+
+    patchDay(i, { endTime: newEnd });
+  };
+
+  /* ---- Stabilize after any date/time change ---- */
+  const sig = days.map((d) => `${d.date}|${d.startTime}|${d.endTime}`).join("||");
+  useEffect(() => {
+    setDays((prev) => {
+      const now = nowTimeStr(); // computed once per stabilization pass
+      let changed = false;
+      const next = prev.map((slot, i) => {
+        let { date, startTime, endTime } = slot;
+
+        // Dates: no past, non-decreasing across neighbors
+        if (date) {
+          if (cmpDate(date, today) < 0) { date = today; changed = true; }
+          if (i > 0 && prev[i - 1]?.date && cmpDate(date, prev[i - 1].date) < 0) {
+            date = prev[i - 1].date; changed = true;
+          }
+          if (i < prev.length - 1 && prev[i + 1]?.date && cmpDate(date, prev[i + 1].date) > 0) {
+            date = prev[i + 1].date; changed = true;
+          }
+        } else {
+          if (startTime || endTime) { startTime = ""; endTime = ""; changed = true; }
+        }
+
+        if (date) {
+          const isToday = date === today;
+          const pEnd = i > 0 && prev[i - 1]?.date === date ? prev[i - 1].endTime : undefined;
+          const nStart = i < prev.length - 1 && prev[i + 1]?.date === date ? prev[i + 1].startTime : undefined;
+
+          // enforce start ≥ prev.end if same date
+          if (pEnd && startTime && cmpTime(startTime, pEnd) < 0) { startTime = pEnd; changed = true; }
+          // enforce start ≥ now if date is today
+          if (isToday && startTime && cmpTime(startTime, now) < 0) { startTime = now; changed = true; }
+
+          // compute required minimum end = max(start+1, now(if today), prevEnd)
+          const startPlus1 = startTime ? addMinutes(startTime, 1) : undefined;
+          const reqMinEnd = [startPlus1, isToday ? now : undefined, pEnd]
+            .filter(Boolean)
+            .reduce(maxTime, undefined);
+
+          // enforce end ≥ required minimum
+          if (reqMinEnd && endTime && cmpTime(endTime, reqMinEnd) < 0) {
+            endTime = reqMinEnd; changed = true;
+          }
+          // enforce end ≤ next.start if same date
+          if (nStart && endTime && cmpTime(endTime, nStart) > 0) {
+            endTime = nStart; changed = true;
+          }
+          // final guard: ensure end > start if both exist
+          if (startTime && endTime && cmpTime(endTime, startTime) <= 0) {
+            endTime = addMinutes(startTime, 1); changed = true;
+          }
+        }
+
+        if (date !== slot.date || startTime !== slot.startTime || endTime !== slot.endTime) {
+          return { ...slot, date, startTime, endTime };
+        }
+        return slot;
+      });
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]);
+
+  /* ---- UI helpers ---- */
   const canAdd = useMemo(
     () => (maxDays ? days.length < maxDays : true),
     [days.length, maxDays]
   );
-  const canRemove = (idx: number) =>
-    days.length > minDays && idx >= 0 && idx < days.length;
+  const canRemove = (i: number) => days.length > minDays && i >= 0 && i < days.length;
 
-  const patchDay = (idx: number, patch: Partial<DaySlot>) => {
-    setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
-  };
   const addDay = () => canAdd && setDays((prev) => [...prev, { ...emptyDay }]);
-  const removeDay = (idx: number) =>
-    canRemove(idx) && setDays((prev) => prev.filter((_, i) => i !== idx));
-
-  // live preview data
-  const groups = useMemo(() => groupConsecutiveDays(days), [days]);
+  const removeDay = (i: number) =>
+    canRemove(i) && setDays((prev) => prev.filter((_, idx) => idx !== i));
 
   return (
     <section className="w-full rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-sm">
@@ -152,31 +270,49 @@ export default function EventScheduleDays({
           disabled={!canAdd}
           className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40"
         >
-          <PlusIcon className="h-4 w-4" />
-          Add Day
+          <PlusIcon className="h-4 w-4" /> Add Day
         </button>
       </div>
 
-      {/* Form (left) + Live preview (right) */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* LEFT: form list */}
-        <div className="space-y-6">
-          {days.map((d, idx) => (
-            <div key={idx} className="rounded-xl border border-gray-200 bg-white p-5">
+      <div className="space-y-6">
+        {days.map((d, i) => {
+          const dateMin = minDateForIndex(i);
+          const dateMax = maxDateForIndex(i);
+          const hasDate = !!d.date;
+
+          const prevEnd = hasDate ? prevEndIfSameDate(i) : undefined;
+          const nextStart = hasDate ? nextStartIfSameDate(i) : undefined;
+
+          const isToday = hasDate && d.date === today;
+          const now = isToday ? nowTimeStr() : undefined;
+
+          // START: min = max(prev.end, now(if today)); no max
+          const startMin = hasDate ? [prevEnd, now].filter(Boolean).reduce(maxTime, undefined) : undefined;
+          const startDisabled = !hasDate;
+
+          // END: min = max(start+1, prevEnd, now(if today)); max = next.start if same-date with next
+          const startPlus1 = hasDate && d.startTime ? addMinutes(d.startTime, 1) : undefined;
+          const endMin = hasDate
+            ? [startPlus1, prevEnd, now].filter(Boolean).reduce(maxTime, undefined)
+            : undefined;
+          const endMax = hasDate ? nextStart : undefined;
+          const endDisabled =
+            !hasDate || (endMin && endMax && cmpTime(endMin, endMax) > 0);
+
+          return (
+            <div key={i} className="rounded-xl border border-gray-200 bg-white p-5">
               <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-800">Day {idx + 1}</h3>
+                <h3 className="text-lg font-semibold text-gray-800">Day {i + 1}</h3>
                 <button
                   type="button"
-                  onClick={() => removeDay(idx)}
-                  disabled={!canRemove(idx)}
+                  onClick={() => removeDay(i)}
+                  disabled={!canRemove(i)}
                   className="inline-flex items-center gap-1 text-sm font-medium text-red-500 hover:text-red-400 disabled:opacity-0"
                 >
-                  <TrashIcon className="h-4 w-4" />
-                  Remove
+                  <TrashIcon className="h-4 w-4" /> Remove
                 </button>
               </div>
 
-              {/* Date & times */}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -185,32 +321,41 @@ export default function EventScheduleDays({
                   <input
                     type="date"
                     value={d.date}
-                    onChange={(e) => patchDay(idx, { date: e.target.value })}
+                    onChange={(e) => patchDay(i, { date: clampDate(i, e.target.value) })}
+                    min={dateMin}
+                    max={dateMax}
                     className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                     required
                   />
                 </div>
+
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     Start Time <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="time"
+                    step="60"
                     value={d.startTime}
-                    onChange={(e) => patchDay(idx, { startTime: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                    onChange={(e) => handleStartChange(i, e.target.value)}
+                    min={startMin}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none disabled:opacity-50"
                     required
                   />
                 </div>
+
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-700">
                     End Time <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="time"
+                    step="60"
                     value={d.endTime}
-                    onChange={(e) => patchDay(idx, { endTime: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                    onChange={(e) => handleEndChange(i, e.target.value)}
+                    min={endMin}
+                    max={endMax}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none disabled:opacity-50"
                     required
                   />
                 </div>
@@ -220,16 +365,13 @@ export default function EventScheduleDays({
               <div className="mt-5 grid gap-4">
                 <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3">
                   <input
-                    id={`isOnline-${idx}`}
+                    id={`isOnline-${i}`}
                     type="checkbox"
                     checked={d.isOnline}
-                    onChange={(e) => patchDay(idx, { isOnline: e.target.checked })}
+                    onChange={(e) => patchDay(i, { isOnline: e.target.checked })}
                     className="h-5 w-5 rounded text-indigo-600 focus:ring-2 focus:ring-indigo-500"
                   />
-                  <label
-                    htmlFor={`isOnline-${idx}`}
-                    className="text-sm font-medium text-gray-800"
-                  >
+                  <label htmlFor={`isOnline-${i}`} className="text-sm font-medium text-gray-800">
                     This day is online
                   </label>
                 </div>
@@ -242,14 +384,11 @@ export default function EventScheduleDays({
                     <input
                       type="url"
                       value={d.meetingLink}
-                      onChange={(e) => patchDay(idx, { meetingLink: e.target.value })}
+                      onChange={(e) => patchDay(i, { meetingLink: e.target.value })}
                       placeholder="https://zoom.us/j/..."
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                       required
                     />
-                    <p className="mt-1 text-xs text-gray-500">
-                      Share a Zoom/Google Meet/Teams link.
-                    </p>
                   </div>
                 ) : (
                   <div>
@@ -259,7 +398,7 @@ export default function EventScheduleDays({
                     <input
                       type="text"
                       value={d.address}
-                      onChange={(e) => patchDay(idx, { address: e.target.value })}
+                      onChange={(e) => patchDay(i, { address: e.target.value })}
                       placeholder="Room 203, Building 15, Campus"
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
                       required
@@ -268,102 +407,8 @@ export default function EventScheduleDays({
                 )}
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* RIGHT: live preview */}
-        <aside className="md:sticky md:top-6 h-fit space-y-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h4 className="mb-3 text-lg font-semibold text-gray-800">Preview</h4>
-
-            {groups.length === 0 ? (
-              <p className="text-sm text-gray-500">Fill in dates to see a preview.</p>
-            ) : (
-              <div className="space-y-3">
-                {groups.map((g, idx) => {
-                  const sameDay = g.start === g.end;
-                  const dateLabel = sameDay
-                    ? formatDateGB(g.start)
-                    : `${formatDateGB(g.start)} – ${formatDateGB(g.end)}`;
-
-                  // Check if all items share exact same location/link
-                  const first = g.items[0];
-                  const allSameLocation = g.items.every((it) =>
-                    g.isOnline
-                      ? it.meetingLink === first.meetingLink
-                      : it.address === first.address
-                  );
-
-                  return (
-                    <div
-                      key={`${g.start}-${g.end}-${idx}`}
-                      className="rounded-xl border border-gray-100 bg-gray-50 p-4"
-                    >
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="inline-flex h-6 items-center rounded-md bg-white px-2 text-xs font-semibold text-[#0B1220]">
-                          {sameDay ? `Day ${idx + 1}` : `Days ${idx + 1}–${idx + g.items.length}`}
-                        </span>
-                        <span className="text-sm font-semibold text-[#0B1220]">{dateLabel}</span>
-                        <span className="text-sm text-[#0B1220]/80">
-                          — {g.startTime}–{g.endTime}
-                        </span>
-                        <span className="ml-auto text-xs rounded bg-white px-2 py-0.5 text-[#0B1220]/70">
-                          {g.isOnline ? "Online" : "On campus"}
-                        </span>
-                      </div>
-
-                      {/* Location(s) */}
-                      {!g.isOnline ? (
-                        allSameLocation ? (
-                          <div className="mt-2 text-sm text-[#0B1220]/80">
-                            <div className="font-medium text-[#0B1220]">{first.address || "—"}</div>
-                          </div>
-                        ) : (
-                          <ul className="mt-3 space-y-1 text-sm">
-                            {g.items.map((it) => (
-                              <li
-                                key={`${it.date}-${it.startTime}-${it.endTime}`}
-                                className="rounded-md bg-white/80 px-3 py-2 text-[#0B1220]/85"
-                              >
-                                <div className="font-semibold">{formatDateGB(it.date)}</div>
-                                <div className="text-xs">{it.startTime}–{it.endTime}</div>
-                                <div className="mt-0.5 text-[#0B1220]">{it.address || "—"}</div>
-                              </li>
-                            ))}
-                          </ul>
-                        )
-                      ) : (
-                        <div className="mt-2 text-sm text-[#0B1220]/80">
-                          {allSameLocation ? (
-                            <>
-                              <div className="font-medium text-[#0B1220]">Meeting link</div>
-                              <div className="break-all">{first.meetingLink || "—"}</div>
-                            </>
-                          ) : (
-                            <ul className="mt-2 space-y-1">
-                              {g.items.map((it) => (
-                                <li
-                                  key={`${it.date}-${it.startTime}-${it.endTime}-online`}
-                                  className="rounded-md bg-white/80 px-3 py-2 text-[#0B1220]/85"
-                                >
-                                  <div className="font-semibold">{formatDateGB(it.date)}</div>
-                                  <div className="text-xs">{it.startTime}–{it.endTime}</div>
-                                  <div className="mt-0.5 break-all text-[#0B1220]">
-                                    {it.meetingLink || "—"}
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </aside>
+          );
+        })}
       </div>
     </section>
   );
