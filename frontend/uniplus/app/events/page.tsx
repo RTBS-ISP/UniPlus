@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
@@ -25,6 +26,32 @@ interface EventItem {
   hostRole?: string;
   category?: string;
 }
+
+// Predefined category options
+const CATEGORY_OPTIONS = [
+  "Workshop",
+  "Club",
+  "Campus",
+  "AI",
+  "Design",
+  "Networking",
+  "Panel",
+  "Health",
+  "Fitness",
+  "Research",
+  "Career",
+  "Education",
+  "Engineering",
+  "Extra",
+];
+
+// Predefined host role options
+const HOST_ROLE_OPTIONS = [
+  "Organizer",
+  "University",
+  "Club",
+  "Student",
+];
 
 export default function EventsPage() {
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -57,7 +84,7 @@ export default function EventsPage() {
         }
 
         const data = await res.json();
-        
+
         // Transform backend data to match frontend interface
         const transformedEvents: EventItem[] = data.map((event: any) => {
           // Parse tags if they're stored as JSON string
@@ -71,13 +98,13 @@ export default function EventsPage() {
           return {
             id: event.id,
             title: event.event_title,
-            host: [event.organizer_name || "Unknown Organizer"],
+            host: [event.organizer_role || "Organizer"],
             tags: parsedTags,
             excerpt: event.event_description?.substring(0, 150) + "..." || "",
             date: event.event_start_date,
             createdAt: event.event_create_date,
-            popularity: event.attendee?.length || 0, // Number of attendees
-            available: event.max_attendee 
+            popularity: event.attendee?.length || 0,
+            available: event.max_attendee
               ? event.max_attendee - (event.attendee?.length || 0)
               : undefined,
             startDate: event.event_start_date,
@@ -85,7 +112,7 @@ export default function EventsPage() {
             location: event.is_online ? "Online" : (event.event_address || "TBA"),
             image: event.event_image || "/placeholder-event.jpg",
             hostRole: event.organizer_role || "Organizer",
-            category: parsedTags[0] || "General", // Use first tag as category
+            category: parsedTags[0] || "General",
           };
         });
 
@@ -100,24 +127,6 @@ export default function EventsPage() {
 
     fetchEvents();
   }, []);
-
-  // Build dropdown options from fetched data
-  const categoryOptions = useMemo(() => {
-    const set = new Set<string>();
-    events.forEach((e) => {
-      if (e.category) set.add(e.category);
-      e.tags?.forEach((tag) => set.add(tag));
-    });
-    return Array.from(set).sort();
-  }, [events]);
-
-  const hostOptions = useMemo(() => {
-    const set = new Set<string>();
-    events.forEach((e) => {
-      if (e.host?.[0]) set.add(e.host[0]);
-    });
-    return Array.from(set).sort();
-  }, [events]);
 
   // Filter + Sort
   const filtered = useMemo(() => {
@@ -136,7 +145,7 @@ export default function EventsPage() {
         : true;
 
       const matchesHost = filters.host
-        ? (e.host?.[0] || "").toLowerCase() === filters.host.toLowerCase()
+        ? (e.hostRole || "").toLowerCase() === filters.host.toLowerCase()
         : true;
 
       const matchesLocation = filters.location
@@ -165,12 +174,26 @@ export default function EventsPage() {
       );
     });
 
-    if (sort === "popular")
-      list = [...list].sort((a, b) => b.popularity - a.popularity);
-    if (sort === "recent")
-      list = [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    if (sort === "upcoming")
-      list = [...list].sort((a, b) => a.date.localeCompare(b.date));
+    // FIX: Proper sorting logic
+    if (sort === "popular") {
+      list = [...list].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+    }
+
+    if (sort === "recent") {
+      list = [...list].sort((a, b) => {
+        const dateA = new Date(a.createdAt || "").getTime();
+        const dateB = new Date(b.createdAt || "").getTime();
+        return dateB - dateA; // Most recent first
+      });
+    }
+
+    if (sort === "upcoming") {
+      list = [...list].sort((a, b) => {
+        const dateA = new Date(a.date || "").getTime();
+        const dateB = new Date(b.date || "").getTime();
+        return dateA - dateB; // Soonest first
+      });
+    }
 
     return list;
   }, [events, query, sort, filters]);
@@ -246,8 +269,8 @@ export default function EventsPage() {
             />
 
             <FilterPanel
-              categories={categoryOptions}
-              hosts={hostOptions}
+              categories={CATEGORY_OPTIONS}
+              hosts={HOST_ROLE_OPTIONS}
               value={filters}
               onChange={(f) => {
                 setPage(1);

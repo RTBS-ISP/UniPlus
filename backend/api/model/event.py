@@ -30,8 +30,6 @@ class Event(models.Model):
     terms_and_conditions = models.TextField(blank=True, null=True)
     event_updated_at = models.DateTimeField(auto_now=True)
     attendee = models.JSONField(default=list, blank=True)
-    
-    # New field to store schedule information
     schedule = models.JSONField(default=list, blank=True, null=True)
 
     def __str__(self):

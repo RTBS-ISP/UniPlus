@@ -28,7 +28,7 @@ type EventWithOptionals = {
   location?: string;
   address2?: string;
   host?: string[];
-  tags?: string[];
+  tags?: string[] | string;  // ← Can be string or array
   schedule?: EventSession[];
 };
 
@@ -244,15 +244,12 @@ export default function EventDetailPage({ params }: Params) {
 
   const fetchRelatedEvents = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/events/', { 
-        credentials: 'include' 
+      const response = await fetch('http://localhost:8000/api/events', {
+        credentials: 'include',
       });
       if (response.ok) {
         const data = await response.json();
-        const filtered = Array.isArray(data) 
-          ? data.filter((e: EventWithOptionals) => e.id !== Number(id)).slice(0, 6)
-          : [];
-        setRelatedEvents(filtered);
+        setRelatedEvents((data.slice(0, 3) || []).filter((e: any) => e.id !== parseInt(id)));
       }
     } catch (error) {
       console.error('Error fetching related events:', error);
@@ -260,20 +257,20 @@ export default function EventDetailPage({ params }: Params) {
   };
 
   const handleRegister = async () => {
+    if (registering) return;
+    
     setRegistering(true);
     setMessage('');
+    
     try {
-      const csrfRes = await fetch('http://localhost:8000/api/set-csrf-token', { 
-        credentials: 'include' 
-      });
-      const { csrftoken } = await csrfRes.json();
-
       const response = await fetch(`http://localhost:8000/api/events/${id}/register`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'X-CSRFToken': csrftoken },
+        headers: {
+          'Content-Type': 'application/json'
+        }
       });
-
+      
       const result = await response.json();
       if (response.ok) {
         const ticketMessage = result.tickets_count > 1 
@@ -323,7 +320,6 @@ export default function EventDetailPage({ params }: Params) {
   const schedule = event.schedule ?? [];
   const hostLabel = event.host?.[0] ?? "Student";
 
-  // IMAGE FIX: Ensure proper image URL handling
   const image = event.image 
     ? (event.image.startsWith('http') ? event.image : `http://localhost:8000${event.image}`)
     : "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
@@ -355,18 +351,54 @@ export default function EventDetailPage({ params }: Params) {
 
         {/* Tags */}
         <div className="mt-3 flex flex-wrap gap-2">
+          {/* Host Badge */}
           <span className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]">
             {hostLabel}
           </span>
-          {(event.tags ?? []).slice(0, 3).map((t) => (
-            <span
-              key={t}
-              className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]"
-            >
-              {t}
-            </span>
-          ))}
+          
+          {/* Tags - TypeScript Safe Parsing */}
+          {(() => {
+            // Start with raw tags
+            const rawTags = event.tags;
+            let tagsArray: string[] = [];
+            
+            // Handle different tag formats with proper type guards
+            if (!rawTags) {
+              // No tags
+              tagsArray = [];
+            } else if (Array.isArray(rawTags)) {
+              // Already an array
+              tagsArray = rawTags;
+            } else if (typeof rawTags === 'string') {
+              try {
+                // Try parsing as JSON first
+                const parsed = JSON.parse(rawTags);
+                if (Array.isArray(parsed)) {
+                  tagsArray = parsed;
+                } else {
+                  tagsArray = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+                }
+              } catch {
+
+                tagsArray = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+              }
+            }
+            
+            const validTags = tagsArray
+              .filter((tag): tag is string => Boolean(tag && typeof tag === 'string' && tag.trim()))
+              .slice(0, 3);
+            
+            return validTags.map((tag, idx) => (
+              <span
+                key={`tag-${idx}-${tag}`}
+                className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]"
+              >
+                {tag}
+              </span>
+            ));
+          })()}
         </div>
+
 
         {/* About card */}
         <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
@@ -475,7 +507,6 @@ export default function EventDetailPage({ params }: Params) {
 
 /* ---------- Related card ---------- */
 function RelatedCard({ item }: { item: EventWithOptionals }) {
-  // IMAGE FIX: Ensure proper image URL handling for related cards
   const img = item.image 
     ? (item.image.startsWith('http') ? item.image : `http://localhost:8000${item.image}`)
     : "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";

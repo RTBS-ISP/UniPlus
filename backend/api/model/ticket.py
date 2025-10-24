@@ -16,8 +16,6 @@ class Ticket(models.Model):
     purchase_date = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='active')
     event_date = models.DateTimeField(null=True, blank=True)
-    
-    # Ticket page fields
     user_name = models.CharField(max_length=255, default='Unknown') 
     user_email = models.EmailField(default='no-email@example.com') 
     event_title = models.CharField(max_length=255, default='Untitled Event')  
