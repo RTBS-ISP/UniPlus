@@ -1,11 +1,23 @@
 import { EventItem } from "../../app/components/events/EventCard";
 
-const hostTypes = [
-  ["Organizer"],
-  ["University"],
-  ["Club"],
-  ["Student"],
-];
+/** --------- Extend the base card type just for this mock data --------- */
+type EventSession = {
+  date: string;      // "YYYY-MM-DD"
+  startTime: string; // "HH:mm"
+  endTime: string;   // "HH:mm"
+};
+
+export type EventItemPlus = EventItem & {
+  // extra optional fields used by the detail page
+  schedule?: EventSession[];
+  capacity?: number;
+  available?: number;
+  address2?: string;
+  image?: string;
+};
+
+/** --------- Static pools --------- */
+const hostTypes = [["Organizer"], ["Professor"], ["Student"]];
 
 const tagSets = [
   ["Engineer", "Club", "Workshop"],
@@ -67,7 +79,7 @@ const eventNames = [
   "Cooking Class",
   "Language Workshop",
   "Social Impact Forum",
-  "Alumni Meetup"
+  "Alumni Meetup",
 ];
 
 // 50 unique Unsplash links
@@ -124,26 +136,98 @@ const eventImages = [
   "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=1600&auto=format&fit=crop",
 ];
 
-export const events: EventItem[] = [
-  ...Array.from({ length: 50 }, (_, i) => ({
-    id: i + 1,
-    title: eventNames[i % eventNames.length],
-    host: hostTypes[i % hostTypes.length],
-    tags: tagSets[i % tagSets.length].slice(
-      0,
-      (i % tagSets[i % tagSets.length].length) + 1
-    ),
-    excerpt:
-      "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy.",
-    date: `2025-10-${(i % 30) + 1}`,
-    createdAt: `2025-09-${(i % 30) + 1}T09:00:00Z`,
-    popularity: 100 - i,
-    available: 100 + i * 5,
-    startDate: `2025-10-${(i % 30) + 1}`,
-    endDate: `2025-10-${(i % 30) + 1}`,
-    startTime: "10:00",
-    endTime: "17:00",
-    location: "Campus Hall",
-    image: eventImages[i],
-  })),
+/** --------- Helpers to build schedules deterministically --------- */
+function pad2(n: number) {
+  return n.toString().padStart(2, "0");
+}
+function ymd(y: number, m: number, d: number) {
+  return `${y}-${pad2(m)}-${pad2(d)}`;
+}
+
+/**
+ * Pattern by index:
+ * 0: single day
+ * 1: two consecutive days (same time)
+ * 2: three scattered days (different times)
+ * 3: five consecutive days (same time)
+ */
+function buildSchedule(i: number): EventSession[] {
+  const baseDay = (i % 20) + 3; // keep within month
+  const y = 2025;
+  const m = 10;
+
+  const pattern = i % 4;
+
+  if (pattern === 0) {
+    return [{ date: ymd(y, m, baseDay), startTime: "10:00", endTime: "17:00" }];
+  }
+  if (pattern === 1) {
+    return [
+      { date: ymd(y, m, baseDay), startTime: "09:00", endTime: "16:00" },
+      { date: ymd(y, m, baseDay + 1), startTime: "09:00", endTime: "16:00" },
+    ];
+  }
+  if (pattern === 2) {
+    return [
+      { date: ymd(y, m, baseDay), startTime: "13:00", endTime: "16:00" },
+      { date: ymd(y, m, baseDay + 2), startTime: "09:30", endTime: "12:00" },
+      { date: ymd(y, m, baseDay + 5), startTime: "10:00", endTime: "17:00" },
+    ];
+  }
+  // pattern === 3
+  return Array.from({ length: 5 }, (_, k) => ({
+    date: ymd(y, m, baseDay + k),
+    startTime: "09:00",
+    endTime: "16:00",
+  }));
+}
+
+function firstDate(s: EventSession[]) {
+  return s.length ? s.map(x => x.date).sort()[0] : `2025-10-01`;
+}
+function lastDate(s: EventSession[]) {
+  return s.length ? s.map(x => x.date).sort().slice(-1)[0] : `2025-10-01`;
+}
+
+/** --------- Exported events with schedules --------- */
+export const events: EventItemPlus[] = [
+  ...Array.from({ length: 50 }, (_, i) => {
+    const schedule = buildSchedule(i);
+    const startDate = firstDate(schedule);
+    const endDate = lastDate(schedule);
+
+    // a mix of open/closed states; first is closed (0 available)
+    const capacity = 100 + (i % 3) * 50;
+    const available = i === 0 ? 0 : 20 + ((i * 17) % capacity);
+
+    return {
+      id: i + 1,
+      title: eventNames[i % eventNames.length],
+      host: hostTypes[i % hostTypes.length],
+      tags: tagSets[i % tagSets.length].slice(
+        0,
+        (i % tagSets[i % tagSets.length].length) + 1
+      ),
+      excerpt:
+        "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy.",
+      // legacy single-date fields stay present for backward-compat (use first session)
+      date: startDate,
+      createdAt: `2025-09-${pad2(((i % 28) + 1))}T09:00:00Z`,
+      popularity: 100 - i,
+
+      // ---- Extra fields used by the detail page ----
+      image: eventImages[i],
+      location: "Campus Hall",
+      address2: "Kasetsart University",
+      capacity,
+      available,
+      startDate,     // derived from schedule
+      endDate,       // derived from schedule
+      startTime: schedule[0]?.startTime ?? "10:00",
+      endTime: schedule[0]?.endTime ?? "17:00",
+
+      // The new multi-day data
+      schedule,
+    };
+  }),
 ];
