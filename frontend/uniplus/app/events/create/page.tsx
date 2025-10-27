@@ -68,7 +68,6 @@ export default function EventCreatePage() {
     imagePreview: "",
   });
 
-  // schedule is fully controlled here and edited inside EventScheduleDays
   const [scheduleDays, setScheduleDays] = useState<DaySlot[]>([
     { date: "", startTime: "", endTime: "", isOnline: false, address: "", meetingLink: "" },
   ]);
@@ -199,7 +198,6 @@ export default function EventCreatePage() {
       formData.append("event_start_date", overallStartISO);
       formData.append("event_end_date", overallEndISO);
 
-      // include per-day location fields
       formData.append(
         "schedule_days",
         JSON.stringify(

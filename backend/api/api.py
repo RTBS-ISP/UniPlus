@@ -127,13 +127,11 @@ def logout_view(request):
 
 @api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
 def get_user(request):
-    if request.user.is_authenticated:
-        about_me_data = None
-        if request.user.about_me:
-            try:
-                about_me_data = json.loads(request.user.about_me)
-            except:
-                about_me_data = {}
+    if request.user.about_me:
+        try:
+            about_me_data = json.loads(request.user.about_me)
+        except:
+            about_me_data = {}
 
         tickets = []
         

@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 
 export type FilterValues = {
-  category: string; // '' = Any
-  host: string;     // '' = Any
-  dateFrom: string; // YYYY-MM-DD
-  dateTo: string;   // YYYY-MM-DD
+  category: string; 
+  host: string;     
+  dateFrom: string; 
+  dateTo: string;   
   location: string;
 };
 
@@ -51,7 +51,6 @@ export default function FilterPanel({
     onClear?.();
   };
 
-  // Make all inputs/selects full width to match the Clear button.
   const field =
     "w-full rounded-full border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:ring-2 focus:ring-indigo-200";
 

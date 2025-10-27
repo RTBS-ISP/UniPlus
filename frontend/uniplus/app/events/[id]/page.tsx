@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import Navbar from "../../components/navbar";
@@ -28,7 +28,7 @@ type EventWithOptionals = {
   location?: string;
   address2?: string;
   host?: string[];
-  tags?: string[] | string;  // ← Can be string or array
+  tags?: string[] | string;
   schedule?: EventSession[];
 };
 
@@ -210,33 +210,57 @@ function ScheduleList({ schedule }: { schedule: EventSession[] }) {
 
 /* ---------- Page ---------- */
 export default function EventDetailPage({ params }: Params) {
-  const { id } = use(params);
+  const [id, setId] = useState<string>("");
   const [event, setEvent] = useState<EventWithOptionals | null>(null);
   const [relatedEvents, setRelatedEvents] = useState<EventWithOptionals[]>([]);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
   const [message, setMessage] = useState('');
+  const [csrfToken, setCsrfToken] = useState('');
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [error, setError] = useState('');
   const router = useRouter();
   const toast = useAlert();
 
   useEffect(() => {
+    params?.then((p) => {
+      setId(p.id);
+    });
+  }, [params]);
+
+  useEffect(() => {
+    if (!id) return;
     fetchEventDetail();
     fetchRelatedEvents();
   }, [id]);
 
+    useEffect(() => {
+    const fetchCsrfToken = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/set-csrf-token', {
+          credentials: 'include'
+        });
+        const data = await response.json();
+        setCsrfToken(data.csrftoken);
+      } catch (error) {
+        console.error('Error fetching CSRF token:', error);
+      }
+    };
+
+    fetchCsrfToken();
+  }, []);
+
   const fetchEventDetail = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/events/${id}`, { 
-        credentials: 'include' 
+      const response = await fetch(`http://localhost:8000/api/events/${id}`, {
+        credentials: 'include'
       });
       if (response.ok) {
         const data = await response.json();
         setEvent(data);
-      } else {
-        console.error('Failed to fetch event:', response.status);
       }
     } catch (error) {
-      console.error('Error fetching event:', error);
+      console.error('Failed to fetch event detail:', error);
     } finally {
       setLoading(false);
     }
@@ -244,49 +268,63 @@ export default function EventDetailPage({ params }: Params) {
 
   const fetchRelatedEvents = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/events', {
-        credentials: 'include',
+      const response = await fetch(`http://localhost:8000/api/events/`, {
+        credentials: 'include'
       });
       if (response.ok) {
         const data = await response.json();
-        setRelatedEvents((data.slice(0, 3) || []).filter((e: any) => e.id !== parseInt(id)));
+        setRelatedEvents(data.slice(0, 3));
       }
     } catch (error) {
-      console.error('Error fetching related events:', error);
+      console.error('Failed to fetch related events:', error);
     }
   };
 
+    // Handle event registration
   const handleRegister = async () => {
-    if (registering) return;
-    
+    if (!csrfToken) {
+      setError('Please wait, loading...');
+      return;
+    }
+
+    if (isRegistered) {
+      setError('You are already registered for this event');
+      return;
+    }
+
     setRegistering(true);
-    setMessage('');
-    
+    setError('');
+
     try {
       const response = await fetch(`http://localhost:8000/api/events/${id}/register`, {
         method: 'POST',
-        credentials: 'include',
         headers: {
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken,
+        },
+        credentials: 'include',
       });
-      
-      const result = await response.json();
-      if (response.ok) {
-        const ticketMessage = result.tickets_count > 1 
-          ? `✅ Successfully registered! You received ${result.tickets_count} tickets (one for each day). Redirecting...`
-          : '✅ Successfully registered! Redirecting...';
-        setMessage(ticketMessage);
-        toast({ text: ticketMessage, variant: "success" });
-        setTimeout(() => router.push('/my-ticket'), 2000);
-      } else {
-        setMessage(result.error || 'Registration failed');
-        toast({ text: result.error || 'Registration failed', variant: "error" });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Registration failed');
       }
-    } catch (error) {
-      console.error('Registration error:', error);
-      setMessage('❌ Failed to register. Please try again.');
-      toast({ text: '❌ Failed to register. Please try again.', variant: "error" });
+
+      // Success!
+      setIsRegistered(true);
+      alert('Successfully registered for the event!');
+      
+      // Refresh event data to update capacity
+      const eventResponse = await fetch(`http://localhost:8000/api/events/${id}`, {
+        credentials: 'include'
+      });
+      const eventData = await eventResponse.json();
+      setEvent(eventData);
+
+    } catch (error: any) {
+      console.error('Error registering for event:', error);
+      setError(error.message || 'Failed to register for event');
     } finally {
       setRegistering(false);
     }
@@ -320,7 +358,7 @@ export default function EventDetailPage({ params }: Params) {
   const schedule = event.schedule ?? [];
   const hostLabel = event.host?.[0] ?? "Student";
 
-  const image = event.image 
+  const image = event.image
     ? (event.image.startsWith('http') ? event.image : `http://localhost:8000${event.image}`)
     : "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
 
@@ -331,17 +369,20 @@ export default function EventDetailPage({ params }: Params) {
     <div className="min-h-screen bg-[#E8ECFF]">
       <Navbar />
       <main className="mx-auto max-w-6xl px-4 py-10">
-        {/* Hero image */}
+        {/* Hero image - FIXED: Removed object-cover and added aspect ratio container */}
         <div className="mx-auto w-[420px] max-w-full overflow-hidden rounded-xl bg-white shadow-sm">
-          <img 
-            src={image} 
-            alt={event.title} 
-            className="h-[420px] w-full object-cover"
-            onError={(e) => {
-              console.error('Image failed to load:', image);
-              e.currentTarget.src = "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
-            }}
-          />
+          <div className="relative w-full" style={{ aspectRatio: '1/1' }}>
+            <img
+              src={image}
+              alt={event.title}
+              className="absolute inset-0 w-full h-full"
+              style={{ objectFit: 'cover' }}
+              loading="eager"
+              onError={(e) => {
+                e.currentTarget.src = "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+              }}
+            />
+          </div>
         </div>
 
         {/* Title */}
@@ -350,55 +391,43 @@ export default function EventDetailPage({ params }: Params) {
         </h1>
 
         {/* Tags */}
-        <div className="mt-3 flex flex-wrap gap-2">
-          {/* Host Badge */}
-          <span className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]">
-            {hostLabel}
-          </span>
-          
-          {/* Tags - TypeScript Safe Parsing */}
-          {(() => {
-            // Start with raw tags
-            const rawTags = event.tags;
-            let tagsArray: string[] = [];
-            
-            // Handle different tag formats with proper type guards
-            if (!rawTags) {
-              // No tags
-              tagsArray = [];
-            } else if (Array.isArray(rawTags)) {
-              // Already an array
-              tagsArray = rawTags;
-            } else if (typeof rawTags === 'string') {
-              try {
-                // Try parsing as JSON first
-                const parsed = JSON.parse(rawTags);
-                if (Array.isArray(parsed)) {
-                  tagsArray = parsed;
-                } else {
-                  tagsArray = rawTags.split(',').map(t => t.trim()).filter(Boolean);
-                }
-              } catch {
+        {(() => {
+          const rawTags = event.tags;
+          let tagsArray: string[] = [];
 
-                tagsArray = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+          if (!rawTags) {
+            tagsArray = [];
+          } else if (Array.isArray(rawTags)) {
+            tagsArray = rawTags;
+          } else if (typeof rawTags === 'string') {
+            try {
+              const parsed = JSON.parse(rawTags);
+              if (Array.isArray(parsed)) {
+                tagsArray = parsed;
+              } else {
+                throw new Error('Not array');
               }
+            } catch {
+              const commaSplit = rawTags.split(',').map(t => t.trim()).filter(Boolean);
+              tagsArray = commaSplit.length > 1
+                ? commaSplit
+                : [rawTags.trim()];
             }
-            
-            const validTags = tagsArray
-              .filter((tag): tag is string => Boolean(tag && typeof tag === 'string' && tag.trim()))
-              .slice(0, 3);
-            
-            return validTags.map((tag, idx) => (
-              <span
-                key={`tag-${idx}-${tag}`}
-                className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]"
-              >
-                {tag}
-              </span>
-            ));
-          })()}
-        </div>
+          }
 
+          const validTags = tagsArray
+            .filter((tag): tag is string => Boolean(tag && typeof tag === 'string' && tag.trim()))
+            .slice(0, 3);
+
+          return validTags.map((tag, idx) => (
+            <span
+              key={`tag-${idx}-${tag}`}
+              className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]"
+            >
+              {tag}
+            </span>
+          ));
+        })()}
 
         {/* About card */}
         <section className="mt-6 rounded-2xl bg-white p-6 shadow-sm">
@@ -459,7 +488,7 @@ export default function EventDetailPage({ params }: Params) {
           </div>
         </section>
 
-        {/* Detailed Schedule (collapsible) */}
+        {/* Schedule */}
         {schedule.length > 0 && <ScheduleList schedule={schedule} />}
 
         {/* Register button */}
@@ -467,10 +496,9 @@ export default function EventDetailPage({ params }: Params) {
           onClick={handleRegister}
           disabled={registering || isClosed}
           className={`mt-6 block w-full rounded-lg px-4 py-3 text-center text-sm font-semibold
-            ${
-              isClosed
-                ? "bg-[#C7CBE0] text-[#3A3F55] cursor-default"
-                : "bg-[#6366F1] text-white hover:bg-[#4F46E5] transition-colors"
+            ${isClosed
+              ? "bg-[#C7CBE0] text-[#3A3F55] cursor-default"
+              : "bg-[#6366F1] text-white hover:bg-[#4F46E5] transition-colors"
             }`}
         >
           {isClosed ? "Closed" : registering ? "Registering..." : "Register"}
@@ -480,7 +508,7 @@ export default function EventDetailPage({ params }: Params) {
           <p className="mt-3 text-center text-sm text-[#0B1220]">{message}</p>
         )}
 
-        {/* Related Events */}
+        {/* Related events */}
         {relatedEvents.length > 0 && (
           <section className="mt-12">
             <h3 className="text-xl font-semibold text-[#0B1220]">Related Events</h3>
@@ -507,27 +535,31 @@ export default function EventDetailPage({ params }: Params) {
 
 /* ---------- Related card ---------- */
 function RelatedCard({ item }: { item: EventWithOptionals }) {
-  const img = item.image 
+  const img = item.image
     ? (item.image.startsWith('http') ? item.image : `http://localhost:8000${item.image}`)
     : "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
 
   const available = item.available ?? 0;
   const capacity = item.capacity ?? 100;
-  const badge = item.host?.[0] ?? item.tags?.[0] ?? "Organizer";
+  const badge = item.host?.[0] ?? (Array.isArray(item.tags) ? item.tags[0] : "Organizer");
 
   return (
     <Link
       href={`/events/${item.id}`}
       className="block rounded-xl bg-white shadow-sm transition hover:shadow-md"
     >
-      <img 
-        src={img} 
-        alt={item.title} 
-        className="h-40 w-full rounded-t-xl object-cover"
-        onError={(e) => {
-          e.currentTarget.src = "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
-        }}
-      />
+      <div className="relative w-full overflow-hidden rounded-t-xl" style={{ aspectRatio: '2/1' }}>
+        <img
+          src={img}
+          alt={item.title}
+          className="absolute inset-0 w-full h-full"
+          style={{ objectFit: 'cover' }}
+          loading="lazy"
+          onError={(e) => {
+            e.currentTarget.src = "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+          }}
+        />
+      </div>
       <div className="p-4">
         <h4 className="font-medium text-[#0B1220]">{item.title}</h4>
         <div className="mt-2">

@@ -54,7 +54,7 @@ function RegisterPage() {
       setForm({ ...form, [name]: value });
     }
 
-    setError(""); // clear error when typing
+    setError(""); 
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -112,7 +112,6 @@ function RegisterPage() {
       if (!csrfRes.ok) throw new Error("Failed to get CSRF token");
       const csrfData = await csrfRes.json();
 
-      // Prepare the request body according to your backend schema
       const requestBody = {
         username: form.username,
         email: form.email,
@@ -124,7 +123,7 @@ function RegisterPage() {
         role: form.role,
       };
 
-      console.log("Sending request:", requestBody); // For debugging
+      console.log("Sending request:", requestBody); 
 
       const res = await fetch("http://localhost:8000/api/register", {
         method: "POST",

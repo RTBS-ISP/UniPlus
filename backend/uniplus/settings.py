@@ -33,7 +33,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles', # Static file handling
 
     # Custom apps
-    'api',                        # Your custom API app
+    'api',                        # Main API app
 
     # Third-party apps
     'corsheaders',                # Handle Cross-Origin Resource Sharing (CORS)
@@ -72,7 +72,7 @@ CSRF_TRUSTED_ORIGINS = [
 
 # Cookie settings (important for authentication with frontend)
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SECURE = False  # Change to True when using HTTPS
+SESSION_COOKIE_SECURE = False  
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_DOMAIN = None   # Keep None for localhost dev
 
