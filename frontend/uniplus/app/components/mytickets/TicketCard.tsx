@@ -1,85 +1,175 @@
+"use client";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Calendar, Clock, MapPin } from "lucide-react";
 
+interface EventDay {
+  date: string;
+  time: string;
+  endTime?: string;
+  location: string;
+  is_online: boolean;
+  meeting_link?: string | null;
+}
 
-{/* Mock Tickets Data */}
-const mockTickets = [
-  {
-    id: "63DA6DE0",
-    title: "Software Engineering Seminar",
-    code: "63DA6DE0",
-    date: "13 October 2025",
-    time: "12:00 PM - 5:00 PM",
-    location: "Room 203, Building 15, Faculty of Engineer",
-    tags: ["Year 1", "Technology", "Web Development"],
-  },
-  {
-    id: "A1B2C3D4",
-    title: "AI & Data Science Workshop",
-    code: "A1B2C3D4",
-    date: "20 November 2025",
-    time: "09:00 AM - 4:00 PM",
-    location: "Auditorium, Building 7",
-    tags: ["Year 2", "AI", "Data Science"],
-  },
-  {
-    id: "E5F6G7H8",
-    title: "Mobile App Development",
-    code: "E5F6G7H8",
-    date: "15 December 2025",
-    time: "10:00 AM - 3:00 PM",
-    location: "Lab 101, Building 3",
-    tags: ["Year 3", "Mobile", "Programming"],
-  },
-];
+interface TicketInfo {
+  date: string;
+  time: string;
+  location: string;
+  organizer: string;
+  user_information: {
+    name: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  };
+  event_title: string;
+  event_description: string;
+  ticket_number: string;
+  event_id: number;
+  is_online: boolean;
+  event_meeting_link: string | null;
+  event_image: string | null;
+  event_dates: EventDay[];
+}
 
-export default function TicketCard() {
+interface EventDetail {
+  tags: string[];
+}
+
+export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
+  const [tags, setTags] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchEventDetail = async (eventId: number) => {
+    try {
+      const response = await fetch(`http://localhost:8000/api/events/${eventId}`, {
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data: EventDetail = await response.json();
+        setTags(data.tags || []);
+      }
+    } catch (error) {
+      console.error("Error fetching event detail:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (ticket.event_id) {
+      fetchEventDetail(ticket.event_id);
+    } else {
+      setLoading(false);
+    }
+  }, [ticket.event_id]);
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "TBA";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  const formatTimeRange = (time?: string, endTime?: string) => {
+    if (!time) return "TBA";
+    try {
+      const start = new Date(`1970-01-01T${time}`);
+      const startStr = start.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+      if (endTime) {
+        const end = new Date(`1970-01-01T${endTime}`);
+        const endStr = end.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        });
+        return `${startStr} - ${endStr}`;
+      }
+
+      return startStr;
+    } catch {
+      return time;
+    }
+  };
+
+  const firstDate = ticket.event_dates?.[0];
+  const formattedDate = formatDate(firstDate?.date || ticket.date);
+  const formattedTime = formatTimeRange(firstDate?.time || ticket.time, firstDate?.endTime);
+
+  if (loading) {
+    return (
+      <div className="rounded-lg bg-white p-6 shadow-sm text-gray-500 text-sm text-center">
+        Loading event info...
+      </div>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {mockTickets.map((ticket) => (
-        <Link
-          key={ticket.id}
-          href={`/mytickets/${ticket.id}`}
-          className="rounded-lg shadow-sm bg-white flex flex-col transition-transform hover:scale-[1.02] hover:shadow-md"
-        >
-          {/* Header */}
-          <div className="flex items-center rounded-t-lg w-full h-24 bg-indigo-500">
-            <div className="flex flex-col p-6 gap-y-3">
-              <h2 className="text-white text-xl font-bold">{ticket.title}</h2>
-              <p className="text-white text-sm font-medium">{ticket.code}</p>
-            </div>
-          </div>
+    <Link
+      href={`/mytickets/${ticket.ticket_number}`}
+      className="rounded-lg shadow-sm bg-white flex flex-col transition-transform hover:scale-[1.02] hover:shadow-md"
+    >
+      {/* Header */}
+      <div className="flex items-center rounded-t-lg w-full h-24 bg-indigo-500">
+        <div className="flex flex-col p-6 gap-y-3">
+          <h2 className="text-white text-xl font-bold">
+            {ticket.event_title || "Untitled Event"}
+          </h2>
+          <p className="text-white text-sm font-medium">
+            {ticket.ticket_number}
+          </p>
+        </div>
+      </div>
 
-          {/* Detail Section */}
-          <div className="p-6 flex-1 flex flex-col">
-            <div className="flex gap-x-2 mb-2">
-              <Calendar size={20} className="text-indigo-500"/>
-              <p className="text-gray-800 text-sm">{ticket.date}</p>
-            </div>
-            <div className="flex gap-x-2 mb-2">
-              <Clock size={20} className="text-indigo-500"/>
-              <p className="text-gray-800 text-sm">{ticket.time}</p>
-            </div>
-            <div className="flex gap-x-2 mb-4">
-              <MapPin size={20} className="text-indigo-500"/>
-              <p className="text-gray-800 text-sm">{ticket.location}</p>
-            </div>
-            <hr className="mb-4" />
+      {/* Detail Section */}
+      <div className="p-6 flex-1 flex flex-col">
+        <div className="flex gap-x-2 mb-2">
+          <Calendar size={20} className="text-indigo-500" />
+          <p className="text-gray-800 text-sm">{formattedDate}</p>
+        </div>
+        <div className="flex gap-x-2 mb-2">
+          <Clock size={20} className="text-indigo-500" />
+          <p className="text-gray-800 text-sm">{formattedTime}</p>
+        </div>
+        <div className="flex gap-x-2 mb-4">
+          <MapPin size={20} className="text-indigo-500" />
+          <p className="text-gray-800 text-sm">
+            {firstDate?.is_online
+              ? "Online Event"
+              : firstDate?.location || ticket.location || "TBA"}
+          </p>
+        </div>
+        <hr className="mb-4" />
 
-            {/* Tags Section */}
-            <div className="flex flex-wrap gap-2 mt-auto">
-              {ticket.tags.map((tag, i) => (
-                <span
-                  key={i}
-                  className="px-3 py-1 bg-indigo-100 text-gray-800 text-sm font-bold rounded-lg"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
-        </Link>
-      ))}
-    </div>
+        {/* Tags Section */}
+        <div className="flex flex-wrap gap-2 mt-auto">
+          {tags.length > 0 ? (
+            tags.map((tag, i) => (
+              <span
+                key={i}
+                className="px-3 py-1 bg-indigo-100 text-gray-800 text-sm font-bold rounded-lg"
+              >
+                {tag}
+              </span>
+            ))
+          ) : (
+            <span className="px-3 py-1 bg-gray-100 text-gray-500 text-sm rounded-lg">
+              No Tags
+            </span>
+          )}
+        </div>
+      </div>
+    </Link>
   );
 }
