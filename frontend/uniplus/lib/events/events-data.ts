@@ -80,6 +80,7 @@ const eventNames = [
   "Language Workshop",
   "Social Impact Forum",
   "Alumni Meetup",
+  "Alumni Meetup",
 ];
 
 // 50 unique Unsplash links

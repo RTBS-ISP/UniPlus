@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo, useState } from "react";
@@ -214,7 +215,6 @@ export default function EventsPage() {
           </div>
         </motion.aside>
 
-        {/* Right: Search + Cards + Pagination */}
         <section className="md:col-span-9" id="events">
           <motion.div
             variants={sectionIn}
@@ -259,18 +259,15 @@ export default function EventsPage() {
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-black/10 bg-white/60 py-10">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 md:grid-cols-4">
-          <div>
-            <p className="text-sm text-gray-700">Site name</p>
-            <div className="mt-3 flex items-center gap-3 text-gray-500">
-              <div className="h-5 w-5 rounded-full border" />
-              <div className="h-5 w-5 rounded-full border" />
-              <div className="h-5 w-5 rounded-full border" />
-              <div className="h-5 w-5 rounded-full border" />
+      <footer className="border-t border-gray-200 bg-white/80 backdrop-blur-sm py-12 mt-16">
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-4 mb-8">
+            <div>
+              <h3 className="text-lg font-bold text-gray-900 mb-4">🎓 UniPLUS</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Connecting students through events and experiences.
+              </p>
             </div>
-          </div>
 
           {["Topic", "Topic", "Topic"].map((t, i) => (
             <div key={i}>
@@ -283,9 +280,10 @@ export default function EventsPage() {
               </ul>
             </div>
           ))}
-        </div>
-        <div className="mx-auto mt-8 max-w-6xl px-4 text-xs text-gray-500">
-          © {new Date().getFullYear()} UniPLUS
+          </div>
+          <div className="mx-auto mt-8 max-w-6xl px-4 text-xs text-gray-500">
+            © {new Date().getFullYear()} UniPLUS
+          </div>
         </div>
       </footer>
     </div>

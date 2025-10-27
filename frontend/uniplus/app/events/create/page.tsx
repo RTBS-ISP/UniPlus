@@ -225,6 +225,7 @@ export default function EventCreatePage() {
         method: "POST",
         credentials: "include",
         headers: { "X-CSRFToken": csrfData.csrftoken },
+        headers: { "X-CSRFToken": csrfData.csrftoken },
         body: formData,
       });
 
