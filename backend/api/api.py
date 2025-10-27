@@ -148,7 +148,19 @@ def get_user(request):
                             event_dates = json.loads(ticket.event_dates) if isinstance(ticket.event_dates, str) else ticket.event_dates
                         except:
                             event_dates = []
-                    
+                    if not event_dates:
+                        schedules = EventSchedule.objects.filter(event=event).order_by("event_date", "start_time_event")
+
+                        # And when building the event_dates array:
+                        for s in schedules:
+                            event_dates.append({
+                                "date": s.event_date.isoformat(), 
+                                "time": s.start_time_event.isoformat(),  
+                                "endTime": s.end_time_event.isoformat() if s.end_time_event else None,  
+                                "location": event.event_address or "TBA",
+                                "is_online": event.is_online,
+                                "meeting_link": event.event_meeting_link or "",
+                            })
                     if not event_dates and event.event_start_date:
                         event_dates = [{
                             'date': event.event_start_date.date().isoformat(),
