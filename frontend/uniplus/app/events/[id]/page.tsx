@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "../../components/navbar";
 import { TagAccent } from "../../components/shared/Tag";
@@ -8,6 +8,7 @@ import { events } from "../../../lib/events/events-data";
 import { useAlert } from "../../components/ui/AlertProvider";
 import { ChevronDown, Check, Lock } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+
 
 /* ---------- Motion variants ---------- */
 const pageVariants = {
@@ -30,17 +31,32 @@ type EventSession = {
   address2?: string;
 };
 
-type EventWithOptionals = (typeof events)[number] & {
-  available?: number;
-  capacity?: number;
-  startDate?: string;
-  endDate?: string;
-  startTime?: string;
-  endTime?: string;
-  location?: string;
+type EventDetail = {
+  id: number;
+  title: string;
+  event_title: string;
+  event_description: string;
+  excerpt: string;
+  organizer_username: string;
+  host: string[];
+  start_date_register: string;
+  end_date_register: string;
+  event_start_date: string;
+  event_end_date: string;
+  max_attendee: number;
+  capacity: number;
+  current_attendees: number;
+  available: number;
+  event_address: string;
+  location: string;
   address2?: string;
-  image?: string;
-  schedule?: EventSession[];
+  is_online: boolean;
+  event_meeting_link: string;
+  tags: string[];
+  event_image: string | null;
+  image: string | null;
+  is_registered: boolean;
+  schedule: EventSession[];
 };
 
 type Params = { params: Promise<{ id: string }> };
@@ -75,6 +91,19 @@ function groupConsecutiveSessions(sessions: EventSession[]) {
     items: [s],
   }));
 }
+
+// Helper function to get full image URL
+const getImageUrl = (imagePath: string | null) => {
+  if (!imagePath) return "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+    
+  // If a full URL already returned
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+    
+  // Otherwise, prefix with backend URL
+  return `http://localhost:8000${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+};
 
 /* ---------- HostPill ---------- */
 function HostPill({ label }: { label: string }) {
@@ -180,10 +209,12 @@ function RegisterCTA({
   disabled,
   success,
   onClick,
+  loading,
 }: {
   disabled: boolean;
   success: boolean;
   onClick: () => void;
+  loading: boolean;
 }) {
   const reduce = useReducedMotion();
   const [ripples, setRipples] = useState<Array<{ id: number; x: number; y: number }>>([]);
@@ -199,7 +230,7 @@ function RegisterCTA({
       setTimeout(() => setDenied(false), 450);
       return;
     }
-    if (success) return;
+    if (success || loading) return;
 
     const id = Date.now();
     setRipples((r) => [...r, { id, x, y }]);
@@ -213,14 +244,14 @@ function RegisterCTA({
   const disabledCls = "bg-[#C7CBE0] text-[#3A3F55] cursor-not-allowed";
   const successCls = "bg-emerald-500 text-white";
 
-  const label = disabled ? "Closed" : success ? "Registered" : "Register";
+  const label = loading ? "Registering..." : disabled ? "Closed" : success ? "Registered" : "Register";
 
   return (
     <motion.button
       type="button"
       aria-disabled={disabled}
       onClick={handleClick}
-      disabled={success}
+      disabled={success || loading}
       className={[base, disabled ? disabledCls : success ? successCls : idle].join(" ")}
       initial={false}
       animate={disabled && !success && denied ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
@@ -287,64 +318,182 @@ function RegisterCTA({
 /* ---------- Event Detail Page ---------- */
 export default function EventDetailPage({ params }: Params) {
   const { id } = use(params);
-  const numericId = Number(id);
-  const event = events.find((e) => e.id === numericId) as EventWithOptionals | undefined;
+  const [event, setEvent] = useState<EventDetail | null>(null);
+  const [relatedEvents, setRelatedEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(false);
+  const [registered, setRegistered] = useState(false);
 
-  if (!event) {
+  const toast = useAlert();
+
+  // Fetch event detail
+  useEffect(() => {
+    async function fetchEventDetail() {
+      try {
+        setLoading(true);
+        const response = await fetch(`http://localhost:8000/api/events/${id}`);
+        if (!response.ok) throw new Error('Event not found');
+        const data = await response.json();
+        
+        setEvent(data);
+        setRegistered(data.is_registered || false);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load event');
+        console.error('Error fetching event:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchEventDetail();
+  }, [id]);
+
+  // Fetch related events
+  useEffect(() => {
+    async function fetchRelatedEvents() {
+      if (!event) return;
+      
+      try {
+        const response = await fetch('http://localhost:8000/api/events');
+        if (!response.ok) throw new Error('Failed to fetch related events');
+        const data = await response.json();
+        
+        const currentTags = new Set(event.tags ?? []);
+        
+        // Find events with overlapping tags
+        const relatedByTags = data
+          .map((e: any) => {
+            const overlap = (e.tags ?? []).filter((t: string) => currentTags.has(t)).length;
+            return { e, overlap };
+          })
+          .filter(({ e, overlap }: any) => e.id !== event.id && overlap > 0)
+          .sort((a: any, b: any) => 
+            b.overlap - a.overlap || (b.e.attendee_count ?? 0) - (a.e.attendee_count ?? 0)
+          )
+          .slice(0, 6)
+          .map(({ e }: any) => ({
+            id: e.id,
+            title: e.event_title,
+            host: [e.organizer_role || "Organizer"],
+            tags: e.tags || [],
+            image: e.event_image,
+            available: e.max_attendee ? e.max_attendee - e.attendee_count : 0,
+            capacity: e.max_attendee || 100,
+          }));
+        
+        // Fallback to first 6 events if no tag overlap
+        const related = relatedByTags.length 
+          ? relatedByTags 
+          : data
+              .filter((e: any) => e.id !== event.id)
+              .slice(0, 6)
+              .map((e: any) => ({
+                id: e.id,
+                title: e.event_title,
+                host: [e.organizer_role || "Organizer"],
+                tags: e.tags || [],
+                image: e.event_image,
+                available: e.max_attendee ? e.max_attendee - e.attendee_count : 0,
+                capacity: e.max_attendee || 100,
+              }));
+        
+        setRelatedEvents(related);
+      } catch (err) {
+        console.error('Error fetching related events:', err);
+      }
+    }
+
+    fetchRelatedEvents();
+  }, [event]);
+
+  const handleRegister = async () => {
+    if (registered || !event) return;
+
+    try {
+      setRegistering(true);
+      const response = await fetch(`http://localhost:8000/api/events/${id}/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setRegistered(true);
+        toast({
+          text: data.message || "You have successfully registered for this event!",
+          variant: "success",
+          duration: 2500,
+        });
+        
+        // Refresh event data to get updated available spots
+        const eventResponse = await fetch(`http://localhost:8000/api/events/${id}`);
+        if (eventResponse.ok) {
+          const updatedEvent = await eventResponse.json();
+          setEvent(updatedEvent);
+        }
+      } else {
+        toast({
+          text: data.error || "Failed to register for event",
+          variant: "error",
+          duration: 2500,
+        });
+      }
+    } catch (err) {
+      console.error('Registration error:', err);
+      toast({
+        text: "An error occurred. Please try again.",
+        variant: "error",
+        duration: 2500,
+      });
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  // Loading state
+  if (loading) {
     return (
       <div className="min-h-screen bg-[#E8ECFF]">
         <Navbar />
         <main className="mx-auto max-w-6xl px-4 py-16">
-          <p className="text-lg font-medium">Event not found.</p>
+          <div className="flex items-center justify-center">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-solid border-[#6366F1] border-r-transparent"></div>
+          </div>
+          <p className="mt-4 text-center text-gray-600">Loading event...</p>
         </main>
       </div>
     );
   }
 
-  const toast = useAlert();
-  const [registered, setRegistered] = useState(false);
+  // Error state
+  if (error || !event) {
+    return (
+      <div className="min-h-screen bg-[#E8ECFF]">
+        <Navbar />
+        <main className="mx-auto max-w-6xl px-4 py-16">
+          <p className="text-lg font-medium text-red-600">{error || "Event not found."}</p>
+          <Link href="/events" className="mt-4 inline-block text-[#6366F1] hover:underline">
+            ← Back to events
+          </Link>
+        </main>
+      </div>
+    );
+  }
 
   const hostLabel = event.host?.[0] ?? "Student";
   const available = event.available ?? 0;
   const capacity = event.capacity ?? 100;
   const isClosed = available <= 0;
-  const legacyStart = event.startDate ?? "2025-10-07";
-  const legacyEnd = event.endDate ?? "2025-10-12";
-  const location = event.location ?? "Room 203, Building 15, Faculty of Engineer";
-  const address2 = event.address2 ?? "Kasetsart University";
-  const image =
-    event.image ??
-    "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
-
-  /* ---- Related (tag-based) ---- */
-  const currentTags = new Set(event.tags ?? []);
-  const relatedByTags = events
-    .map((e) => {
-      const overlap = (e.tags ?? []).filter((t) => currentTags.has(t)).length;
-      return { e, overlap };
-    })
-    .filter(({ e, overlap }) => e.id !== numericId && overlap > 0)
-    .sort(
-      (a, b) => b.overlap - a.overlap || (b.e.popularity ?? 0) - (a.e.popularity ?? 0)
-    )
-    .slice(0, 6)
-    .map(({ e }) => e);
-
-  const related = relatedByTags.length
-    ? relatedByTags
-    : events.filter((e) => e.id !== numericId).slice(0, 6);
-
-  const handleRegister = () => {
-    if (registered || isClosed) return;
-    setRegistered(true);
-    toast({
-      text: "You have successfully registered for this event!",
-      variant: "success",
-      duration: 2500,
-    });
-  };
-
+  const location = event.location || event.event_address || "TBA";
+  const address2 = event.address2 ?? "";
   const schedule = event.schedule ?? [];
+  const image = getImageUrl(event.image || event.event_image);
 
   return (
     <motion.div className="min-h-screen bg-[#E8ECFF]" variants={pageVariants} initial="initial" animate="animate">
@@ -353,7 +502,6 @@ export default function EventDetailPage({ params }: Params) {
       <main className="mx-auto max-w-6xl px-4 py-10">
         {/* Hero Image */}
         <div className="mx-auto w-[420px] max-w-full overflow-hidden rounded-xl bg-white shadow-sm">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <motion.img
             src={image}
             alt={event.title}
@@ -391,7 +539,7 @@ export default function EventDetailPage({ params }: Params) {
           <div className="flex flex-wrap items-end gap-2">
             <h2 className="text-xl font-bold text-[#0B1220]">About this event</h2>
             <p className="text-x1 text-[#0B1220]/70">
-              Organized by <span className="font-semibold">Test Account</span>
+              Organized by <span className="font-semibold">{event.organizer_username}</span>
             </p>
           </div>
 
@@ -399,7 +547,7 @@ export default function EventDetailPage({ params }: Params) {
             <div>
               <p className="text-sm font-semibold text-[#0B1220]">Registration Period</p>
               <p className="mt-1 text-sm text-[#0B1220]">
-                {formatDateGB(legacyStart)} - {formatDateGB(legacyEnd)}
+                {formatDateGB(event.start_date_register)} - {formatDateGB(event.end_date_register)}
               </p>
             </div>
 
@@ -417,14 +565,20 @@ export default function EventDetailPage({ params }: Params) {
           <div className="mt-6">
             <p className="text-sm font-semibold text-[#0B1220]">Location</p>
             <p className="mt-1 text-sm font-semibold text-[#0B1220]">{location}</p>
-            <p className="text-sm text-[#0B1220]">{address2}</p>
+            {address2 && <p className="text-sm text-[#0B1220]">{address2}</p>}
+            {event.is_online && event.event_meeting_link && (
+              <p className="mt-1 text-sm text-[#0B1220]">
+                <a href={event.event_meeting_link} target="_blank" rel="noopener noreferrer" className="text-[#6366F1] hover:underline">
+                  Online Meeting Link
+                </a>
+              </p>
+            )}
           </div>
 
           <div className="mt-6">
             <p className="text-sm font-semibold text-[#0B1220]">Description</p>
-            <p className="mt-2 text-sm text-[#0B1220]">
-              {event.excerpt ??
-                "Lorem Ipsum is simply dummy text of the printing and typesetting industry."}
+            <p className="mt-2 text-sm text-[#0B1220] whitespace-pre-wrap">
+              {event.event_description || event.excerpt || "No description available."}
             </p>
           </div>
         </motion.section>
@@ -436,23 +590,30 @@ export default function EventDetailPage({ params }: Params) {
 
         {/* Register */}
         <div className="mt-6">
-          <RegisterCTA disabled={isClosed} success={registered} onClick={handleRegister} />
+          <RegisterCTA 
+            disabled={isClosed} 
+            success={registered} 
+            onClick={handleRegister}
+            loading={registering}
+          />
         </div>
 
         {/* Related */}
-        <section className="mt-12">
-          <h3 className="text-xl font-semibold text-[#0B1220]">Related Events</h3>
-          <motion.div
-            className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
-            variants={staggerRow}
-          >
-            {related.map((r) => (
-              <Link key={r.id} href={`/events/${r.id}`}>
-                <RelatedCard item={r as EventWithOptionals} />
-              </Link>
-            ))}
-          </motion.div>
-        </section>
+        {relatedEvents.length > 0 && (
+          <section className="mt-12">
+            <h3 className="text-xl font-semibold text-[#0B1220]">Related Events</h3>
+            <motion.div
+              className="mt-4 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+              variants={staggerRow}
+            >
+              {relatedEvents.map((r) => (
+                <Link key={r.id} href={`/events/${r.id}`}>
+                  <RelatedCard item={r} />
+                </Link>
+              ))}
+            </motion.div>
+          </section>
+        )}
       </main>
 
       {/* Footer */}
@@ -488,12 +649,10 @@ export default function EventDetailPage({ params }: Params) {
 }
 
 /* ---------- Related card ---------- */
-function RelatedCard({ item }: { item: EventWithOptionals }) {
-  const img =
-    item.image ??
-    "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
+function RelatedCard({ item }: { item: any }) {
+  const img = getImageUrl(item.image);
 
-  const available = item.available ?? 20 + ((item.id * 37) % 120);
+  const available = item.available ?? 0;
   const capacity = item.capacity ?? 100;
 
   const hostLabel = item.host?.[0];
@@ -505,7 +664,6 @@ function RelatedCard({ item }: { item: EventWithOptionals }) {
       variants={fadeUp}
       {...cardHover}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <motion.img
         src={img}
         alt={item.title}
@@ -516,11 +674,12 @@ function RelatedCard({ item }: { item: EventWithOptionals }) {
       <div className="p-4">
         <h4 className="font-medium text-[#0B1220]">{item.title}</h4>
         <div className="mt-2">
-          {hostLabel ? (
-            <HostPill label={hostLabel} />
-          ) : tagLabel ? (
-            <TagAccent label={tagLabel} />
-          ) : null}
+          {hostLabel && <HostPill label={hostLabel} />}
+          {!hostLabel && tagLabel && (
+            <span className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]">
+              {tagLabel}
+            </span>
+          )}
         </div>
         <p className="mt-1 text-sm text-gray-600">
           Available: {available}/{capacity}
