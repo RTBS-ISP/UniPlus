@@ -38,6 +38,7 @@ type EventDetail = {
   event_description: string;
   excerpt: string;
   organizer_username: string;
+  organier_role: string;
   host: string[];
   start_date_register: string;
   end_date_register: string;
@@ -336,6 +337,7 @@ export default function EventDetailPage({ params }: Params) {
         if (!response.ok) throw new Error('Event not found');
         const data = await response.json();
         
+        console.log(data)
         setEvent(data);
         setRegistered(data.is_registered || false);
         setError(null);
@@ -486,7 +488,7 @@ export default function EventDetailPage({ params }: Params) {
     );
   }
 
-  const hostLabel = event.host?.[0] ?? "Student";
+  const hostLabel = event.organizer_role ? event.organizer_role.charAt(0).toUpperCase() + event.organizer_role.slice(1).toLowerCase(): "Organizer"
   const available = event.available ?? 0;
   const capacity = event.capacity ?? 100;
   const isClosed = available <= 0;

@@ -617,6 +617,7 @@ def get_event_detail(request, event_id: int):
         "event_description": event.event_description,
         "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
         "organizer_username": event.organizer.username if event.organizer else "Unknown",
+        "organizer_role": event.organizer.role or "Organizer",
         "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
         "start_date_register": event.start_date_register,
         "end_date_register": event.end_date_register,
