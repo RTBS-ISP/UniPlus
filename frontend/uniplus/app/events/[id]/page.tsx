@@ -415,10 +415,18 @@ export default function EventDetailPage({ params }: Params) {
 
     try {
       setRegistering(true);
+      function getCSRFToken() {
+        const match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : null;
+      }
+
+      const csrfToken = getCSRFToken();
+
       const response = await fetch(`http://localhost:8000/api/events/${id}/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken || '',
         },
         credentials: 'include',
       });
