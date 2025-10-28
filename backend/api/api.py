@@ -576,6 +576,7 @@ def get_event_detail(request, event_id: int):
                 date_str = day.get('date', '')
                 start_iso = day.get('start_iso', '')
                 end_iso = day.get('end_iso', '')
+                location = day.get('address', '') or day.get('location', '')
                 start_time = '00:00'
                 end_time = '00:00'
                 
@@ -595,6 +596,7 @@ def get_event_detail(request, event_id: int):
                     "date": date_str,
                     "startTime": start_time,
                     "endTime": end_time,
+                    "location": location,
                 })
         except Exception as e:
             print(f"Error parsing schedule: {e}")

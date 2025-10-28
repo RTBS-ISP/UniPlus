@@ -28,6 +28,7 @@ type EventSession = {
   startTime: string;
   endTime: string;
   location?: string;
+  address?: string;
   address2?: string;
 };
 
