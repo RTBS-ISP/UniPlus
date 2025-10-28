@@ -6,7 +6,7 @@ import Navbar from "../../components/navbar";
 import { TagAccent } from "../../components/shared/Tag";
 import { events } from "../../../lib/events/events-data";
 import { useAlert } from "../../components/ui/AlertProvider";
-import { ChevronDown, Check, Lock } from "lucide-react";
+import { ChevronDown, Check, Lock, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 
@@ -326,8 +326,33 @@ export default function EventDetailPage({ params }: Params) {
   const [error, setError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const [registered, setRegistered] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
 
   const toast = useAlert();
+
+  // Fetch current logged-in user to compare with event board owner
+  useEffect(() => {
+    async function checkOwnership(organizerUsername?: string) {
+      try {
+        const res = await fetch("http://localhost:8000/api/user", {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const user = await res.json();
+        if (organizerUsername && user.username === organizerUsername) {
+          setIsOwner(true);
+        } else {
+          setIsOwner(false);
+        }
+      } catch (err) {
+        console.error("Error checking ownership:", err);
+      }
+    }
+
+    if (event?.organizer_username) {
+      checkOwnership(event.organizer_username);
+    }
+  }, [event?.organizer_username]);
 
   // Fetch event detail
   useEffect(() => {
@@ -601,12 +626,23 @@ export default function EventDetailPage({ params }: Params) {
 
         {/* Register */}
         <div className="mt-6">
-          <RegisterCTA 
-            disabled={isClosed} 
-            success={registered} 
-            onClick={handleRegister}
-            loading={registering}
-          />
+          {isOwner ? (
+            <div className="mt-6 flex justify-end">
+              <Link
+                href={`/events/${id}/dashboard`}
+                className="inline-flex items-center rounded-lg bg-[#6366F1] px-4 py-3 text-sm font-semibold text-white hover:bg-[#4F46E5] transition-colors"
+              >
+                Event Dash Board <ChevronRight/>
+              </Link>
+            </div>
+          ) : (
+            <RegisterCTA 
+              disabled={isClosed} 
+              success={registered} 
+              onClick={handleRegister}
+              loading={registering}
+            />
+          )}
         </div>
 
         {/* Related */}
