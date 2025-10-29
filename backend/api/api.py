@@ -126,7 +126,6 @@ def logout_view(request):
 @api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
 def get_user(request):
     if request.user.is_authenticated:
-        # about_me is now JSONField, no need to parse
         about_me_data = request.user.about_me if isinstance(request.user.about_me, dict) else {}
 
         tickets = []
@@ -190,7 +189,6 @@ def get_user(request):
                     print(f"Error processing ticket: {e}")
                     continue
 
-        # FIX: Make sure to include tickets in the return statement!
         return 200, {
             "username": request.user.username,
             "email": request.user.email,
@@ -203,7 +201,6 @@ def get_user(request):
             "tickets": tickets  
         }
     return 401, {"error": "Not authenticated"}
-
 
 # ============================================================================
 # NEW: PUBLIC PROFILE ENDPOINT
@@ -1199,4 +1196,95 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str):
         }
     except Exception as e:
         print(f"Error checking in: {e}")
+        return 400, {"error": str(e)}
+    
+
+@api.get("/user/tickets", auth=django_auth, response={200: schemas.UserTicketsResponse, 401: schemas.ErrorSchema})
+def get_user_tickets(request, status: str = None):
+    """
+    Get all tickets for the authenticated user
+    Optional query parameter: status (pending/approved/rejected)
+    """
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    
+    try:
+        # Base query
+        tickets_query = Ticket.objects.filter(attendee=request.user).select_related('event', 'event__organizer')
+        
+        # Filter by status if provided
+        if status and status in ['pending', 'approved', 'rejected']:
+            tickets_query = tickets_query.filter(approval_status=status)
+        
+        tickets_data = []
+        
+        for ticket in tickets_query.order_by('-purchase_date'):
+            try:
+                event = ticket.event
+                
+                # Get event dates from ticket or event schedule
+                event_dates = ticket.event_dates if isinstance(ticket.event_dates, list) else []
+                
+                if not event_dates and event:
+                    schedules = EventSchedule.objects.filter(event=event).order_by("event_date", "start_time_event")
+                    for s in schedules:
+                        event_dates.append({
+                            "date": s.event_date.isoformat(), 
+                            "time": s.start_time_event.isoformat(),  
+                            "endTime": s.end_time_event.isoformat() if s.end_time_event else None,  
+                            "location": event.event_address or "TBA",
+                            "is_online": event.is_online,
+                            "meeting_link": event.event_meeting_link or "",
+                        })
+                
+                # Fallback
+                if not event_dates and event and event.event_start_date:
+                    event_dates = [{
+                        'date': event.event_start_date.date().isoformat(),
+                        'time': event.event_start_date.time().isoformat(),
+                        'location': event.event_address or 'TBA',
+                        'is_online': event.is_online,
+                        'meeting_link': event.event_meeting_link
+                    }]
+                
+                display_date = event_dates[0]['date'] if event_dates else (event.event_start_date.date().isoformat() if event and event.event_start_date else None)
+                display_time = event_dates[0]['time'] if event_dates else (event.event_start_date.time().isoformat() if event and event.event_start_date else '00:00:00')
+                
+                ticket_data = {
+                    "ticket_id": ticket.id,
+                    "qr_code": ticket.qr_code,
+                    "ticket_number": ticket.qr_code,  # For compatibility
+                    "event_id": event.id if event else None,
+                    "event_title": event.event_title if event else "Event not found",
+                    "event_description": event.event_description if event else None,
+                    "event_image": event.event_image.url if event and event.event_image else None,
+                    "organizer_name": event.organizer.username if event and event.organizer else None,
+                    "organizer_id": event.organizer.id if event and event.organizer else None,
+                    "date": display_date,
+                    "time": display_time,
+                    "location": event_dates[0]['location'] if event_dates else (event.event_address if event else 'TBA'),
+                    "is_online": ticket.is_online,
+                    "event_meeting_link": ticket.meeting_link,
+                    "event_dates": event_dates,
+                    "approval_status": ticket.approval_status,
+                    "purchase_date": ticket.purchase_date.isoformat() if ticket.purchase_date else None,
+                    "checked_in_at": ticket.checked_in_at.isoformat() if ticket.checked_in_at else None,
+                    "status": ticket.status,
+                }
+                tickets_data.append(ticket_data)
+                
+            except Exception as e:
+                print(f"Error processing ticket {ticket.id}: {e}")
+                continue
+
+        return 200, {
+            "tickets": tickets_data,
+            "total_count": len(tickets_data),
+            "pending_count": tickets_query.filter(approval_status='pending').count(),
+            "approved_count": tickets_query.filter(approval_status='approved').count(),
+            "rejected_count": tickets_query.filter(approval_status='rejected').count(),
+        }
+        
+    except Exception as e:
+        print(f"Error fetching user tickets: {e}")
         return 400, {"error": str(e)}

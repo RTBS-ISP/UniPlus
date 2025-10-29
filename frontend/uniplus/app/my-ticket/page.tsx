@@ -32,24 +32,40 @@ function formatTime(timeStr: string) {
 
 /* ---------- Types ---------- */
 interface Ticket {
-  date: string;
-  time: string;
-  location: string;
-  organizer: string;
-  user_information: {
-    name: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone?: string;
-  };
-  event_title: string;
-  event_description: string;
+  ticket_id: number;
+  qr_code: string;
   ticket_number: string;
-  event_id: number;
+  event_id: number | null;
+  event_title: string;
+  event_description: string | null;
+  event_image: string | null;
+  organizer_name: string | null;
+  organizer_id: number | null;
+  date: string | null;
+  time: string | null;
+  location: string | null;
   is_online: boolean;
-  event_meeting_link?: string;
-  approval_status?: string; // Added this field
+  event_meeting_link: string | null;
+  event_dates: Array<{
+    date: string;
+    time: string;
+    endTime?: string;
+    location: string;
+    is_online: boolean;
+    meeting_link: string | null;
+  }>;
+  approval_status: string;
+  purchase_date: string | null;
+  checked_in_at: string | null;
+  status: string;
+}
+
+interface TicketsResponse {
+  tickets: Ticket[];
+  total_count: number;
+  pending_count: number;
+  approved_count: number;
+  rejected_count: number;
 }
 
 /* ---------- Main Page ---------- */
@@ -57,6 +73,12 @@ export default function MyTicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ticketStats, setTicketStats] = useState({
+    total_count: 0,
+    pending_count: 0,
+    approved_count: 0,
+    rejected_count: 0
+  });
   const router = useRouter();
 
   useEffect(() => {
@@ -68,7 +90,7 @@ export default function MyTicketsPage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:8000/api/user', {
+      const response = await fetch('http://localhost:8000/api/user/tickets', {
         credentials: 'include',
       });
 
@@ -80,7 +102,7 @@ export default function MyTicketsPage() {
         throw new Error(`Failed to fetch tickets: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data: TicketsResponse = await response.json();
       
       // DEBUG: Log the API response
       console.log('=== MY TICKETS PAGE DEBUG ===');
@@ -89,6 +111,12 @@ export default function MyTicketsPage() {
       
       if (data.tickets && Array.isArray(data.tickets)) {
         console.log('Total tickets received:', data.tickets.length);
+        console.log('Ticket statistics:', {
+          total: data.total_count,
+          pending: data.pending_count,
+          approved: data.approved_count,
+          rejected: data.rejected_count
+        });
         
         // Log each ticket's details
         data.tickets.forEach((ticket: Ticket, idx: number) => {
@@ -98,7 +126,16 @@ export default function MyTicketsPage() {
             approval_status: ticket.approval_status,
             date: ticket.date,
             time: ticket.time,
+            organizer: ticket.organizer_name,
           });
+        });
+
+        // Set ticket statistics
+        setTicketStats({
+          total_count: data.total_count,
+          pending_count: data.pending_count,
+          approved_count: data.approved_count,
+          rejected_count: data.rejected_count
         });
 
         // FILTER: Only show approved tickets
@@ -164,8 +201,29 @@ export default function MyTicketsPage() {
         <h1 className="text-4xl font-extrabold tracking-tight text-[#0B1220] mb-2">
           My Tickets
         </h1>
+        
+        {/* Ticket Statistics */}
+        <div className="flex flex-wrap gap-4 mb-6">
+          <div className="bg-white rounded-lg px-4 py-2 shadow-sm">
+            <div className="text-sm text-gray-500">Total</div>
+            <div className="text-lg font-bold text-gray-900">{ticketStats.total_count}</div>
+          </div>
+          <div className="bg-yellow-50 rounded-lg px-4 py-2 shadow-sm">
+            <div className="text-sm text-yellow-600">Pending</div>
+            <div className="text-lg font-bold text-yellow-700">{ticketStats.pending_count}</div>
+          </div>
+          <div className="bg-green-50 rounded-lg px-4 py-2 shadow-sm">
+            <div className="text-sm text-green-600">Approved</div>
+            <div className="text-lg font-bold text-green-700">{ticketStats.approved_count}</div>
+          </div>
+          <div className="bg-red-50 rounded-lg px-4 py-2 shadow-sm">
+            <div className="text-sm text-red-600">Rejected</div>
+            <div className="text-lg font-bold text-red-700">{ticketStats.rejected_count}</div>
+          </div>
+        </div>
+
         <p className="text-gray-600 mb-8">
-          {tickets.length} ticket{tickets.length !== 1 ? 's' : ''} found
+          {tickets.length} approved ticket{tickets.length !== 1 ? 's' : ''} displayed
         </p>
 
         {error && (
@@ -183,7 +241,7 @@ export default function MyTicketsPage() {
             <div className="mb-4 text-6xl">🎫</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Tickets Yet</h2>
             <p className="text-gray-600 mb-6">
-              Your registered tickets will appear here once they are approved by the event organizer
+              Your registered tickets will appear here once they are approved by the event organizerrrrrrrr
             </p>
             <button
               onClick={() => router.push('/events')}
@@ -206,7 +264,7 @@ export default function MyTicketsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {upcomingTickets.map((ticket, idx) => (
                     <TicketCard
-                      key={`upcoming-${idx}`}
+                      key={`upcoming-${ticket.ticket_id}`}
                       ticket={ticket}
                       onClick={() => router.push(`/my-ticket/${ticket.ticket_number}`)}
                     />
@@ -227,7 +285,7 @@ export default function MyTicketsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {pastTickets.map((ticket, idx) => (
                     <TicketCard
-                      key={`past-${idx}`}
+                      key={`past-${ticket.ticket_id}`}
                       ticket={ticket}
                       onClick={() => router.push(`/my-ticket/${ticket.ticket_number}`)}
                       isPast
@@ -294,7 +352,7 @@ function TicketCard({ ticket, onClick, isPast = false }: TicketCardProps) {
           <Clock className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-wide">Time</p>
-            <p className="font-semibold text-gray-900">{formatTime(ticket.time)}</p>
+            <p className="font-semibold text-gray-900">{formatTime(ticket.time || '')}</p>
           </div>
         </div>
 
@@ -311,7 +369,7 @@ function TicketCard({ ticket, onClick, isPast = false }: TicketCardProps) {
 
         <div className="pt-2 border-t border-gray-200">
           <p className="text-xs text-gray-500 uppercase tracking-wide">Organized by</p>
-          <p className="font-semibold text-gray-900">{ticket.organizer}</p>
+          <p className="font-semibold text-gray-900">{ticket.organizer_name || 'Unknown Organizer'}</p>
         </div>
       </div>
 

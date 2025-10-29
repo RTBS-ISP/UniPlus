@@ -3,6 +3,34 @@ from pydantic import BaseModel, validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 
+class UserTicketSchema(Schema):
+    ticket_id: int
+    qr_code: str
+    ticket_number: str
+    event_id: Optional[int]
+    event_title: str
+    event_description: Optional[str]
+    event_image: Optional[str]
+    organizer_name: Optional[str]
+    organizer_id: Optional[int]
+    date: Optional[str]
+    time: Optional[str]
+    location: Optional[str]
+    is_online: bool
+    event_meeting_link: Optional[str]
+    event_dates: List[dict]
+    approval_status: str
+    purchase_date: Optional[str]
+    checked_in_at: Optional[str]
+    status: str
+
+class UserTicketsResponse(Schema):
+    tickets: List[UserTicketSchema]
+    total_count: int
+    pending_count: int
+    approved_count: int
+    rejected_count: int
+
 
 # ============================================================================
 # USER SCHEMAS
@@ -424,3 +452,13 @@ class UserStatisticsSchema(Schema):
     # For organizers:
     events_organized: Optional[int] = None
     total_attendees: Optional[int] = None
+
+
+
+
+
+
+
+
+
+
