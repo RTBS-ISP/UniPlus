@@ -112,64 +112,9 @@ export default function EventCard({
   );
 
   // --- dynamic tag fitting ---
-  const pillsRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [visibleCount, setVisibleCount] = useState<number>(tagList.length);
-
-  useEffect(() => {
-    function recalc() {
-      const pillsWrap = pillsRef.current;
-      const measure = measureRef.current;
-      if (!pillsWrap || !measure) return;
-
-      const containerWidth = pillsWrap.clientWidth;
-      if (containerWidth <= 0) {
-        setVisibleCount(tagList.length);
-        return;
-      }
-
-      const tagSpans = Array.from(
-        measure.querySelectorAll<HTMLElement>('[data-role="pill"]')
-      );
-      const widths = tagSpans.map((el) => el.offsetWidth);
-
-      const plusSpan = measure.querySelector<HTMLElement>('[data-role="plus"]');
-      const plusWidthBase = plusSpan ? plusSpan.offsetWidth : 40;
-
-      const GAP = 8;
-      let used = 0;
-      let count = 0;
-
-      for (let i = 0; i < widths.length; i++) {
-        const w = widths[i] + (i > 0 ? GAP : 0);
-        const remaining = widths.length - (i + 1);
-        const reserve = remaining > 0 ? GAP + plusWidthBase : 0;
-
-        if (used + w + reserve <= containerWidth) {
-          used += w;
-          count++;
-        } else {
-          break;
-        }
-      }
-      setVisibleCount(count);
-    }
-
-    recalc();
-    const t = setTimeout(recalc, 0);
-    const ro = new ResizeObserver(recalc);
-    if (pillsRef.current) ro.observe(pillsRef.current);
-    window.addEventListener("resize", recalc);
-
-    return () => {
-      clearTimeout(t);
-      ro.disconnect();
-      window.removeEventListener("resize", recalc);
-    };
-  }, [tagList]);
-
-  const visibleTags = tagList.slice(0, visibleCount);
-  const hiddenTags = tagList.slice(visibleCount);
+  const MAX_VISIBLE_TAGS = 5;
+  const visibleTags = tagList.slice(0, MAX_VISIBLE_TAGS);
+  const hiddenTags = tagList.slice(MAX_VISIBLE_TAGS);
 
   // --- motion: entrance + hover ---
   const entranceDelay = shouldReduce ? 0 : index * stagger;
@@ -235,7 +180,7 @@ export default function EventCard({
               <span className="font-semibold text-[#0B1220]/80">Tag</span>
 
               {/* visible pills */}
-              <div ref={pillsRef} className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 {visibleTags.map((t) => (
                   <BluePill key={t}>{t}</BluePill>
                 ))}
@@ -252,9 +197,9 @@ export default function EventCard({
                     {/* hovercard */}
                     <div
                       className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(420px,90vw)]
-                                 -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
-                                 shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
-                                 group-hover:opacity-100 group-hover:scale-100"
+                                -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
+                                shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
+                                group-hover:opacity-100 group-hover:scale-100"
                     >
                       <div className="flex flex-wrap gap-2">
                         {hiddenTags.map((t) => (
@@ -264,29 +209,6 @@ export default function EventCard({
                     </div>
                   </span>
                 )}
-              </div>
-
-              {/* hidden measurer */}
-              <div
-                ref={measureRef}
-                className="invisible absolute left-[-9999px] top-0 -z-10 flex flex-wrap gap-2"
-                aria-hidden
-              >
-                {tagList.map((t) => (
-                  <span
-                    key={t}
-                    data-role="pill"
-                    className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
-                  >
-                    {t}
-                  </span>
-                ))}
-                <span
-                  data-role="plus"
-                  className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
-                >
-                  +99
-                </span>
               </div>
             </div>
           )}
