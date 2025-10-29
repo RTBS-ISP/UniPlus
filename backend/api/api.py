@@ -13,11 +13,15 @@ from django.shortcuts import get_object_or_404
 from api.model.user import AttendeeUser
 from api.model.event import Event
 from api.model.ticket import Ticket
+from api.model.comment import Comment
+from api.model.rating import Rating
 from api.model.event_schedule import EventSchedule
 from api import schemas
-from typing import List, Optional, Union
+from typing import List, Optional
 import json
 from datetime import datetime
+from django.db.models import Count
+from django.db.models import Avg, Count
 import uuid 
 import traceback
 
@@ -660,6 +664,153 @@ def get_ticket_detail(request, ticket_id: int):
         "user_email": request.user.email,
     }
 
+#Comments and Ratings Endpoints
+
+@api.post("/events/{event_id}/comments", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def add_comment(request, event_id: int, payload: schemas.CommentCreateSchema):
+    """
+    Add a comment to an event
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        user = request.user
+
+        # Check if user has attended the event 
+        has_ticket = Ticket.objects.filter(event=event, attendee=user).exists()
+        if not has_ticket:
+            return 400, {"error": "You must have attended this event to leave a comment"}
+
+        # Content is not empty
+        if not payload.content or not payload.content.strip():
+            return 400, {"error": "Comment content cannot be empty"}
+        
+        existing_comment = Comment.objects.filter(event_id=event, author_id=user).first()
+        if existing_comment:
+            # Update existing comment
+            existing_comment.content = payload.content.strip()
+            existing_comment.save()
+            message = "Comment updated successfully"
+            comment_id = existing_comment.id  
+        else:
+            # Create new comment
+            comment = Comment.objects.create(
+                event_id=event,      
+                author_id=user,      
+                content=payload.content.strip()
+            )
+            message = "Comment added successfully"
+            comment_id = comment.id  
+
+        return 200, {
+            "success": True,
+            "message": message,
+            "comment_id": comment_id  
+        }
+    except Event.DoesNotExist:
+        return 400, {"error": "Event not found"}
+    except Exception as e:
+        print(f"Error adding comment: {str(e)}")
+        return 400, {"error": str(e)}
+
+
+@api.post("/events/{event_id}/ratings", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def add_rating(request, event_id: int, payload: schemas.RatingCreateSchema):
+    """
+    Add or update a rating for an event
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        user = request.user
+
+
+        # Check if user has attended the event 
+        has_ticket = Ticket.objects.filter(event=event, attendee=user).exists()
+        if not has_ticket:
+            return 400, {"error": "You must have attended this event to leave a rating"}
+
+        # Check if user already rated this event
+        existing_rating = Rating.objects.filter(event_id=event, reviewer_id=user).first()
+        
+        if existing_rating:
+            # Update existing rating
+            existing_rating.rates = payload.rates
+            existing_rating.save()
+            message = "Rating updated successfully"
+        else:
+            rating = Rating.objects.create(
+                event_id=event,      
+                reviewer_id=user,    
+                rates=payload.rates
+            )
+            message = "Rating added successfully"
+
+        return 200, {
+            "success": True,
+            "message": message
+        }
+
+    except Event.DoesNotExist:
+        return 400, {"error": "Event not found"}
+    except Exception as e:
+        print(f"Error adding rating: {str(e)}")
+        return 400, {"error": str(e)}
+    
+@api.get("/events/{event_id}/comments", response=schemas.EventCommentsResponse)
+def get_event_comments(request, event_id: int):
+    """
+    Get all comments and ratings for an event
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Get comments with user information
+        comments = Comment.objects.filter(event_id=event).select_related('author_id').order_by('-content_created_at')
+        
+        comments_data = []
+        for comment in comments:
+            user_name = f"{comment.author_id.first_name} {comment.author_id.last_name}".strip()
+            if not user_name:
+                user_name = comment.author_id.username or comment.author_id.email
+                
+            comments_data.append({
+                "id": comment.id,
+                "event_id": comment.event_id.id,
+                "user_id": comment.author_id.id,
+                "organizer_id": event.organizer.id,
+                "content": comment.content,
+                "content_created_at": comment.content_created_at.isoformat() if comment.content_created_at else None,
+                "content_updated_at": comment.content_updated_at.isoformat() if comment.content_updated_at else None,
+                "user_name": user_name,
+                "user_profile_pic": comment.author_id.profile_picture.url if comment.author_id.profile_picture else DEFAULT_PROFILE_PIC,
+            })
+
+        ratings_agg = Rating.objects.filter(event_id=event).aggregate(
+            average_rating=Avg('rates'),
+            total_ratings=Count('id')
+        )
+        
+        average_rating = ratings_agg['average_rating']
+        if average_rating is not None:
+            average_rating = round(average_rating, 1)
+        else:
+            average_rating = 0.0 
+
+        total_ratings = ratings_agg['total_ratings'] or 0  
+
+        return {
+            "comments": comments_data,
+            "average_rating": average_rating, 
+            "total_ratings": total_ratings
+        }
+
+    except Event.DoesNotExist:
+        return {"error": "Event not found"}
+    except Exception as e:
+        print(f"Error fetching comments for event {event_id}: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return {"error": str(e)}
+      
 @api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_event_history(request):
     """Get user's registered events and attendance history"""
