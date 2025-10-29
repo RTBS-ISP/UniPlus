@@ -57,7 +57,6 @@ type EventCommentsResponse = {
   total_ratings: number;
 };
 
-type EventWithOptionals = {
 type EventDetail = {
   id: number;
   title: string;
@@ -506,6 +505,10 @@ function EventDateSummary({ schedule }: { schedule: EventSession[] }) {
 
   if (sorted.length === 1) {
     return <span className="text-[#0B1220]">{formatDateGB(first)}</span>;
+  }
+  return null;
+}
+
 // Helper function to get full image URL
 const getImageUrl = (imagePath: string | null) => {
   if (!imagePath) return "https://images.unsplash.com/photo-1604908176997-431651c0d2dc?q=80&w=1200&auto=format&fit=crop";
@@ -737,9 +740,6 @@ export default function EventDetailPage({ params }: Params) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
-  const [message, setMessage] = useState('');
-  const [isRegistered, setIsRegistered] = useState(false);
-  const router = useRouter();
   const [registered, setRegistered] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
 
@@ -774,7 +774,9 @@ export default function EventDetailPage({ params }: Params) {
     async function fetchEventDetail() {
       try {
         setLoading(true);
-        const response = await fetch(`http://localhost:8000/api/events/${id}`);
+        const response = await fetch(`http://localhost:8000/api/events/${id}`, {
+          credentials: 'include'
+        });
         if (!response.ok) throw new Error('Event not found');
         const data = await response.json();
         
@@ -883,7 +885,9 @@ export default function EventDetailPage({ params }: Params) {
         });
         
         // Refresh event data to get updated available spots
-        const eventResponse = await fetch(`http://localhost:8000/api/events/${id}`);
+        const eventResponse = await fetch(`http://localhost:8000/api/events/${id}`, {
+          credentials: 'include'
+        });
         if (eventResponse.ok) {
           const updatedEvent = await eventResponse.json();
           setEvent(updatedEvent);
@@ -1064,12 +1068,12 @@ export default function EventDetailPage({ params }: Params) {
         {/* Register */}
         <div className="mt-6">
           {isOwner ? (
-            <div className="mt-6 flex justify-end">
+            <div className="flex justify-end">
               <Link
                 href={`/events/${id}/dashboard`}
                 className="inline-flex items-center rounded-lg bg-[#6366F1] px-4 py-3 text-sm font-semibold text-white hover:bg-[#4F46E5] transition-colors"
               >
-                Event Dash Board <ChevronRight/>
+                Event Dashboard <ChevronRight className="ml-1 h-4 w-4" />
               </Link>
             </div>
           ) : (
@@ -1081,6 +1085,9 @@ export default function EventDetailPage({ params }: Params) {
             />
           )}
         </div>
+
+        {/* Comments and Ratings Section */}
+        <CommentsRatingsSection eventId={Number(id)} isRegistered={registered} />
 
         {/* Related */}
         {relatedEvents.length > 0 && (
@@ -1098,12 +1105,6 @@ export default function EventDetailPage({ params }: Params) {
             </motion.div>
           </section>
         )}
-        
-        {/* Comments and Ratings Section */}
-        <section className="mt-12">
-          <CommentsRatingsSection eventId={Number(id)} isRegistered={isRegistered} />
-        </section>
-        
       </main>
 
       {/* Footer */}
