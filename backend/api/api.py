@@ -19,6 +19,7 @@ from typing import List, Optional, Union
 import json
 from datetime import datetime
 import uuid 
+import traceback
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
@@ -659,7 +660,7 @@ def get_ticket_detail(request, ticket_id: int):
         "user_email": request.user.email,
     }
 
-@api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema})
+@api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_event_history(request):
     """Get user's registered events and attendance history"""
     if not request.user.is_authenticated:
@@ -693,6 +694,60 @@ def get_user_event_history(request):
         }
     except Exception as e:
         print(f"Error fetching event history: {e}")
+        tickets = (
+            Ticket.objects.filter(attendee=request.user)
+            .select_related("event", "event__organizer")
+            .order_by("-purchase_date")
+        )
+        events_data = []
+        for ticket in tickets:
+            event_obj = ticket.event
+            status = "upcoming" if (
+                (ticket.event_date or ticket.start_date or (event_obj and getattr(event_obj, "event_start_date", None)))
+                and (ticket.event_date or ticket.start_date or event_obj.event_start_date) > timezone.now()
+            ) else "past"
+
+            # Parse event tags
+            event_tags = []
+            if event_obj and event_obj.tags:
+                try:
+                    event_tags = json.loads(event_obj.tags) if isinstance(event_obj.tags, str) else event_obj.tags
+                except:
+                    event_tags = [event_obj.tags] if event_obj.tags else []
+
+            event_date_str = None
+            if ticket.event_date:
+                event_date_str = ticket.event_date.strftime("%Y-%m-%d")
+            elif ticket.start_date:
+                event_date_str = ticket.start_date.date().strftime("%Y-%m-%d") if hasattr(ticket.start_date, 'date') else ticket.start_date.strftime("%Y-%m-%d")
+            elif event_obj and event_obj.event_start_date:
+                event_date_str = event_obj.event_start_date.date().strftime("%Y-%m-%d") if hasattr(event_obj.event_start_date, 'date') else event_obj.event_start_date.strftime("%Y-%m-%d")
+
+            events_data.append({
+                "ticket_id": ticket.id,
+                "event_id": event_obj.id if event_obj else None,
+                "event_title": ticket.event_title,
+                "event_description": event_obj.event_description if event_obj else None,
+                "event_date": event_date_str,  # Now returns YYYY-MM-DD format
+                "location": ticket.location,
+                "is_online": ticket.is_online,
+                "meeting_link": ticket.meeting_link,
+                "status": ticket.status,
+                "organizer": event_obj.organizer.username if event_obj and event_obj.organizer else None,
+                "organizer_role": event_obj.organizer.role if event_obj and event_obj.organizer else "organizer",
+                "event_tags": event_tags,
+                "user_name": ticket.user_name,
+                "user_email": ticket.user_email,
+                "purchase_date": ticket.purchase_date.isoformat() if ticket.purchase_date else None,
+                "qr_code": ticket.qr_code,
+            })
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data),
+        }
+    except Exception as e:
+        print("Error fetching event history:")
+        traceback.print_exc()
         return 400, {"error": str(e)}
 
 
@@ -762,4 +817,61 @@ def get_user_created_events(request):
         }
     except Exception as e:
         print(f"Error fetching created events: {e}")
+        
+@api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def get_user_created_events(request):
+    """Return events created by the logged-in user"""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    try:
+        created_events = (
+            Event.objects.filter(organizer=request.user)
+            .select_related("organizer")
+            .order_by("-event_start_date")
+        )
+        events_data = []
+        for event in created_events:
+            # Determine status (upcoming/past)
+            status = "upcoming" if (
+                event.event_start_date and event.event_start_date > timezone.now()
+            ) else "past"
+
+            # Parse tags safely
+            event_tags = []
+            if event.tags:
+                try:
+                    event_tags = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    event_tags = [event.tags] if event.tags else []
+
+            event_date_str = (
+                event.event_start_date.strftime("%Y-%m-%d")
+                if event.event_start_date
+                else None
+            )
+            events_data.append({
+                "event_id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_date": event_date_str,
+                "location": event.event_address, 
+                "is_online": event.is_online,
+                "meeting_link": event.event_meeting_link,  
+                "status": status,
+                "organizer": event.organizer.username if event.organizer else None,
+                "organizer_role": getattr(event.organizer, "role", "organizer") if event.organizer else "organizer",
+                "event_tags": event_tags,
+                "user_name": request.user.username,
+                "user_email": request.user.email,
+                "purchase_date": None,
+                "qr_code": None,
+            })
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data),
+        }
+    except Exception as e:
+        import traceback
+        print("Error fetching created events:")
+        traceback.print_exc()
         return 400, {"error": str(e)}

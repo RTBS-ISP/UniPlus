@@ -1,7 +1,8 @@
-"use client";
+'use client';
 
 import { use, useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from 'next/navigation';
 import Navbar from "../../components/navbar";
 import { TagAccent } from "../../components/shared/Tag";
 import { events } from "../../../lib/events/events-data";
@@ -687,30 +688,10 @@ export default function EventDetailPage({ params }: Params) {
 
       {/* Footer */}
       <footer className="border-t border-black/10 bg-white/60 py-10">
-        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 md:grid-cols-4">
-          <div>
-            <p className="text-sm text-gray-700">Site name</p>
-            <div className="mt-3 flex items-center gap-3 text-gray-500">
-              <div className="h-5 w-5 rounded-full border" />
-              <div className="h-5 w-5 rounded-full border" />
-              <div className="h-5 w-5 rounded-full border" />
-              <div className="h-5 w-5 rounded-full border" />
-            </div>
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="text-xs text-gray-500">
+            © {new Date().getFullYear()} UniPLUS
           </div>
-          {["Topic", "Topic", "Topic"].map((t, i) => (
-            <div key={i}>
-              <p className="text-sm font-medium text-gray-800">{t}</p>
-              <ul className="mt-3 space-y-1 text-sm text-gray-600">
-                <li><a href="#" className="hover:underline">Page</a></li>
-                <li><a href="#" className="hover:underline">Page</a></li>
-                <li><a href="#" className="hover:underline">Page</a></li>
-                <li><a href="#" className="hover:underline">Page</a></li>
-              </ul>
-            </div>
-          ))}
-        </div>
-        <div className="mx-auto mt-8 max-w-6xl px-4 text-xs text-gray-500">
-          © {new Date().getFullYear()} UniPLUS
         </div>
       </footer>
     </motion.div>
