@@ -232,18 +232,54 @@ export default function TicketDetailPage () {
               <h1 className="text-white text-4xl font-bold mb-4">
                 {ticket.event_title}
               </h1>
-              {tags.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
+              {tags.length > 0 && (() => {
+                const MAX_VISIBLE_TAGS = 3;
+                const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
+                const hiddenTags = tags.slice(MAX_VISIBLE_TAGS);
+
+                return (
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {visibleTags.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+
+                    {hiddenTags.length > 0 && (
+                      <span className="relative group inline-block">
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
+                        >
+                          +{hiddenTags.length} more
+                        </button>
+
+                        {/* hover dropdown */}
+                        <div
+                          className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(400px,90vw)]
+                                    -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
+                                    shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
+                                    group-hover:opacity-100 group-hover:scale-100"
+                        >
+                          <div className="flex flex-wrap gap-2">
+                            {hiddenTags.map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Content Grid */}
