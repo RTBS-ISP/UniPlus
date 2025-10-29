@@ -9,34 +9,15 @@ import FilterPanel, { FilterValues } from "../components/events/FilterPanel";
 import EventCard from "../components/events/EventCard";
 import Pagination from "../components/events/Pagination";
 
-interface EventItem {
-  id: number;
-  title: string;
-  host: string[];
-  tags: string[];
-  excerpt: string;
-  date: string;
-  createdAt: string;
-  popularity: number;
-  available?: number;
-  startDate?: string;
-  endDate?: string;
-  location?: string;
-  image?: string;
-  hostRole?: string;
-  category?: string;
-  capacity?: number;
-  registered?: number;
-  spotsAvailable?: number;
-}
-
 export default function EventsPage() {
-  const [events, setEvents] = useState<EventItem[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"recent" | "popular" | "upcoming">("recent");
-  const [filters, setFilters] = useState<FilterValues>({
+  const [sort, setSort] = 
+    useState<"recent" | "popular" | "upcoming">("recent");
+  const [filters, setFilters] = useState({
     category: "",
     host: "",
     dateFrom: "",
@@ -48,117 +29,71 @@ export default function EventsPage() {
 
   const reduce = useReducedMotion();
 
-  // Fetch events from Django backend
+  // Fetch events from API
   useEffect(() => {
-    const fetchEvents = async () => {
+    async function fetchEvents() {
       try {
         setLoading(true);
-        // REMOVED TRAILING SLASH
-        const res = await fetch("http://localhost:8000/api/events", {
-          method: "GET",
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          throw new Error("Failed to fetch events");
-        }
-
-        const data = await res.json();
-        console.log("Fetched events:", data);
-        
-        const transformedEvents: EventItem[] = data.map((event: Record<string, any>) => {
-          let parsedTags: string[] = [];
-
-          const rawTags: unknown = event.tags;
-
-          if (Array.isArray(rawTags)) {
-            parsedTags = rawTags.map((t: unknown) => String(t).trim()).filter(Boolean);
-          } 
-          else if (typeof rawTags === "string" && rawTags.trim() !== "") {
-            try {
-              const parsedJson = JSON.parse(rawTags);
-              if (Array.isArray(parsedJson)) {
-                parsedTags = parsedJson.map((t: unknown) => String(t).trim()).filter(Boolean);
-              } else {
-                parsedTags = rawTags.split(",").map((t: string) => t.trim()).filter(Boolean);
-              }
-            } catch {
-              const commaSplit = rawTags.split(",").map((t: string) => t.trim()).filter(Boolean);
-              if (commaSplit.length > 1) {
-                parsedTags = commaSplit;
-              } else {
-                const spaceSplit = rawTags.split(/\s+/).filter(Boolean);
-                if (spaceSplit.length > 1) {
-                  parsedTags = spaceSplit;
-                } else {
-                  const camelSplit = rawTags.match(/[A-Z][a-z]+|[a-z]+/g);
-                  if (camelSplit && camelSplit.length > 1) {
-                    parsedTags = camelSplit.map((tag: string) =>
-                      tag.charAt(0).toUpperCase() + tag.slice(1).toLowerCase()
-                    );
-                  } else {
-                    parsedTags = [rawTags];
-                  }
-                }
-              }
-            }
-          }
-
-          const attendeeCount = event.attendee?.length || event.current_attendees || 0;
-          const maxAttendee = event.max_attendee || event.capacity || 0;
-          const available = maxAttendee ? maxAttendee - attendeeCount : undefined;
-
-          return {
-            id: event.id,
-            title: event.event_title || event.title,
-            host: [event.organizer_username || event.organizer_name || "Unknown Organizer"],
-            tags: parsedTags,
-            excerpt: event.event_description?.substring(0, 150) + "..." || event.excerpt || "",
-            date: event.event_start_date || event.date,
-            createdAt: event.event_create_date || event.createdAt,
-            popularity: attendeeCount,
-            available: available,
-            capacity: maxAttendee,
-            registered: attendeeCount,
-            spotsAvailable: available,
-            startDate: event.event_start_date || event.startDate,
-            endDate: event.event_end_date || event.endDate,
-            location: event.is_online ? "Online" : event.event_address || event.location || "TBA",
-            image: event.event_image || event.image || "/placeholder-event.jpg",
-            hostRole: event.organizer_role || event.hostRole || "Organizer",
-            category: parsedTags[0] || event.category || "General",
-          };
-        });
+        const response = await fetch('http://localhost:8000/api/events');
+        if (!response.ok) throw new Error('Failed to fetch events');
+        const data = await response.json();
+        console.log(response);
+        const transformedEvents = data.map((event: any) => ({
+          id: event.id,
+          title: event.event_title,
+          host: [
+          event.organizer_role
+            ? event.organizer_role.charAt(0).toUpperCase() + event.organizer_role.slice(1).toLowerCase()
+            : "Organizer"
+          ],
+          tags: event.tags || [],
+          excerpt: event.event_description,
+          date: event.event_start_date || event.start_date_register,
+          createdAt: event.event_create_date,
+          popularity: event.attendee_count || 0,
+          category: event.tags?.[0] || "",
+          startDate: event.event_start_date?.split('T')[0],
+          endDate: event.event_end_date?.split('T')[0],
+          location: event.event_address || (event.is_online ? "Online" : ""),
+          capacity: event.max_attendee,
+          registered: event.attendee_count,
+          spotsAvailable: event.max_attendee ? event.max_attendee - event.attendee_count : undefined,
+        }));
 
         setEvents(transformedEvents);
+        console.log(transformedEvents);
+        setError(null);
       } catch (err) {
-        console.error("Error fetching events:", err);
-        setError("Failed to load events. Please try again later.");
+        setError(err instanceof Error ? err.message : 'Failed to load events');
+        console.error('Error fetching events:', err);
       } finally {
         setLoading(false);
       }
-    };
-
+    }
     fetchEvents();
   }, []);
 
-  // Build dropdown options from fetched data
+  // Build dropdown options from data
   const categoryOptions = useMemo(() => {
     const set = new Set<string>();
     events.forEach((e) => {
       if (e.category) set.add(e.category);
-      e.tags?.forEach((tag) => set.add(tag));
+      if (e.tags) {
+        e.tags.forEach((tag: string) => set.add(tag));
+      }
     });
     return Array.from(set).sort();
   }, [events]);
 
   const hostOptions = useMemo(() => {
-    const set = new Set<string>();
-    events.forEach((e) => {
-      if (e.host?.[0]) set.add(e.host[0]);
-    });
-    return Array.from(set).sort();
-  }, [events]);
+    return ["Student", "Organizer", "Professor"];
+  }, []);
+
+  // ---- Helper: percent filled (0..1). Lower availability => higher score ----
+  const pctFilled = (e: any) => {
+    const capacity = Number(
+      e.capacity ?? e.maxAttendee ?? e.maxSeats ?? e.limit ?? 0
+    );
 
   // Helper: percent filled (0..1). Lower availability => higher score
   const pctFilled = (e: EventItem) => {
@@ -168,8 +103,11 @@ export default function EventsPage() {
     if (capacity > 0 && !Number.isNaN(registered)) {
       return Math.min(1, Math.max(0, registered / capacity));
     }
-
-    const spotsAvailable = Number(e.spotsAvailable ?? e.available ?? NaN);
+  
+    // Fallback: derive from spotsAvailable if present
+    const spotsAvailable = Number(
+      e.spotsAvailable ?? e.available ?? e.seatsLeft ?? NaN
+    );
     if (capacity > 0 && !Number.isNaN(spotsAvailable)) {
       return Math.min(1, Math.max(0, 1 - spotsAvailable / capacity));
     }
@@ -186,15 +124,12 @@ export default function EventsPage() {
     const q = query.trim().toLowerCase();
 
     let list = events.filter((e) => {
-      const matchesText = [
-        e.title,
-        e.excerpt,
-        ...(e.tags || []),
-        ...(e.host || []),
-      ].some((x) => x.toLowerCase().includes(q));
+      const matchesText = [e.title, e.excerpt, ...(e.tags || []), ...(e.host || [])]
+        .some((x) => x?.toLowerCase().includes(q));
 
       const matchesCategory = filters.category
-        ? e.category === filters.category || (e.tags || []).includes(filters.category)
+        ? e.category === filters.category || 
+          (e.tags || []).includes(filters.category)
         : true;
 
       const matchesHost = filters.host
@@ -207,14 +142,14 @@ export default function EventsPage() {
 
       const matchesDateFrom = filters.dateFrom
         ? e.startDate
-          ? e.startDate >= filters.dateFrom
-          : false
+         ? e.startDate >= filters.dateFrom
+         : false
         : true;
 
       const matchesDateTo = filters.dateTo
         ? e.endDate
-          ? e.endDate <= filters.dateTo
-          : false
+         ? e.endDate <= filters.dateTo
+         : false
         : true;
 
       return (
@@ -243,7 +178,7 @@ export default function EventsPage() {
       list = [...list].sort((a, b) => a.date.localeCompare(b.date));
 
     return list;
-  }, [events, query, sort, filters]);
+  }, [query, sort, filters, events]);
 
   // Pagination
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -334,7 +269,7 @@ export default function EventsPage() {
           <div className="sticky top-30 space-y-4">
             <SortPanel
               value={sort}
-              onChange={(v) => {
+              onChange={(v: any) => {
                 setPage(1);
                 setSort(v);
               }}
@@ -343,11 +278,20 @@ export default function EventsPage() {
               categories={categoryOptions}
               hosts={hostOptions}
               value={filters}
-              onChange={(f) => {
+              onChange={(f: any) => {
                 setPage(1);
                 setFilters(f);
               }}
-              onClear={() => setPage(1)}
+              onClear={() => {
+                setPage(1);
+                setFilters({
+                  category: "",
+                  host: "",
+                  dateFrom: "",
+                  dateTo: "",
+                  location: "",
+                });
+              }}
             />
           </div>
         </motion.aside>
@@ -361,53 +305,62 @@ export default function EventsPage() {
           >
             <SearchBar
               value={query}
-              onChange={(v) => {
+              onChange={(v: string) => {
                 setPage(1);
                 setQuery(v);
               }}
             />
           </motion.div>
 
-          {/* Cards — let EventCard control its own in-view animation */}
-          <div className="space-y-4">
-            {pageItems.map((e, i) => (
-              <EventCard key={e.id} item={e} index={i} stagger={0.06} />
-            ))}
+          {/* Loading State */}
+          {loading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="rounded-xl border border-gray-300 bg-white p-8 text-center"
+            >
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[#6366F1] border-r-transparent"></div>
+              <p className="mt-4 text-sm text-gray-600">Loading events...</p>
+            </motion.div>
+          )}
 
-            {pageItems.length === 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: reduce ? 0 : 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl border-2 border-dashed border-gray-300 bg-white p-12 text-center shadow-sm"
+          {/* Error State */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="rounded-xl border border-red-300 bg-red-50 p-8 text-center"
+            >
+              <p className="text-sm text-red-600">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
               >
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                  <svg
-                    className="w-8 h-8 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">
-                  {events.length === 0 ? "No events available yet" : "No events found"}
-                </h3>
-                <p className="text-gray-600">
-                  {events.length === 0
-                    ? "Check back soon for upcoming events!"
-                    : "Try adjusting your search or filters"}
-                </p>
-              </motion.div>
-            )}
-          </div>
+                Retry
+              </button>
+            </motion.div>
+          )}
 
-          {totalPages > 1 && (
+          {/* Cards */}
+          {!loading && !error && (
+            <div className="space-y-4">
+              {pageItems.map((e, i) => (
+                <EventCard key={e.id} item={e} index={i} stagger={0.06} />
+              ))}
+
+              {pageItems.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: reduce ? 0 : 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500"
+                >
+                  No events found.
+                </motion.div>
+              )}
+            </div>
+          )}
+
+          {!loading && !error && (
             <motion.div
               variants={sectionIn}
               initial="hidden"

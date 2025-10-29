@@ -107,40 +107,41 @@ class EventDateSchema(Schema):
     meeting_link: Optional[str] = None
 
 
+# Standard success response schema
+class SuccessSchema(Schema):
+    success: bool
+    message: str = None
+    user: UserSchema = None
+    event_id: Optional[int] = None
+    tickets_count: Optional[int] = None
+    ticket_numbers: Optional[List[str]] = None
+
+
+# Event Schema for event creation with validators for optional fields
 class EventCreateSchema(Schema):
     """Schema for creating new events"""
     event_title: str
     event_description: str
-    category: Optional[str] = None  # Deprecated but kept for backwards compatibility
+    category: Optional[str] = None
     start_date_register: datetime
     end_date_register: datetime
-    schedule_days: List[Dict[str, Any]]  # List of EventDateSchema-like objects
-    max_attendee: Optional[int] = None  # null = unlimited
-    event_address: Optional[str] = None
+    schedule_days: List[Dict[str, Any]]  
+    max_attendee: Optional[int] = None
+    event_address: Optional[str] = None 
     is_online: bool = False
     event_meeting_link: Optional[str] = None
-    tags: Optional[List[str]] = None  # Max 30 tags, 30 chars each
+    tags: Optional[List[str]] = None
     event_email: Optional[str] = None
     event_phone_number: Optional[str] = None
     event_website_url: Optional[str] = None
     terms_and_conditions: Optional[str] = None
     
+    # Validators to handle empty strings as None
     @validator('event_email', 'event_phone_number', 'event_website_url', 'event_address', 'event_meeting_link', 'terms_and_conditions', pre=True)
     def empty_str_to_none(cls, v):
         if v == '':
             return None
         return v
-    
-    @validator('tags')
-    def validate_tags(cls, v):
-        if v is not None:
-            if len(v) > 30:
-                raise ValueError('Maximum 30 tags allowed')
-            for tag in v:
-                if len(tag) > 30:
-                    raise ValueError('Each tag must be maximum 30 characters')
-        return v
-
 
 class EventSchema(Schema):
     """Basic event listing schema"""
@@ -151,8 +152,8 @@ class EventSchema(Schema):
     event_create_date: datetime
     start_date_register: datetime
     end_date_register: datetime
-    event_start_date: datetime
-    event_end_date: datetime
+    event_start_date: datetime 
+    event_end_date: datetime   
     max_attendee: Optional[int] = None
     current_attendees: int
     event_address: Optional[str] = None
@@ -453,11 +454,38 @@ class UserStatisticsSchema(Schema):
     total_attendees: Optional[int] = None
 
 
+class CommentCreateSchema(Schema):
+    content: str
 
+class RatingCreateSchema(Schema):
+    rates: int
 
+class CommentResponseSchema(Schema):
+    id: int
+    event_id: int          
+    user_id: int
+    organizer_id: int
+    content: str
+    content_created_at: datetime
+    content_updated_at: datetime
+    user_name: str
+    user_profile_pic: Optional[str] = None
 
+class RatingResponseSchema(Schema):
+    id: int
+    event_id: int          
+    organizer_id: int
+    user_id: Optional[int] = None
+    rates: int
+    liked_date: datetime
+    user_name: str
 
+class EventCommentsResponse(Schema):
+    comments: List[CommentResponseSchema]
+    average_rating: float
+    total_ratings: int
 
-
-
-
+class ExportSuccessSchema(Schema):
+    success: bool
+    google_sheet: str
+    total_count: int

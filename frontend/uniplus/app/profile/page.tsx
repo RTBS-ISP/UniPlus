@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "../components/navbar";
 import EditPopup from "../components/profile/EditPopup";
 import Tabs from '../components/profile/Tabs';
+import EventCard from "../components/events/EventCard";
 import { useUser } from "../context/UserContext"; 
 import { Calendar, Zap } from 'lucide-react';
 
@@ -12,9 +13,13 @@ interface EventData {
   event_id: number;
   event_title: string;
   event_date: string;
+  event_description: string;
   location: string;
   organizer: string;
+  organizer_role: string;
   status: string;
+  event_tags: string[];
+  is_online: boolean;
 }
 
 interface StatisticsData {
@@ -24,6 +29,54 @@ interface StatisticsData {
   total_registrations: number;
 }
 
+// Transform event history data to EventCard format
+function transformEventToItem(event: any, index: number) {
+  const eventDateStr = event.event_date || '';
+  const eventDate = eventDateStr ? new Date(eventDateStr) : null;
+  const now = new Date();
+  const isPast = eventDate ? eventDate < now : false;
+  
+  const organizerRole = event.organizer_role 
+    ? event.organizer_role.charAt(0).toUpperCase() + event.organizer_role.slice(1)
+    : 'Organizer';
+  
+  let eventTags = [];
+  if (event.event_tags) {
+    try {
+      eventTags = Array.isArray(event.event_tags) 
+        ? event.event_tags 
+        : JSON.parse(event.event_tags);
+    } catch {
+      eventTags = [];
+    }
+  }
+  
+  // Extract category from tags (first tag is usually the category)
+  const category = eventTags.length > 0 ? eventTags[0] : undefined;
+  
+  // Create excerpt from event description
+  const excerpt = event.event_description 
+    ? (event.event_description.length > 150 
+        ? event.event_description.substring(0, 150) + '...' 
+        : event.event_description)
+    : 'No description available';
+
+  return {
+    id: event.event_id || index,
+    title: event.event_title || 'Untitled Event',
+    host: [organizerRole],
+    tags: eventTags,
+    category: category,
+    excerpt: excerpt,
+    date: eventDateStr,
+    createdAt: eventDateStr || new Date().toISOString(),
+    popularity: 0,
+    startDate: eventDateStr,
+    endDate: eventDateStr,
+    location: event.is_online ? 'Online Event' : (event.location || 'TBA'),
+  };
+}
+
 function ProfilePage() {
   const { user, setUser } = useUser(); 
   const [editOpen, setEditOpen] = useState(false);
@@ -31,6 +84,8 @@ function ProfilePage() {
   const [statistics, setStatistics] = useState<StatisticsData | null>(null);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [createdEvents, setCreatedEvents] = useState<EventData[]>([]);
+  const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
   const router = useRouter();
 
   useEffect(() => {
@@ -38,6 +93,7 @@ function ProfilePage() {
       router.push('/login');
     } else if (user) {
       fetchEventHistory();
+      fetchCreatedEvents();
       fetchStatistics();
     }
   }, [user, router]);
@@ -57,6 +113,26 @@ function ProfilePage() {
       }
     } catch (error) {
       console.error('Error fetching event history:', error);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  const fetchCreatedEvents = async () => {
+    try {
+      setLoadingEvents(true);
+      const response = await fetch("http://localhost:8000/api/user/created-events", {
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCreatedEvents(data.events || []);
+      } else {
+        console.error("Failed to fetch created events");
+      }
+    } catch (error) {
+      console.error("Error fetching created events:", error);
     } finally {
       setLoadingEvents(false);
     }
@@ -110,7 +186,6 @@ function ProfilePage() {
 
     if (res.ok) {
       const updatedUser = await res.json();
-      console.log("Profile updated", updatedUser);
       setUser(updatedUser);
       setEditOpen(false);
     } else {
@@ -121,17 +196,56 @@ function ProfilePage() {
 
   if (!user) return <p>Loading.....</p>
 
-  const items = [
+  // Transform event history to EventCard format
+  const eventItems = eventHistory.map((event, idx) => 
+    transformEventToItem(event, idx)
+  );
+
+  // Sort events: upcoming first, then past
+  const sortedEventItems = [...eventItems].sort((a, b) => {
+    const aDate = a.date ? new Date(a.date).getTime() : 0;
+    const bDate = b.date ? new Date(b.date).getTime() : 0;
+    const now = Date.now();
+    
+    const aIsUpcoming = aDate >= now;
+    const bIsUpcoming = bDate >= now;
+    
+    if (aIsUpcoming && !bIsUpcoming) return -1;
+    if (!aIsUpcoming && bIsUpcoming) return 1;
+    
+    return bDate - aDate; 
+  });
+
+  const filteredEvents = sortedEventItems.filter((e) => {
+    if (!e.date) return false;
+    const eventDate = new Date(e.date);
+    if (filter === "upcoming") return eventDate >= new Date();
+    if (filter === "past") return eventDate < new Date();
+    return true;
+  });
+
+  const createdEventItems = createdEvents.map((event, idx) =>
+    transformEventToItem(event, idx)
+  );
+
+  const sortedCreatedEventItems = [...createdEventItems].sort((a, b) => {
+    const aDate = a.date ? new Date(a.date).getTime() : 0;
+    const bDate = b.date ? new Date(b.date).getTime() : 0;
+    return bDate - aDate;
+  });
+
+
+    const items = [
     {
       title: "Event History",
       content: (
-        <div className="bg-white p-6 rounded-xl shadow-md">
+        <div className="mt-4 rounded-xl">
           {loadingEvents ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-gray-500">Loading events...</div>
             </div>
-          ) : eventHistory.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-800">
+          ) : sortedEventItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-800 bg-white rounded-xl">
               <Calendar className="mb-2.5" size={52} />
               <p className="font-semibold text-xl">No registered events yet</p>
               <p className="text-sm text-gray-600 mt-2">
@@ -139,95 +253,180 @@ function ProfilePage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {eventHistory.map((event, idx) => (
-                <div
-                  key={idx}
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-lg text-gray-900">
-                        {event.event_title}
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {new Date(event.event_date).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        📍 {event.location}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        👤 Organized by {event.organizer}
-                      </p>
+            <div className="flex gap-6">
+              {/* Left Sidebar */}
+              <div className="w-72 flex-shrink-0">
+                <div className="bg-white rounded-xl p-6 shadow-sm sticky top-6">
+                  <h3 className="font-bold text-lg text-gray-800 mb-4">
+                    Statistics
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                      <span className="text-gray-600 text-sm">Total Events</span>
+                      <span className="font-bold text-indigo-600">
+                        {sortedEventItems.length}
+                      </span>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                      event.status === 'active'
-                        ? 'bg-green-100 text-green-800'
-                        : event.status === 'used'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {event.status}
-                    </span>
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                      <span className="text-gray-600 text-sm">Upcoming</span>
+                      <span className="font-bold text-indigo-400">
+                        {
+                          sortedEventItems.filter(
+                            (e) => e.date && new Date(e.date) >= new Date()
+                          ).length
+                        }
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 text-sm">Past Events</span>
+                      <span className="font-bold text-indigo-400">
+                        {
+                          sortedEventItems.filter(
+                            (e) => e.date && new Date(e.date) < new Date()
+                          ).length
+                        }
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <h4 className="font-semibold text-sm text-gray-700 mb-3">
+                      Filter by Status
+                    </h4>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setFilter("all")}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          filter === "all"
+                            ? "bg-indigo-500 text-white"
+                            : "hover:bg-indigo-50 text-gray-700"
+                        }`}
+                      >
+                        All Events
+                      </button>
+                      <button
+                        onClick={() => setFilter("upcoming")}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          filter === "upcoming"
+                            ? "bg-indigo-500 text-white"
+                            : "hover:bg-indigo-50 text-gray-700"
+                        }`}
+                      >
+                        Upcoming
+                      </button>
+                      <button
+                        onClick={() => setFilter("past")}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          filter === "past"
+                            ? "bg-indigo-500 text-white"
+                            : "hover:bg-indigo-50 text-gray-700"
+                        }`}
+                      >
+                        Past Events
+                      </button>
+                    </div>
                   </div>
                 </div>
-              ))}
+              </div>
+
+              {/* Event Cards */}
+              <div className="flex-1 space-y-4">
+                {filteredEvents.map((eventItem, idx) => (
+                  <EventCard 
+                    key={eventItem.id} 
+                    item={eventItem} 
+                    index={idx}
+                    stagger={0.04}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
       ),
     },
     {
-      title: "Statistics",
+      title: "My Events",
       content: (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {loadingStats ? (
-            <div className="col-span-full flex items-center justify-center h-40 text-gray-500">
-              Loading statistics...
+        <div className="mt-4 rounded-xl">
+          {loadingEvents ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-gray-500">Loading your events...</div>
+            </div>
+          ) : sortedCreatedEventItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-800 bg-white rounded-xl">
+              <Calendar className="mb-2.5" size={52} />
+              <p className="font-semibold text-xl">No events created yet</p>
+              <p className="text-sm text-gray-600 mt-2">
+                Create an event to see it here.
+              </p>
             </div>
           ) : (
-            <>
-              {/* Total Events */}
-              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-                <div className="font-medium text-lg mb-2.5">Total Events</div>
-                <div className="font-extrabold text-indigo-500 text-3xl">
-                  {statistics?.total_events || 0}
+            <div className="flex gap-6">
+              {/* Left Sidebar */}
+              <div className="w-72 flex-shrink-0">
+                <div className="bg-white rounded-xl p-6 shadow-sm sticky top-6">
+                  <h3 className="font-bold text-lg text-gray-800 mb-4">
+                    Event Overview
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                      <span className="text-gray-600 text-sm">Total Created</span>
+                      <span className="font-bold text-indigo-600">
+                        {sortedCreatedEventItems.length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                      <span className="text-gray-600 text-sm">Upcoming</span>
+                      <span className="font-bold text-indigo-400">
+                        {
+                          sortedCreatedEventItems.filter(
+                            (e) => e.date && new Date(e.date) >= new Date()
+                          ).length
+                        }
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 text-sm">Completed</span>
+                      <span className="font-bold text-indigo-400">
+                        {
+                          sortedCreatedEventItems.filter(
+                            (e) => e.date && new Date(e.date) < new Date()
+                          ).length
+                        }
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <h4 className="font-semibold text-medium text-gray-700 mb-3">
+                      Quick Actions
+                    </h4>
+                    <div className="flex w-full space-y-2">
+                      <a href="/events/create" className="w-full text-left px-3 py-2 rounded-lg text-sm bg-indigo-500 hover:bg-indigo-600 text-white transition-colors font-medium">
+                        Create New Event
+                      </a>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Upcoming Events */}
-              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-                <div className="font-medium text-lg mb-2.5">Upcoming</div>
-                <div className="font-extrabold text-green-500 text-3xl">
-                  {statistics?.upcoming_events || 0}
-                </div>
+              {/* Event Cards */}
+              <div className="flex-1 space-y-4">
+                {sortedCreatedEventItems.map((eventItem, idx) => (
+                  <EventCard
+                    key={eventItem.id}
+                    item={eventItem}
+                    index={idx}
+                    stagger={0.04}
+                  />
+                ))}
               </div>
-
-              {/* Attended */}
-              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-                <div className="font-medium text-lg mb-2.5">Attended</div>
-                <div className="font-extrabold text-blue-500 text-3xl">
-                  {statistics?.attended_events || 0}
-                </div>
-              </div>
-
-              {/* Total Registrations */}
-              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-                <div className="font-medium text-lg mb-2.5">Registrations</div>
-                <div className="font-extrabold text-purple-500 text-3xl">
-                  {statistics?.total_registrations || 0}
-                </div>
-              </div>
-            </>
+            </div>
           )}
         </div>
       ),
-    },
+    }
   ];
 
   return (
@@ -266,7 +465,7 @@ function ProfilePage() {
 
               {/* Info */}
               <div className="flex flex-col justify-between h-64">
-                <div className="overflow-y-auto">
+                <div>
                   <div className="text-gray-800 font-extrabold text-5xl">
                     {user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1)}{" "}
                     {user.lastName.charAt(0).toUpperCase() + user.lastName.slice(1)}

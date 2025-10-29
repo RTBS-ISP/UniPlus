@@ -167,13 +167,6 @@ export default function Navbar() {
             >
               🎟️ My Tickets
             </Link>
-            <Link
-              href="/my-created-events"
-              className="block px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-              onClick={() => setProfileMenuOpen(false)}
-            >
-              📋 My Created Events
-            </Link>
             <hr className="my-1 border-gray-200" />
             <button
               onClick={handleLogout}
