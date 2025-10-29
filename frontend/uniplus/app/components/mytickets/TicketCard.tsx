@@ -172,7 +172,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
 
   return (
     <Link
-      href={`/mytickets/${ticket.ticket_number}`}
+      href={`/my-ticket/${ticket.ticket_number}`}
       className="rounded-lg shadow-sm bg-white flex flex-col transition-transform hover:scale-[1.02] hover:shadow-md"
     >
       {/* Header */}
