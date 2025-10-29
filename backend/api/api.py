@@ -1057,6 +1057,10 @@ def get_user_event_history(request):
                 "status": ticket.status,
                 "approval_status": ticket.approval_status,
                 "purchase_date": ticket.purchase_date.isoformat(),
+                "event_tags": event_tags, 
+                "organizer_role": request.user.role,
+                "is_online": event.is_online,
+                "location": event.event_address or ("Online" if event.is_online else "TBA"),
                 "qr_code": ticket.qr_code,
                 "is_online": ticket.is_online,
                 "meeting_link": ticket.meeting_link,
@@ -1158,51 +1162,6 @@ def get_user_statistics(request):
         print(f"Error calculating statistics: {e}")
         return 400, {"error": str(e)}
 
-
-@api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
-def get_user_created_events(request):
-    """Get events created by the user (for organizers)"""
-    if not request.user.is_authenticated:
-        return 401, {"error": "Not authenticated"}
-    
-    try:
-        created_events = Event.objects.filter(
-            organizer=request.user
-        ).order_by('-event_create_date')
-        
-        events_data = []
-        for event in created_events:
-            attendee_count = len(event.attendee) if event.attendee else 0
-            
-            # Get pending approvals count for this event
-            pending_approvals = Ticket.objects.filter(
-                event=event,
-                approval_status='pending'
-            ).count()
-            
-            events_data.append({
-                "id": event.id,
-                "event_title": event.event_title,
-                "event_description": event.event_description,
-                "event_start_date": event.event_start_date.isoformat() if event.event_start_date else None,
-                "event_end_date": event.event_end_date.isoformat() if event.event_end_date else None,
-                "max_attendee": event.max_attendee,
-                "current_attendees": attendee_count,
-                "available_spots": (event.max_attendee - attendee_count) if event.max_attendee else 0,
-                "status_registration": event.status_registration,
-                "event_image": event.event_image.url if event.event_image else None,
-                "event_create_date": event.event_create_date.isoformat(),
-                "pending_approvals": pending_approvals,
-            })
-        
-        return 200, {
-            "events": events_data,
-            "total_created": len(events_data),
-        }
-    except Exception as e:
-        print(f"Error fetching created events: {e}")
-        return 400, {"error": str(e)}
-    
 
 @api.get("/events/{event_id}/dashboard", auth=django_auth, response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_event_dashboard(request, event_id: int):
