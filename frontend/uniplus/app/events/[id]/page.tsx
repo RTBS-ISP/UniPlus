@@ -530,6 +530,10 @@ export default function EventDetailPage({ params }: Params) {
   const address2 = event.address2 ?? "";
   const schedule = event.schedule ?? [];
   const image = getImageUrl(event.image || event.event_image);
+  const tagList = event.tags ?? [];
+  const visibleTags = tagList.slice(0, 5);
+  const hiddenTags = tagList.slice(5);
+
 
   return (
     <motion.div className="min-h-screen bg-[#E8ECFF]" variants={pageVariants} initial="initial" animate="animate">
@@ -560,7 +564,8 @@ export default function EventDetailPage({ params }: Params) {
         {/* Tags */}
         <motion.div className="mt-3 flex flex-wrap gap-2" variants={staggerRow}>
           <HostPill label={hostLabel} />
-          {(event.tags ?? []).slice(0, 3).map((t) => (
+          {/* General tags */}
+          {visibleTags.map((t) => (
             <motion.span
               key={t}
               className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]"
@@ -568,6 +573,36 @@ export default function EventDetailPage({ params }: Params) {
               {t}
             </motion.span>
           ))}
+
+          {/* +N hovercard */}
+          {hiddenTags.length > 0 && (
+            <span className="relative group inline-block">
+              <button
+                type="button"
+                className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
+              >
+                +{hiddenTags.length}
+              </button>
+
+              <div
+                className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(420px,90vw)]
+                          -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
+                          shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
+                          group-hover:opacity-100 group-hover:scale-100"
+              >
+                <div className="flex flex-wrap gap-2">
+                  {hiddenTags.map((t) => (
+                    <span
+                      key={t}
+                      className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </span>
+          )}
         </motion.div>
 
         {/* About */}
