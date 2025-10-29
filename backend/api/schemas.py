@@ -6,7 +6,6 @@ from datetime import datetime
 class UserTicketSchema(Schema):
     ticket_id: int
     qr_code: str
-    ticket_number: str
     event_id: Optional[int]
     event_title: str
     event_description: Optional[str]
