@@ -85,6 +85,7 @@ function ProfilePage() {
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [createdEvents, setCreatedEvents] = useState<EventData[]>([]);
+  const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
   const router = useRouter();
 
   useEffect(() => {
@@ -185,7 +186,6 @@ function ProfilePage() {
 
     if (res.ok) {
       const updatedUser = await res.json();
-      console.log("Profile updated", updatedUser);
       setUser(updatedUser);
       setEditOpen(false);
     } else {
@@ -216,6 +216,14 @@ function ProfilePage() {
     return bDate - aDate; 
   });
 
+  const filteredEvents = sortedEventItems.filter((e) => {
+    if (!e.date) return false;
+    const eventDate = new Date(e.date);
+    if (filter === "upcoming") return eventDate >= new Date();
+    if (filter === "past") return eventDate < new Date();
+    return true;
+  });
+
   const createdEventItems = createdEvents.map((event, idx) =>
     transformEventToItem(event, idx)
   );
@@ -227,7 +235,7 @@ function ProfilePage() {
   });
 
 
-  const items = [
+    const items = [
     {
       title: "Event History",
       content: (
@@ -245,15 +253,93 @@ function ProfilePage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {sortedEventItems.map((eventItem, idx) => (
-                <EventCard 
-                  key={eventItem.id} 
-                  item={eventItem} 
-                  index={idx}
-                  stagger={0.04}
-                />
-              ))}
+            <div className="flex gap-6">
+              {/* Left Sidebar */}
+              <div className="w-72 flex-shrink-0">
+                <div className="bg-white rounded-xl p-6 shadow-sm sticky top-6">
+                  <h3 className="font-bold text-lg text-gray-800 mb-4">
+                    Statistics
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                      <span className="text-gray-600 text-sm">Total Events</span>
+                      <span className="font-bold text-indigo-600">
+                        {sortedEventItems.length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                      <span className="text-gray-600 text-sm">Upcoming</span>
+                      <span className="font-bold text-indigo-400">
+                        {
+                          sortedEventItems.filter(
+                            (e) => e.date && new Date(e.date) >= new Date()
+                          ).length
+                        }
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 text-sm">Past Events</span>
+                      <span className="font-bold text-indigo-400">
+                        {
+                          sortedEventItems.filter(
+                            (e) => e.date && new Date(e.date) < new Date()
+                          ).length
+                        }
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <h4 className="font-semibold text-sm text-gray-700 mb-3">
+                      Filter by Status
+                    </h4>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setFilter("all")}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          filter === "all"
+                            ? "bg-indigo-500 text-white"
+                            : "hover:bg-indigo-50 text-gray-700"
+                        }`}
+                      >
+                        All Events
+                      </button>
+                      <button
+                        onClick={() => setFilter("upcoming")}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          filter === "upcoming"
+                            ? "bg-indigo-500 text-white"
+                            : "hover:bg-indigo-50 text-gray-700"
+                        }`}
+                      >
+                        Upcoming
+                      </button>
+                      <button
+                        onClick={() => setFilter("past")}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          filter === "past"
+                            ? "bg-indigo-500 text-white"
+                            : "hover:bg-indigo-50 text-gray-700"
+                        }`}
+                      >
+                        Past Events
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Event Cards */}
+              <div className="flex-1 space-y-4">
+                {filteredEvents.map((eventItem, idx) => (
+                  <EventCard 
+                    key={eventItem.id} 
+                    item={eventItem} 
+                    index={idx}
+                    stagger={0.04}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -276,66 +362,71 @@ function ProfilePage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {sortedCreatedEventItems.map((eventItem, idx) => (
-                <EventCard
-                  key={eventItem.id}
-                  item={eventItem}
-                  index={idx}
-                  stagger={0.04}
-                />
-              ))}
+            <div className="flex gap-6">
+              {/* Left Sidebar */}
+              <div className="w-72 flex-shrink-0">
+                <div className="bg-white rounded-xl p-6 shadow-sm sticky top-6">
+                  <h3 className="font-bold text-lg text-gray-800 mb-4">
+                    Event Overview
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                      <span className="text-gray-600 text-sm">Total Created</span>
+                      <span className="font-bold text-indigo-600">
+                        {sortedCreatedEventItems.length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pb-3 border-b border-gray-200">
+                      <span className="text-gray-600 text-sm">Upcoming</span>
+                      <span className="font-bold text-indigo-400">
+                        {
+                          sortedCreatedEventItems.filter(
+                            (e) => e.date && new Date(e.date) >= new Date()
+                          ).length
+                        }
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600 text-sm">Completed</span>
+                      <span className="font-bold text-indigo-400">
+                        {
+                          sortedCreatedEventItems.filter(
+                            (e) => e.date && new Date(e.date) < new Date()
+                          ).length
+                        }
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-6 border-t border-gray-200">
+                    <h4 className="font-semibold text-medium text-gray-700 mb-3">
+                      Quick Actions
+                    </h4>
+                    <div className="flex w-full space-y-2">
+                      <a href="/events/create" className="w-full text-left px-3 py-2 rounded-lg text-sm bg-indigo-500 hover:bg-indigo-600 text-white transition-colors font-medium">
+                        Create New Event
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Event Cards */}
+              <div className="flex-1 space-y-4">
+                {sortedCreatedEventItems.map((eventItem, idx) => (
+                  <EventCard
+                    key={eventItem.id}
+                    item={eventItem}
+                    index={idx}
+                    stagger={0.04}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
       ),
-    },
-    {
-      title: "Statistics",
-      content: (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {loadingStats ? (
-            <div className="col-span-full flex items-center justify-center h-40 text-gray-500">
-              Loading statistics...
-            </div>
-          ) : (
-            <>
-              {/* Total Events */}
-              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-                <div className="font-medium text-lg mb-2.5">Total Events</div>
-                <div className="font-extrabold text-indigo-500 text-3xl">
-                  {statistics?.total_events || 0}
-                </div>
-              </div>
-
-              {/* Upcoming */}
-              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-                <div className="font-medium text-lg mb-2.5">Upcoming</div>
-                <div className="font-extrabold text-green-500 text-3xl">
-                  {statistics?.upcoming_events || 0}
-                </div>
-              </div>
-
-              {/* Attended */}
-              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-                <div className="font-medium text-lg mb-2.5">Attended</div>
-                <div className="font-extrabold text-blue-500 text-3xl">
-                  {statistics?.attended_events || 0}
-                </div>
-              </div>
-
-              {/* Total Registrations */}
-              <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
-                <div className="font-medium text-lg mb-2.5">Registrations</div>
-                <div className="font-extrabold text-purple-500 text-3xl">
-                  {statistics?.total_registrations || 0}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      ),
-    },
+    }
   ];
 
   return (
