@@ -467,6 +467,9 @@ function TicketDetailPage() {
                   )}
                 </div>
 
+                {/* Horizontal Line */}
+                <hr className="border-gray-300" />
+
                 {/* User Information - Replaces Description */}
                 <div>
                   <h2 className="text-gray-800 font-bold text-lg mb-4">USER INFORMATION</h2>
@@ -497,22 +500,23 @@ function TicketDetailPage() {
                   </div>
                 </div>
 
-                {/* Additional Info - Removed Status field */}
+                {/* Horizontal Line */}
+                <hr className="border-gray-300" />
+
+                {/* Additional Info - Updated labels and full Ticket ID */}
                 <div className="bg-indigo-100 rounded-lg p-4 space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-800">Organized by</span>
                     <span className="text-gray-800 font-semibold">{ticket.organizer_name || 'Unknown Organizer'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-800">Ticket ID</span>
-                    <span className="text-gray-800 font-semibold">{ticket.qr_code.substring(0, 8).toUpperCase()}</span>
+                    <span className="text-gray-800">Registered on</span>
+                    <span className="text-gray-800 font-semibold">{formatDate(ticket.purchase_date)}</span>
                   </div>
-                  {ticket.purchase_date && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-800">Purchased</span>
-                      <span className="text-gray-800 font-semibold">{formatDate(ticket.purchase_date)}</span>
-                    </div>
-                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-800">Ticket ID</span>
+                    <span className="text-gray-800 font-semibold">{ticket.qr_code}</span>
+                  </div>
                 </div>
               </div>
 
@@ -538,10 +542,10 @@ function TicketDetailPage() {
                   }`}>
                     <p className="text-sm font-semibold">
                       {ticket.approval_status === 'pending' 
-                        ? '⏳ Ticket Pending Approval' 
-                        : '❌ Ticket Not Approved'}
+                        ? 'Ticket Pending Approval' 
+                        : 'Ticket Not Approved'}
                     </p>
-                    <p className="text-xs mt-1">
+                    <p className="text-xs mt-1">    
                       {ticket.approval_status === 'pending'
                         ? 'Your ticket is awaiting organizer approval'
                         : 'This ticket has been rejected by the organizer'}
