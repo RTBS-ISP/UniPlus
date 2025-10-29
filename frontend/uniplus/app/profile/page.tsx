@@ -374,7 +374,7 @@ function ProfilePage() {
 
               {/* Info */}
               <div className="flex flex-col justify-between h-64">
-                <div className="overflow-y-auto">
+                <div>
                   <div className="text-gray-800 font-extrabold text-5xl">
                     {user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1)}{" "}
                     {user.lastName.charAt(0).toUpperCase() + user.lastName.slice(1)}
