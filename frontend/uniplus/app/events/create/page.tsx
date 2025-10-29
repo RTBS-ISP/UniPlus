@@ -1,14 +1,24 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "../../components/navbar";
 import TagSelector from "../../components/events/TagSelector";
 import EventScheduleDays, { DaySlot } from "../../components/events/EventScheduleDays";
 import { useAlert } from "../../components/ui/AlertProvider";
 import { Trash2 } from "lucide-react";
-import { CATEGORIES } from "../../../lib/events/categories";
-import LiveSummaryCard from "../../components/events/LiveSummaryCard";
+
+// ---- Categories (edit this list as needed) ----
+const CATEGORIES = [
+  "Engineering",
+  "Science",
+  "Business",
+  "Humanities",
+  "Architecture",
+  "Arts",
+  "Sports",
+  "Technology",
+];
 
 type FormData = {
   eventTitle: string;
@@ -22,6 +32,8 @@ type FormData = {
   termsAndConditions: string;
   registrationStartDate: string;
   registrationEndDate: string;
+  eventStartDate: string;
+  eventEndDate: string;
   imageFile: File | null;
   imagePreview: string;
 };
@@ -34,30 +46,6 @@ const inputBase =
   "w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-gray-900 placeholder-gray-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
 const sectionCard =
   "rounded-2xl border border-gray-200 bg-white p-6 shadow-sm";
-
-/* ---------------- Helpers for friendly errors ---------------- */
-async function parseJsonSafe(res: Response) {
-  try { return await res.json(); } catch { return null; }
-}
-function extractBackendMsg(payload: any): string | null {
-  if (!payload) return null;
-  if (typeof payload.error === "string") return payload.error;
-  if (typeof payload.detail === "string") return payload.detail;
-  if (Array.isArray(payload.detail)) {
-    return payload.detail
-      .map((err: any) => (err?.loc ? `${err.loc.join(".")}: ${err.msg}` : err?.msg || ""))
-      .filter(Boolean)
-      .join(", ");
-  }
-  return null;
-}
-function friendlyFromStatus(status: number) {
-  if (status === 401) return "You’re not logged in. Please sign in to create an event.";
-  if (status === 403) return "Session expired or CSRF invalid. Please refresh and try again.";
-  if (status === 413) return "Upload too large. Please use a smaller image.";
-  if (status >= 500) return "Server error. Please try again in a moment.";
-  return "";
-}
 
 export default function EventCreatePage() {
   const toast = useAlert();
@@ -74,16 +62,18 @@ export default function EventCreatePage() {
     termsAndConditions: "",
     registrationStartDate: "",
     registrationEndDate: "",
+    eventStartDate: "",
+    eventEndDate: "",
     imageFile: null,
     imagePreview: "",
   });
 
-  // schedule is fully controlled here and edited inside EventScheduleDays
   const [scheduleDays, setScheduleDays] = useState<DaySlot[]>([
     { date: "", startTime: "", endTime: "", isOnline: false, address: "", meetingLink: "" },
   ]);
 
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,47 +93,64 @@ export default function EventCreatePage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const summary = useMemo(() => {
+    const first = scheduleDays.find((d) => d.date && d.startTime);
+    const last = [...scheduleDays].reverse().find((d) => d.date && d.endTime);
+
+    const when =
+      first && last
+        ? `${first.date} • ${first.startTime} → ${last.date} • ${last.endTime}`
+        : "TBD";
+
+    const firstWithLoc = scheduleDays.find(
+      (d) => d.date && (d.isOnline || d.address.trim())
+    );
+
+    const where = firstWithLoc
+      ? firstWithLoc.isOnline
+        ? firstWithLoc.meetingLink
+          ? "Online • Link provided"
+          : "Online • Link TBD"
+        : firstWithLoc.address || "Location TBD"
+      : "Location TBD";
+
+    const capacity = data.maxAttendee ? `${data.maxAttendee} people` : "Unlimited";
+
+    return {
+      when,
+      where,
+      capacity,
+      tags: data.tags.length ? data.tags.join(", ") : "—",
+      modeLabel: firstWithLoc ? (firstWithLoc.isOnline ? "Online event" : "In-person event") : "",
+    };
+  }, [scheduleDays, data.maxAttendee, data.tags]);
+
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  e.preventDefault();
+  setError("");
+  setLoading(true);
 
     try {
       // ---------- Validation (with toasts) ----------
       if (!data.eventTitle || !data.eventDescription) {
         const msg = "Event title and description are required.";
+        setError(msg);
         toast({ text: msg, variant: "error" });
         setLoading(false);
         return;
       }
       if (scheduleDays.length === 0) {
         const msg = "Please add at least one day.";
+        setError(msg);
         toast({ text: msg, variant: "warning" });
         setLoading(false);
         return;
       }
-      // Require at least one tag
-      if (data.tags.length < 1) {
-        const msg = "Please select at least one tag.";
-        toast({ text: msg, variant: "error" });
-
-        // Show the browser bubble with our custom message
-        const el = document.querySelector<HTMLInputElement>('input[name="tags_value"]');
-        if (el) {
-          el.setCustomValidity("Please select a tag.");
-          // reportValidity shows the bubble at the hidden input anchor
-          el.reportValidity();
-          // clear message so it doesn't persist after fixing
-          setTimeout(() => el.setCustomValidity(""), 0);
-        }
-
-        setLoading(false);
-        return;
-      }
-
       for (let i = 0; i < scheduleDays.length; i++) {
         const d = scheduleDays[i];
         if (!d.date || !d.startTime || !d.endTime) {
           const msg = `Day ${i + 1}: date, start time, and end time are required.`;
+          setError(msg);
           toast({ text: msg, variant: "error" });
           setLoading(false);
           return;
@@ -152,6 +159,7 @@ export default function EventCreatePage() {
         const endMs = new Date(`${d.date}T${d.endTime}:00`).getTime();
         if (!(endMs > startMs)) {
           const msg = `Day ${i + 1}: end time must be after start time.`;
+          setError(msg);
           toast({ text: msg, variant: "error" });
           setLoading(false);
           return;
@@ -169,12 +177,7 @@ export default function EventCreatePage() {
         method: "GET",
         credentials: "include",
       });
-      if (!csrfRes.ok) {
-        const csrfMsg = friendlyFromStatus(csrfRes.status) || "Could not get CSRF token.";
-        toast({ text: csrfMsg, variant: "error" });
-        setLoading(false);
-        return;
-      }
+      if (!csrfRes.ok) throw new Error("Failed to get CSRF token");
       const csrfData = await csrfRes.json();
 
       // ---------- Payload ----------
@@ -195,7 +198,6 @@ export default function EventCreatePage() {
       formData.append("event_start_date", overallStartISO);
       formData.append("event_end_date", overallEndISO);
 
-      // include per-day location fields
       formData.append(
         "schedule_days",
         JSON.stringify(
@@ -228,27 +230,29 @@ export default function EventCreatePage() {
         body: formData,
       });
 
-      const payload = await parseJsonSafe(res);
-      if (!res.ok) {
-        const nice = friendlyFromStatus(res.status);
-        const backend = extractBackendMsg(payload);
-        const msg = nice || backend || "Failed to create event.";
-        toast({ text: msg, variant: "error" });
-        setLoading(false);
-        return;
-      }
-
-      if (payload?.success) {
+      const result = await res.json();
+      if (res.ok && result.success) {
         toast({ text: "Event created successfully!", variant: "success" });
         window.location.href = "/events";
         return;
       }
 
-      const msg = extractBackendMsg(payload) || "Failed to create event.";
+      let msg = "Failed to create event";
+      if (result.error) msg = result.error;
+      else if (result.detail) {
+        msg = Array.isArray(result.detail)
+          ? result.detail.map((err: any) => `${err.loc.join(".")}: ${err.msg}`).join(", ")
+          : typeof result.detail === "string"
+          ? result.detail
+          : JSON.stringify(result.detail);
+      }
+      setError(msg);
       toast({ text: msg, variant: "error" });
     } catch (ex) {
       console.error(ex);
-      toast({ text: "Network error. Please check your connection and try again.", variant: "error" });
+      const msg = "Failed to create event. Make sure you're logged in.";
+      setError(msg);
+      toast({ text: msg, variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -379,12 +383,7 @@ export default function EventCreatePage() {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <TagSelector
-                    tags={data.tags}
-                    setTags={(tags) => setData({ ...data, tags })}
-                    required
-                    requiredMessage="Please select a tag."
-                  />
+                  <TagSelector tags={data.tags} setTags={(tags) => setData({ ...data, tags })} />
                 </div>
               </div>
             </section>
@@ -507,19 +506,71 @@ export default function EventCreatePage() {
                 {loading ? "Creating..." : "Create Event"}
               </button>
             </div>
+
+            {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
 
           {/* Right summary */}
           <aside className="md:col-span-4">
-            <LiveSummaryCard
-              scheduleDays={scheduleDays}
-              category={data.category}
-              registrationStartDate={data.registrationStartDate}
-              registrationEndDate={data.registrationEndDate}
-              maxAttendee={data.maxAttendee}
-              tags={data.tags}
-              imagePreview={data.imagePreview}
-            />
+            <div className={`${sectionCard} sticky top-30`}>
+              <h3 className="text-base font-semibold text-gray-900">Live Summary</h3>
+
+              <dl className="mt-4 space-y-4">
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-gray-500">When</dt>
+                  <dd className="text-sm text-gray-900">{summary.when || "TBD"}</dd>
+                </div>
+
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-gray-500">Where</dt>
+                  <dd className="text-sm text-gray-900">{summary.where || "Location TBD"}</dd>
+                  {summary.modeLabel && (
+                    <p className="text-xs text-gray-500">{summary.modeLabel}</p>
+                  )}
+                </div>
+
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-gray-500">Category</dt>
+                  <dd className="text-sm text-gray-900">{data.category || "—"}</dd>
+                </div>
+
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-gray-500">Capacity</dt>
+                  <dd className="text-sm text-gray-900">{summary.capacity || "Unlimited"}</dd>
+                </div>
+
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-gray-500">Tags</dt>
+                  <dd className="text-sm text-gray-900">
+                    {summary.tags !== "—" ? summary.tags : "—"}
+                  </dd>
+                </div>
+
+                <hr className="border-gray-200" />
+
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-gray-500">Registration Period</dt>
+                  <dd className="text-sm text-gray-900">
+                    {data.registrationStartDate && data.registrationEndDate
+                      ? `${new Date(data.registrationStartDate).toLocaleString()} — ${new Date(
+                          data.registrationEndDate
+                        ).toLocaleString()}`
+                      : "Not specified"}
+                  </dd>
+                </div>
+
+                {data.imagePreview && (
+                  <div className="pt-2">
+                    <dt className="text-xs uppercase tracking-wide text-gray-500">Event Image</dt>
+                    <img
+                      src={data.imagePreview}
+                      alt="Preview"
+                      className="mt-2 h-24 w-full rounded-md object-cover border border-gray-200"
+                    />
+                  </div>
+                )}
+              </dl>
+            </div>
           </aside>
         </form>
       </main>

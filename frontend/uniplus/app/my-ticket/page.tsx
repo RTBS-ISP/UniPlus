@@ -1,287 +1,247 @@
-'use client';
+"use client"
+import Navbar from "../components/navbar"
+import TicketCard from "../components/mytickets/TicketCard";
+import { useState, useEffect } from "react"
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Navbar from '../components/navbar';
-import { Calendar, Clock, MapPin, AlertCircle } from 'lucide-react';
-
-/* ---------- Utility Functions ---------- */
-function formatDate(dateStr: string | null | undefined) {
-  if (!dateStr) return 'TBD';
-  try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return dateStr;
-  }
+interface EventDate {
+  date: string;
+  time: string;
+  endTime?: string;
+  location: string;
+  is_online: boolean;
+  meeting_link?: string;
 }
 
-function formatTime(timeStr: string) {
-  if (!timeStr) return 'TBD';
-  if (timeStr.includes(':')) {
-    return timeStr.substring(0, 5);
-  }
-  return timeStr;
+interface UserInformation {
+  name: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
 }
 
-/* ---------- Types ---------- */
 interface Ticket {
   date: string;
   time: string;
   location: string;
   organizer: string;
-  user_information: {
-    name: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone?: string;
-  };
+  user_information: UserInformation;
   event_title: string;
   event_description: string;
   ticket_number: string;
   event_id: number;
   is_online: boolean;
   event_meeting_link?: string;
+  event_image?: string;
+  event_dates: EventDate[];
+  approval_status: string; // Add approval_status to the interface
 }
 
-/* ---------- Main Page ---------- */
-export default function MyTicketsPage() {
+function MyTicketPage() {
+  const [activeFilter, setActiveFilter] = useState("all");
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [filteredTickets, setFilteredTickets] = useState<Ticket[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
+  // Fetch user data including tickets
   useEffect(() => {
+    const fetchTickets = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/user/tickets', {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch tickets');
+        }
+
+        const data = await response.json();
+        
+        // Transform the API response to match the old interface
+        const transformedTickets: Ticket[] = data.tickets.map((ticket: any) => ({
+          date: ticket.date || '',
+          time: ticket.time || '',
+          location: ticket.location || '',
+          organizer: ticket.organizer_name || '',
+          user_information: {
+            name: '',
+            firstName: '',
+            lastName: '',
+            email: '',
+            phone: ''
+          },
+          event_title: ticket.event_title,
+          event_description: ticket.event_description || '',
+          ticket_number: ticket.qr_code, // Map qr_code to ticket_number
+          event_id: ticket.event_id || 0,
+          is_online: ticket.is_online,
+          event_meeting_link: ticket.event_meeting_link,
+          event_image: ticket.event_image,
+          event_dates: ticket.event_dates || [],
+          approval_status: ticket.approval_status || 'pending' // Add approval_status
+        }));
+        
+        // Filter to only show approved tickets
+        const approvedTickets = transformedTickets.filter(ticket => 
+          ticket.approval_status === 'approved'
+        );
+        
+        setTickets(approvedTickets);
+        setLoading(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+        setLoading(false);
+      }
+    };
+
     fetchTickets();
   }, []);
 
-  const fetchTickets = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Filter tickets based on activeFilter and searchQuery
+  useEffect(() => {
+    let filtered = tickets;
 
-      const response = await fetch('http://localhost:8000/api/user', {
-        credentials: 'include',
+    // Apply search filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(ticket =>
+        ticket.event_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ticket.event_description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        ticket.location.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+
+    // Apply time-based filter
+    const now = new Date();
+    
+    if (activeFilter === "present") {
+      // Upcoming events
+      filtered = filtered.filter(ticket => {
+        const eventDate = new Date(ticket.date);
+        return eventDate >= now;
       });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          router.push('/login');
-          return;
-        }
-        throw new Error(`Failed to fetch tickets: ${response.status}`);
-      }
-
-      const data = await response.json();
-      if (data.tickets && Array.isArray(data.tickets)) {
-        setTickets(data.tickets);
-      } else {
-        setTickets([]);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load tickets');
-    } finally {
-      setLoading(false);
+    } else if (activeFilter === "pending") {
+      // Past events
+      filtered = filtered.filter(ticket => {
+        const eventDate = new Date(ticket.date);
+        return eventDate < now;
+      });
     }
-  };
 
-  const isUpcoming = (dateStr: string | null | undefined) => {
-    if (!dateStr) return false;
-    try {
-      const eventDate = new Date(dateStr);
-      if (isNaN(eventDate.getTime())) return false;
-      const now = new Date();
-      return eventDate > now;
-    } catch {
-      return false;
-    }
-  };
+    setFilteredTickets(filtered);
+  }, [tickets, activeFilter, searchQuery]);
 
-  const upcomingTickets = tickets.filter((t) => isUpcoming(t.date));
-  const pastTickets = tickets.filter((t) => !isUpcoming(t.date));
+  // Count tickets by status (only approved tickets)
+  const upcomingCount = tickets.filter(ticket => {
+    const eventDate = new Date(ticket.date);
+    return eventDate >= new Date();
+  }).length;
+
+  const pastCount = tickets.filter(ticket => {
+    const eventDate = new Date(ticket.date);
+    return eventDate < new Date();
+  }).length;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#E8ECFF]">
+      <main>
         <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-xl text-gray-900">Loading tickets...</div>
+        <div className="min-h-screen bg-indigo-100 flex items-center justify-center">
+          <div className="text-gray-800 text-xl">Loading tickets...</div>
         </div>
-      </div>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main>
+        <Navbar />
+        <div className="min-h-screen bg-indigo-100 flex items-center justify-center">
+          <div className="text-red-600 text-xl">Error: {error}</div>
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#E8ECFF]">
+    <main>
       <Navbar />
+      <div className="min-h-screen bg-indigo-100">
+        {/* Header */}
+        <div className="flex flex-col gap-y-5 max-w-7xl mx-auto px-8 py-8">
+          <h1 className="text-gray-800 text-5xl font-extrabold pt-10">My Tickets</h1>
+          <p className="text-gray-800 font-medium">Your approved event tickets</p>
+        </div>
 
-      <main className="mx-auto max-w-6xl px-4 py-10">
-        <h1 className="text-4xl font-extrabold tracking-tight text-[#0B1220] mb-2">
-          My Tickets
-        </h1>
-        <p className="text-gray-600 mb-8">
-          {tickets.length} ticket{tickets.length !== 1 ? 's' : ''} found
-        </p>
-
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="font-semibold text-red-900">Error</p>
-              <p className="text-red-700">{error}</p>
+        {/* Search & Filter Section */}
+        <div className="max-w-7xl mx-auto px-8 py-2">
+          <div className="rounded-lg shadow-sm p-8 mb-8 bg-white">
+            <input
+              type="text"
+              placeholder="Search your tickets.."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="flex-1 px-4 py-3 w-full rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-gray-800 placeholder-gray-400"
+            />
+            <div className="flex mt-4 gap-2">
+              <button
+                onClick={() => setActiveFilter("all")}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                  activeFilter === "all"
+                    ? "bg-indigo-500 text-white"
+                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                All ({tickets.length})
+              </button>
+              <button
+                onClick={() => setActiveFilter("present")}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                  activeFilter === "present"
+                    ? "bg-indigo-500 text-white"
+                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Upcoming ({upcomingCount})
+              </button>
+              <button
+                onClick={() => setActiveFilter("pending")}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                  activeFilter === "pending"
+                    ? "bg-indigo-500 text-white"
+                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                Past ({pastCount})
+              </button>
             </div>
           </div>
-        )}
-
-        {tickets.length === 0 ? (
-          <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
-            <div className="mb-4 text-6xl">🎫</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">No Tickets Yet</h2>
-            <p className="text-gray-600 mb-6">
-              Register for events to get your tickets here
-            </p>
-            <button
-              onClick={() => router.push('/events')}
-              className="inline-block px-6 py-3 bg-[#6366F1] text-white font-semibold rounded-xl hover:bg-[#4F46E5] transition"
-            >
-              Browse Events
-            </button>
-          </div>
-        ) : (
-          <>
-            {upcomingTickets.length > 0 && (
-              <section className="mb-12">
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="w-1 h-8 bg-[#6366F1] rounded-full"></div>
-                  <h2 className="text-2xl font-bold text-[#0B1220]">
-                    Upcoming Events ({upcomingTickets.length})
-                  </h2>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {upcomingTickets.map((ticket, idx) => (
-                    <TicketCard
-                      key={`upcoming-${idx}`}
-                      ticket={ticket}
-                      onClick={() => router.push(`/my-ticket/${ticket.ticket_number}`)}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {pastTickets.length > 0 && (
-              <section>
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="w-1 h-8 bg-gray-400 rounded-full"></div>
-                  <h2 className="text-2xl font-bold text-[#0B1220]">
-                    Past Events ({pastTickets.length})
-                  </h2>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {pastTickets.map((ticket, idx) => (
-                    <TicketCard
-                      key={`past-${idx}`}
-                      ticket={ticket}
-                      onClick={() => router.push(`/my-ticket/${ticket.ticket_number}`)}
-                      isPast
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-          </>
-        )}
-      </main>
-
-      <footer className="border-t border-black/10 bg-white/60 py-10 mt-12">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="text-xs text-gray-500">
-            © {new Date().getFullYear()} UniPLUS
-          </div>
         </div>
-      </footer>
-    </div>
+
+        {/* Tickets Display */}
+        <div className="max-w-7xl mx-auto px-8 py-2 pb-12">
+          {filteredTickets.length === 0 ? (
+            <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+              <p className="text-gray-500 text-lg">
+                {searchQuery ? "No approved tickets found matching your search." : "You don't have any approved tickets yet."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredTickets.map((ticket) => (
+                    <TicketCard key={ticket.ticket_number} ticket={ticket} />
+                ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
   );
 }
-
-/* ---------- TicketCard Component ---------- */
-interface TicketCardProps {
-  ticket: Ticket;
-  onClick: () => void;
-  isPast?: boolean;
-}
-
-function TicketCard({ ticket, onClick, isPast = false }: TicketCardProps) {
-  return (
-    <div
-      onClick={onClick}
-      className={`rounded-2xl shadow-sm overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1 cursor-pointer ${
-        isPast ? 'bg-gray-100 opacity-75' : 'bg-white'
-      }`}
-    >
-      <div
-        className={`p-4 text-white ${
-          isPast
-            ? 'bg-gradient-to-r from-gray-400 to-gray-500'
-            : 'bg-gradient-to-r from-[#6366F1] to-[#4F46E5]'
-        }`}
-      >
-        <h3 className="font-bold text-lg truncate">{ticket.event_title}</h3>
-        <p className="text-sm opacity-90">
-          {isPast ? 'Past Event' : 'Upcoming Event'}
-        </p>
-      </div>
-
-      <div className="p-4 space-y-3">
-        {/* Date */}
-        <div className="flex items-start gap-3">
-          <Calendar className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Date</p>
-            <p className="font-semibold text-gray-900">{formatDate(ticket.date)}</p>
-          </div>
-        </div>
-
-        {/* Time */}
-        <div className="flex items-start gap-3">
-          <Clock className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Time</p>
-            <p className="font-semibold text-gray-900">{formatTime(ticket.time)}</p>
-          </div>
-        </div>
-
-        {/* Location */}
-        <div className="flex items-start gap-3">
-          <MapPin className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
-          <div>
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Location</p>
-            <p className="font-semibold text-gray-900">
-              {ticket.is_online ? '🌐 Online' : ticket.location || 'TBD'}
-            </p>
-          </div>
-        </div>
-
-        <div className="pt-2 border-t border-gray-200">
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Organized by</p>
-          <p className="font-semibold text-gray-900">{ticket.organizer}</p>
-        </div>
-      </div>
-
-      <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
-        <button className="w-full text-center text-sm font-semibold text-[#6366F1] hover:text-[#4F46E5]">
-          View Ticket →
-        </button>
-      </div>
-    </div>
-  );
-}
+export default MyTicketPage

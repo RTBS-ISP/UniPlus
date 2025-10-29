@@ -111,18 +111,14 @@ export default function EventsPage() {
       return Math.min(1, Math.max(0, 1 - spotsAvailable / capacity));
     }
 
-    // If we only have a single "available" without capacity, invert via a soft heuristic
     if (!Number.isNaN(spotsAvailable) && spotsAvailable >= 0) {
-      // Without capacity we can't get a real percent; treat smaller availability as more filled.
-      // Map smaller numbers to higher scores using 1/(1+x).
       return 1 - 1 / (1 + spotsAvailable);
     }
 
-    // No data => treat as 0% filled
     return 0;
   };
 
-  // ---- Filter + Sort ----
+  // Filter + Sort
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
 
@@ -170,7 +166,6 @@ export default function EventsPage() {
         const fb = pctFilled(b);
         const fa = pctFilled(a);
         if (fb !== fa) return fb - fa; // more filled first
-        // tie-breaker: original popularity if present
         return (b.popularity ?? 0) - (a.popularity ?? 0);
       });
     }
@@ -184,7 +179,7 @@ export default function EventsPage() {
     return list;
   }, [query, sort, filters, events]);
 
-  // ---- Pagination ----
+  // Pagination
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const start = (page - 1) * pageSize;
   const pageItems = filtered.slice(start, start + pageSize);
@@ -216,7 +211,7 @@ export default function EventsPage() {
         <h1 className="text-3xl text-black font-bold">Discover Events</h1>
         <p className="mt-2 max-w-2xl text-sm text-gray-600">
           Explore clubs, meetups, and university events happening around campus.
-          Use the search and filters to find exactly what you’re looking for.
+          Use the search and filters to find exactly what you're looking for.
         </p>
 
         <motion.button
@@ -349,7 +344,7 @@ export default function EventsPage() {
       {/* Footer */}
       <footer className="border-t border-black/10 bg-white/60 py-10">
         <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 md:grid-cols-4">
-          <div>
+            <div>
             <p className="text-sm text-gray-700">Site name</p>
             <div className="mt-3 flex items-center gap-3 text-gray-500">
               <div className="h-5 w-5 rounded-full border" />
@@ -357,23 +352,23 @@ export default function EventsPage() {
               <div className="h-5 w-5 rounded-full border" />
               <div className="h-5 w-5 rounded-full border" />
             </div>
-          </div>
-
-          {["Topic", "Topic", "Topic"].map((t, i) => (
-            <div key={i}>
-              <p className="text-sm font-medium text-gray-800">{t}</p>
-              <ul className="mt-3 space-y-1 text-sm text-gray-600">
-                <li><a href="#" className="hover:underline">Page</a></li>
-                <li><a href="#" className="hover:underline">Page</a></li>
-                <li><a href="#" className="hover:underline">Page</a></li>
-                <li><a href="#" className="hover:underline">Page</a></li>
-              </ul>
             </div>
-          ))}
-        </div>
-        <div className="mx-auto mt-8 max-w-6xl px-4 text-xs text-gray-500">
-          © {new Date().getFullYear()} UniPLUS
-        </div>
+
+            {["Topic", "Topic", "Topic"].map((t, i) => (
+              <div key={i}>
+                <p className="text-sm font-medium text-gray-800">{t}</p>
+                <ul className="mt-3 space-y-1 text-sm text-gray-600">
+                  <li><a href="#" className="hover:underline">Page</a></li>
+                  <li><a href="#" className="hover:underline">Page</a></li>
+                  <li><a href="#" className="hover:underline">Page</a></li>
+                  <li><a href="#" className="hover:underline">Page</a></li>
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div className="mx-auto mt-8 max-w-6xl px-4 text-xs text-gray-500">
+            © {new Date().getFullYear()} UniPLUS
+          </div>
       </footer>
     </div>
   );

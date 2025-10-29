@@ -33,6 +33,7 @@ type EventSession = {
   address2?: string;
 };
 
+
 type Comment = {
   id: number;
   user_id: number;
@@ -111,11 +112,11 @@ function groupConsecutiveSessions(sessions: EventSession[]) {
   if (!sessions?.length) return [];
   const sorted = [...sessions].sort((a, b) => dateKey(a.date) - dateKey(b.date));
   return sorted.map((s) => ({
-    start: s.date,
-    end: s.date,
-    startTime: s.startTime,
-    endTime: s.endTime,
-    items: [s],
+        start: s.date,
+        end: s.date,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        items: [s],
   }));
 }
 
@@ -609,7 +610,7 @@ function ScheduleList({
                     <div className="mt-2 text-sm text-[#0B1220]/80">
                       <div className="font-medium text-[#0B1220]">{loc}</div>
                       {addr2 && <div>{addr2}</div>}
-                    </div>
+                  </div>
                   </motion.div>
                 );
               })}
@@ -729,8 +730,8 @@ function RegisterCTA({
         {label}
       </span>
     </motion.button>
-  );
-}
+    );
+  }
 
 /* ---------- Event Detail Page ---------- */
 export default function EventDetailPage({ params }: Params) {

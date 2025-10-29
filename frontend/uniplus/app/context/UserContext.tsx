@@ -53,7 +53,6 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Load user once when app starts
   useEffect(() => {
     fetchUser();
   }, []);

@@ -10,15 +10,19 @@ import { useUser } from "../context/UserContext";
 import { Calendar, Zap } from 'lucide-react';
 
 interface EventData {
-  event_id: number;
+  event_id?: number;
+  id?: number;
   event_title: string;
-  event_date: string;
+  event_date?: string;
+  event_start_date?: string;
   event_description: string;
-  location: string;
-  organizer: string;
-  organizer_role: string;
-  status: string;
-  event_tags: string[];
+  location?: string;
+  event_address?: string;
+  organizer?: string;
+  organizer_role?: string;
+  status?: string;
+  event_tags?: string[] | string;
+  tags?: string[] | string;
   is_online: boolean;
 }
 
@@ -29,9 +33,13 @@ interface StatisticsData {
   total_registrations: number;
 }
 
-// Transform event history data to EventCard format
 function transformEventToItem(event: any, index: number) {
-  const eventDateStr = event.event_date || '';
+  const eventDateStr = 
+    event.event_date ||           
+    event.event_start_date ||     
+    event.start_date_register || 
+    '';
+    
   const eventDate = eventDateStr ? new Date(eventDateStr) : null;
   const now = new Date();
   const isPast = eventDate ? eventDate < now : false;
@@ -40,16 +48,37 @@ function transformEventToItem(event: any, index: number) {
     ? event.organizer_role.charAt(0).toUpperCase() + event.organizer_role.slice(1)
     : 'Organizer';
   
-  let eventTags = [];
+  let eventTags: string[] = [];
+  
+  // Try event_tags first (from event-history API)
   if (event.event_tags) {
-    try {
-      eventTags = Array.isArray(event.event_tags) 
-        ? event.event_tags 
-        : JSON.parse(event.event_tags);
-    } catch {
-      eventTags = [];
+    if (Array.isArray(event.event_tags)) {
+      eventTags = event.event_tags;
+    } else if (typeof event.event_tags === 'string') {
+      try {
+        const parsed = JSON.parse(event.event_tags);
+        eventTags = Array.isArray(parsed) ? parsed : [event.event_tags];
+      } catch {
+        eventTags = [event.event_tags];
+      }
     }
   }
+  
+  // Also check for 'tags' field as fallback (used in EventsPage)
+  if (eventTags.length === 0 && event.tags) {
+    if (Array.isArray(event.tags)) {
+      eventTags = event.tags;
+    } else if (typeof event.tags === 'string') {
+      try {
+        const parsed = JSON.parse(event.tags);
+        eventTags = Array.isArray(parsed) ? parsed : [event.tags];
+      } catch {
+        eventTags = [event.tags];
+      }
+    }
+  }
+  
+  console.log('Event tags for', event.event_title, ':', eventTags); // Debug log
   
   // Extract category from tags (first tag is usually the category)
   const category = eventTags.length > 0 ? eventTags[0] : undefined;
@@ -61,19 +90,24 @@ function transformEventToItem(event: any, index: number) {
         : event.event_description)
     : 'No description available';
 
+  // Handle location
+  const location = event.is_online 
+    ? 'Online Event' 
+    : (event.location || event.event_address || 'TBA');
+
   return {
-    id: event.event_id || index,
+    id: event.event_id || event.id || index,
     title: event.event_title || 'Untitled Event',
     host: [organizerRole],
-    tags: eventTags,
+    tags: eventTags, 
     category: category,
     excerpt: excerpt,
     date: eventDateStr,
-    createdAt: eventDateStr || new Date().toISOString(),
-    popularity: 0,
+    createdAt: event.event_create_date || eventDateStr || new Date().toISOString(),
+    popularity: event.attendee_count || 0,
     startDate: eventDateStr,
-    endDate: eventDateStr,
-    location: event.is_online ? 'Online Event' : (event.location || 'TBA'),
+    endDate: event.event_end_date || eventDateStr,
+    location: location,
   };
 }
 
@@ -530,7 +564,7 @@ function ProfilePage() {
           </div>
         </div>
 
-        {/* Event History & Stats*/}
+        {/* Event History & Stats */}
         <div className="flex flex-col w-full px-20">
           <Tabs items={items} />
         </div>

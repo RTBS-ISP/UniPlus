@@ -50,7 +50,6 @@ function LoginPage() {
       if (data.success) {
         console.log('Login successful:', data.message);
 
-        // Fetch the logged-in user's data right after login
         const userRes = await fetch('http://localhost:8000/api/user', {
           credentials: 'include',
         });
@@ -61,7 +60,6 @@ function LoginPage() {
           console.log('User data set:', userData);
         }
 
-        // Redirect to profile
         router.push('/profile');
       } else {
         setError(data.error || "Login failed. Please check your credentials");
