@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import Navbar from "../../components/navbar";
 import { TagAccent } from "../../components/shared/Tag";
+import { events } from "../../../lib/events/events-data";
 import { useAlert } from "../../components/ui/AlertProvider";
 import { ChevronDown, Check, Lock, ChevronRight, Star, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
@@ -27,6 +28,9 @@ type EventSession = {
   date: string;
   startTime: string;
   endTime: string;
+  location?: string;
+  address?: string;
+  address2?: string;
 };
 
 
@@ -107,47 +111,13 @@ function dateKey(d: string) {
 function groupConsecutiveSessions(sessions: EventSession[]) {
   if (!sessions?.length) return [];
   const sorted = [...sessions].sort((a, b) => dateKey(a.date) - dateKey(b.date));
-
-  const groups: Array<{
-    start: string;
-    end: string;
-    startTime: string;
-    endTime: string;
-    items: EventSession[];
-  }> = [];
-
-  let cur = {
-    start: sorted[0].date,
-    end: sorted[0].date,
-    startTime: sorted[0].startTime,
-    endTime: sorted[0].endTime,
-    items: [sorted[0]],
-  };
-
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = cur.items[cur.items.length - 1];
-    const s = sorted[i];
-    const prevDay = dateKey(prev.date);
-    const thisDay = dateKey(s.date);
-    const isConsecutive = thisDay - prevDay === 24 * 60 * 60 * 1000;
-    const sameTime = s.startTime === cur.startTime && s.endTime === cur.endTime;
-
-    if (isConsecutive && sameTime) {
-      cur.end = s.date;
-      cur.items.push(s);
-    } else {
-      groups.push(cur);
-      cur = {
+  return sorted.map((s) => ({
         start: s.date,
         end: s.date,
         startTime: s.startTime,
         endTime: s.endTime,
         items: [s],
-      };
-    }
-  }
-  groups.push(cur);
-  return groups;
+  }));
 }
 
 /* ---------- Rating Stars Component ---------- */
@@ -567,43 +537,29 @@ function HostPill({ label }: { label: string }) {
     bg = "#C7D2FE";
   }
 
-  const visibleDates = sorted.slice(0, 3);
-  const hiddenDates = sorted.slice(3);
-
   return (
-    <div className="text-[#0B1220]">
-      <p className="font-medium">
-        {formatDateGB(first)} – {formatDateGB(last)}
-      </p>
-
-      <ul className="list-disc list-inside mt-1 text-sm text-[#0B1220]/90 space-y-0.5">
-        {visibleDates.map((s) => (
-          <li key={s.date}>{formatDateGB(s.date)}</li>
-        ))}
-
-        {hiddenDates.length > 0 && (
-          <li className="relative group text-[#0B1220]/60 hover:text-[#0B1220] transition">
-            + {hiddenDates.length} more
-            <div
-              className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(260px,90vw)]
-                         -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
-                         shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
-                         group-hover:opacity-100 group-hover:scale-100"
-            >
-              <ul className="list-disc list-inside space-y-0.5 text-sm text-[#0B1220]/80">
-                {hiddenDates.map((s) => (
-                  <li key={s.date}>{formatDateGB(s.date)}</li>
-                ))}
-              </ul>
-            </div>
-          </li>
-        )}
-      </ul>
-    </div>
+    <motion.span
+      className="inline-flex items-center rounded-md border border-black/10 px-3 py-1 text-xs font-semibold"
+      style={{ backgroundColor: bg, color }}
+      initial={{ scale: 0.9, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 300, damping: 22 }}
+    >
+      {label}
+    </motion.span>
   );
 }
 
-function ScheduleList({ schedule }: { schedule: EventSession[] }) {
+/* ---------- ScheduleList ---------- */
+function ScheduleList({
+  schedule,
+  fallbackLocation,
+  fallbackAddress2,
+}: {
+  schedule: EventSession[];
+  fallbackLocation: string;
+  fallbackAddress2: string;
+}) {
   const [open, setOpen] = useState(true);
   if (!schedule?.length) return null;
   const groups = groupConsecutiveSessions(schedule);
@@ -630,33 +586,35 @@ function ScheduleList({ schedule }: { schedule: EventSession[] }) {
             transition={{ type: "spring", stiffness: 260, damping: 28 }}
             className="overflow-hidden"
           >
-            <div className="mt-4 space-y-3">
+            <motion.div className="mt-4 space-y-3" variants={staggerRow} initial="initial" animate="animate">
               {groups.map((g, idx) => {
-                const sameDay = g.start === g.end;
-                const dateLabel = sameDay
-                  ? formatDateGB(g.start)
-                  : `${formatDateGB(g.start)} – ${formatDateGB(g.end)}`;
-
+                const dateLabel = formatDateGB(g.start);
+                const loc = g.items[0].location ?? fallbackLocation;
+                const addr2 = g.items[0].address2 ?? fallbackAddress2;
                 return (
-                  <div
-                    key={`${g.start}-${g.end}-${idx}`}
+                  <motion.div
+                    key={`${g.start}-${idx}`}
                     className="rounded-xl border border-black/10 bg-gray-50 p-4"
+                    variants={fadeUp}
                   >
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="inline-flex h-6 items-center rounded-md bg-white px-2 text-xs font-semibold text-[#0B1220]">
-                        {sameDay
-                          ? `Day ${idx + 1}`
-                          : `Days ${idx + 1}–${idx + g.items.length}`}
+                        Day {idx + 1}
                       </span>
                       <span className="text-sm font-semibold text-[#0B1220]">{dateLabel}</span>
                       <span className="text-sm text-[#0B1220]/80">
                         — {g.startTime}–{g.endTime}
                       </span>
                     </div>
+
+                    <div className="mt-2 text-sm text-[#0B1220]/80">
+                      <div className="font-medium text-[#0B1220]">{loc}</div>
+                      {addr2 && <div>{addr2}</div>}
                   </div>
+                  </motion.div>
                 );
               })}
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -664,100 +622,6 @@ function ScheduleList({ schedule }: { schedule: EventSession[] }) {
   );
 }
 
-/* ---------- Page ---------- */
-export default function EventDetailPage({ params }: Params) {
-  const [id, setId] = useState<string>("");
-  const [event, setEvent] = useState<EventWithOptionals | null>(null);
-  const [relatedEvents, setRelatedEvents] = useState<EventWithOptionals[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [registering, setRegistering] = useState(false);
-  const [message, setMessage] = useState('');
-  const [csrfToken, setCsrfToken] = useState('');
-  const [isRegistered, setIsRegistered] = useState(false);
-  const [error, setError] = useState('');
-  const router = useRouter();
-  const toast = useAlert();
-
-  // Unwrap params
-  useEffect(() => {
-    params?.then((p) => {
-      setId(p.id);
-    });
-  }, [params]);
-
-  // Fetch CSRF token on mount
-  useEffect(() => {
-    const fetchCsrfToken = async () => {
-      try {
-        const response = await fetch('http://localhost:8000/api/set-csrf-token', {
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setCsrfToken(data.csrftoken);
-          console.log('CSRF token fetched successfully');
-        }
-      } catch (error) {
-        console.error('Error fetching CSRF token:', error);
-      }
-    };
-
-    fetchCsrfToken();
-  }, []);
-
-  // Fetch event detail when id changes
-  useEffect(() => {
-    if (!id) return;
-    fetchEventDetail();
-    fetchRelatedEvents();
-  }, [id]);
-
-  const fetchEventDetail = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      
-      // REMOVED trailing slash
-      const response = await fetch(`http://localhost:8000/api/events/${id}`, {
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch event');
-      }
-
-      const data = await response.json();
-      console.log('Event data:', data);
-      
-      setEvent({
-        id: data.id,
-        title: data.event_title || data.title,
-        excerpt: data.event_description || data.excerpt,
-        image: data.event_image || data.image,
-        available: data.available,
-        capacity: data.max_attendee || data.capacity,
-        startDate: data.start_date_register || data.startDate,
-        endDate: data.end_date_register || data.endDate,
-        location: data.event_address || data.location,
-        address2: data.address2,
-        host: data.host || [data.organizer_username || 'Unknown'],
-        tags: data.tags,
-        schedule: data.schedule,
-        is_registered: data.is_registered || false
-      });
-      
-      setIsRegistered(data.is_registered || false);
-    } catch (error) {
-      console.error('Error fetching event:', error);
-      setError('Failed to load event');
-    } finally {
-      setLoading(false);
-    }
-  };
 /* ---------- RegisterCTA ---------- */
 function RegisterCTA({
   disabled,
@@ -786,107 +650,18 @@ function RegisterCTA({
     }
     if (success || loading) return;
 
-  const fetchRelatedEvents = async () => {
-    try {
-      // REMOVED trailing slash
-      const response = await fetch('http://localhost:8000/api/events', {
-        credentials: 'include'
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const filtered = data
-          .filter((e: any) => e.id !== Number(id))
-          .slice(0, 6)
-          .map((e: any) => ({
-            id: e.id,
-            title: e.event_title || e.title,
-            excerpt: e.event_description || e.excerpt,
-            image: e.event_image || e.image,
-            available: e.available,
-            capacity: e.max_attendee || e.capacity,
-            host: e.host || [e.organizer_username || 'Unknown'],
-            tags: e.tags
-          }));
-        
-        setRelatedEvents(filtered);
-      }
-    } catch (error) {
-      console.error('Error fetching related events:', error);
-    }
+    const id = Date.now();
+    setRipples((r) => [...r, { id, x, y }]);
+    onClick();
+    setTimeout(() => setRipples((r) => r.filter((it) => it.id !== id)), 600);
   };
 
-  const handleRegister = async () => {
-    if (!csrfToken) {
-      setError('Please wait, loading...');
-      toast({
-        text: 'Please wait, loading...',
-        variant: 'error',
-        duration: 2000,
-      });
-      return;
-    }
+  const base =
+    "relative inline-flex w-full items-center justify-center rounded-lg px-4 py-3 text-center text-sm font-semibold outline-none group";
+  const idle = "bg-[#6366F1] text-white hover:bg-[#4F46E5] transition-colors";
+  const disabledCls = "bg-[#C7CBE0] text-[#3A3F55] cursor-not-allowed";
+  const successCls = "bg-emerald-500 text-white";
 
-    if (isRegistered) {
-      toast({
-        text: 'You are already registered for this event',
-        variant: 'info',
-        duration: 2000,
-      });
-      return;
-    }
-
-    if (!event) return;
-
-    setRegistering(true);
-    setError('');
-    setMessage('');
-
-    try {
-      // REMOVED trailing slash
-      const response = await fetch(`http://localhost:8000/api/events/${id}/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': csrfToken,
-        },
-        credentials: 'include',
-      });
-
-      const data = await response.json();
-      console.log('Registration response:', data);
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
-
-      // Success!
-      setIsRegistered(true);
-      setMessage('Successfully registered! Check your tickets.');
-      
-      toast({
-        text: 'You have successfully registered for this event!',
-        variant: 'success',
-        duration: 3000,
-      });
-
-      // Refresh event data to update capacity
-      await fetchEventDetail();
-
-    } catch (error: any) {
-      console.error('Error registering for event:', error);
-      const errorMessage = error.message || 'Failed to register for event';
-      setError(errorMessage);
-      
-      toast({
-        text: errorMessage,
-        variant: 'error',
-        duration: 3000,
-      });
-    } finally {
-      setRegistering(false);
-    }
-  };
   const label = loading ? "Registering..." : disabled ? "Closed" : success ? "Registered" : "Register";
 
   return (
@@ -932,27 +707,32 @@ function RegisterCTA({
           />
         ))}
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#E8ECFF]">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-xl text-gray-900">Loading event...</div>
-        </div>
-      </div>
+      {success && (
+        <>
+          <motion.span
+            className="absolute inset-0 rounded-lg"
+            initial={{ boxShadow: "0 0 0px rgba(16,185,129,0)" }}
+            animate={{ boxShadow: "0 0 28px rgba(16,185,129,.45)" }}
+          />
+          <motion.span
+            className="mr-2 inline-flex"
+            initial={{ scale: 0.4, opacity: 0, rotate: -45 }}
+            animate={{ scale: 1, opacity: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 16 }}
+          >
+            <Check className="h-5 w-5" />
+          </motion.span>
+        </>
+      )}
+
+      <span className="relative z-10 inline-flex items-center gap-2">
+        {disabled && !success ? <Lock className="h-4 w-4" /> : null}
+        {label}
+      </span>
+    </motion.button>
     );
   }
 
-  if (error && !event) {
-    return (
-      <div className="min-h-screen bg-[#E8ECFF]">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-xl text-red-600">{error}</div>
-        </div>
-      </div>
-    );
-  }
 /* ---------- Event Detail Page ---------- */
 export default function EventDetailPage({ params }: Params) {
   const { id } = use(params);
@@ -1176,10 +956,11 @@ export default function EventDetailPage({ params }: Params) {
 
 
   return (
-    <div className="min-h-screen bg-[#E8ECFF]">
+    <motion.div className="min-h-screen bg-[#E8ECFF]" variants={pageVariants} initial="initial" animate="animate">
       <Navbar />
+
       <main className="mx-auto max-w-6xl px-4 py-10">
-        {/* Hero image */}
+        {/* Hero Image */}
         <div className="mx-auto w-[420px] max-w-full overflow-hidden rounded-xl bg-white shadow-sm">
           <motion.img
             src={image}
@@ -1193,9 +974,12 @@ export default function EventDetailPage({ params }: Params) {
         </div>
 
         {/* Title */}
-        <h1 className="mt-8 text-5xl font-extrabold tracking-tight text-[#0B1220]">
+        <motion.h1
+          className="mt-8 text-5xl font-extrabold tracking-tight text-[#0B1220]"
+          variants={fadeUp}
+        >
           {event.title}
-        </h1>
+        </motion.h1>
 
         {/* Tags */}
         <motion.div className="mt-3 flex flex-wrap gap-2" variants={staggerRow}>
@@ -1261,50 +1045,25 @@ export default function EventDetailPage({ params }: Params) {
             <div>
               <p className="text-sm font-semibold text-[#0B1220]">Available Spot</p>
               <p className="mt-1 text-sm">
-                <span
-                  className={
-                    isClosed
-                      ? "font-bold text-[#E11D48]"
-                      : "font-bold text-[#0B1220]"
-                  }
-                >
+                <span className={isClosed ? "font-bold text-[#E11D48]" : "font-bold text-[#0B1220]"}>
                   {available}
                 </span>
                 <span className="text-[#0B1220]">/{capacity}</span>
               </p>
             </div>
-
-            <div>
-              <p className="text-sm font-semibold text-[#0B1220]">
-                Event Date{schedule.length > 1 ? "s" : ""}
-              </p>
-              <div className="mt-1 text-sm">
-                {schedule.length > 0 ? (
-                  <EventDateSummary schedule={schedule} />
-                ) : (
-                  <span className="text-[#0B1220]">TBD</span>
-                )}
-              </div>
-            </div>
           </div>
 
-          {/* Location */}
           <div className="mt-6">
             <p className="text-sm font-semibold text-[#0B1220]">Description</p>
             <p className="mt-2 text-sm text-[#0B1220] whitespace-pre-wrap">
               {event.event_description || event.excerpt || "No description available."}
             </p>
           </div>
-        </section>
+        </motion.section>
 
         {/* Schedule */}
-        {schedule.length > 0 && <ScheduleList schedule={schedule} />}
-
-        {/* Error message */}
-        {error && (
-          <div className="mt-4 rounded-lg bg-red-100 p-4 text-red-700">
-            {error}
-          </div>
+        {schedule.length > 0 && (
+          <ScheduleList schedule={schedule} fallbackLocation={location} fallbackAddress2={address2} />
         )}
 
         {/* Register */}
@@ -1357,7 +1116,7 @@ export default function EventDetailPage({ params }: Params) {
           </div>
         </div>
       </footer>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1367,12 +1126,15 @@ function RelatedCard({ item }: { item: any }) {
 
   const available = item.available ?? 0;
   const capacity = item.capacity ?? 100;
-  const badge = item.host?.[0] ?? (Array.isArray(item.tags) ? item.tags[0] : "Organizer");
+
+  const hostLabel = item.host?.[0];
+  const tagLabel = (item.tags ?? [])[0];
 
   return (
-    <Link
-      href={`/events/${item.id}`}
-      className="block rounded-xl bg-white shadow-sm transition hover:shadow-md"
+    <motion.div
+      className="block rounded-xl bg-white shadow-sm transition hover:shadow-md cursor-pointer"
+      variants={fadeUp}
+      {...cardHover}
     >
       <motion.img
         src={img}
@@ -1395,6 +1157,6 @@ function RelatedCard({ item }: { item: any }) {
           Available: {available}/{capacity}
         </p>
       </div>
-    </Link>
+    </motion.div>
   );
 }

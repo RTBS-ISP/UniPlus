@@ -95,11 +95,10 @@ export default function EventsPage() {
       e.capacity ?? e.maxAttendee ?? e.maxSeats ?? e.limit ?? 0
     );
 
-  // Helper: percent filled (0..1). Lower availability => higher score
-  const pctFilled = (e: EventItem) => {
-    const capacity = Number(e.capacity ?? 0);
-    const registered = Number(e.registered ?? NaN);
-    
+    // Prefer direct registered/attending counts
+    const registered = Number(
+      e.registered ?? e.attending ?? e.rsvpCount ?? e.enrolled ?? NaN
+    );
     if (capacity > 0 && !Number.isNaN(registered)) {
       return Math.min(1, Math.max(0, registered / capacity));
     }
@@ -198,38 +197,6 @@ export default function EventsPage() {
     show: { opacity: 1, y: 0, transition: { duration: reduce ? 0 : 0.25 } },
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#E0E7FF]">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <div className="animate-pulse">
-            <div className="text-2xl font-semibold text-gray-600">Loading events...</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#E0E7FF]">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="text-2xl font-semibold text-red-600 mb-4">{error}</div>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#E0E7FF]">
       <Navbar />
@@ -296,6 +263,7 @@ export default function EventsPage() {
           </div>
         </motion.aside>
 
+        {/* Right: Search + Cards + Pagination */}
         <section className="md:col-span-9" id="events">
           <motion.div
             variants={sectionIn}
@@ -373,14 +341,17 @@ export default function EventsPage() {
         </section>
       </main>
 
-      <footer className="border-t border-gray-200 bg-white/80 backdrop-blur-sm py-12 mt-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-4 mb-8">
+      {/* Footer */}
+      <footer className="border-t border-black/10 bg-white/60 py-10">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 md:grid-cols-4">
             <div>
-              <h3 className="text-lg font-bold text-gray-900 mb-4">🎓 UniPLUS</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Connecting students through events and experiences.
-              </p>
+            <p className="text-sm text-gray-700">Site name</p>
+            <div className="mt-3 flex items-center gap-3 text-gray-500">
+              <div className="h-5 w-5 rounded-full border" />
+              <div className="h-5 w-5 rounded-full border" />
+              <div className="h-5 w-5 rounded-full border" />
+              <div className="h-5 w-5 rounded-full border" />
+            </div>
             </div>
 
             {["Topic", "Topic", "Topic"].map((t, i) => (
@@ -398,7 +369,6 @@ export default function EventsPage() {
           <div className="mx-auto mt-8 max-w-6xl px-4 text-xs text-gray-500">
             © {new Date().getFullYear()} UniPLUS
           </div>
-        </div>
       </footer>
     </div>
   );
