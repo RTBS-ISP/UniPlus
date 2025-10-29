@@ -161,7 +161,7 @@ export default function Navbar() {
               <User className="w-4 h-4" /> Profile
             </Link>
             <Link
-              href="/my-ticket"
+              href="/mytickets"
               className="block px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
               onClick={() => setProfileMenuOpen(false)}
             >
