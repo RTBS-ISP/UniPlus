@@ -69,12 +69,55 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "TBA";
-    const date = new Date(dateString);
+    const date = new Date(dateString.split('T')[0]); 
+    if (isNaN(date.getTime())) return "TBA";
+    
     return date.toLocaleDateString("en-GB", {
       day: "numeric",
       month: "long",
       year: "numeric",
     });
+  };
+  
+  // Function to summarize date range 
+  const formatDateRangeSummary = (eventDates: EventDay[], fallbackDate: string) => {
+    if (!eventDates || eventDates.length === 0) {
+      return formatDate(fallbackDate);
+    }
+
+    const sortedDates = eventDates
+      .map((d) => new Date(d.date.split('T')[0])) 
+      .filter(d => !isNaN(d.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    if (sortedDates.length === 0) {
+        return formatDate(fallbackDate);
+    }
+
+    const startDate = sortedDates[0];
+    const endDate = sortedDates[sortedDates.length - 1];
+
+    // Case 1: Single day event
+    if (sortedDates.length === 1 || startDate.getTime() === endDate.getTime()) {
+      return formatDate(eventDates[0].date);
+    }
+
+    // Case 2: Consecutive multi-day event 
+    const oneDay = 24 * 60 * 60 * 1000;
+    const diffDays = Math.round(
+      Math.abs((endDate.getTime() - startDate.getTime()) / oneDay)
+    );
+    
+    if (diffDays === sortedDates.length - 1) {
+      // If the number of days in the array equals the span of days (consecutive)
+      const formattedStart = formatDate(startDate.toISOString().split('T')[0]);
+      const formattedEnd = formatDate(endDate.toISOString().split('T')[0]);
+      return `${formattedStart} - ${formattedEnd}`;
+    } else {
+      // Case 3: Non-consecutive/scattered event
+      const formattedStart = formatDate(startDate.toISOString().split('T')[0]);
+      return `${formattedStart} (${eventDates.length} Dates)`;
+    }
   };
 
   const formatTimeRange = (time?: string, endTime?: string) => {
@@ -104,8 +147,17 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   };
 
   const firstDate = ticket.event_dates?.[0];
-  const formattedDate = formatDate(firstDate?.date || ticket.date);
+  // Summary function for the date display
+  const formattedDate = formatDateRangeSummary(
+    ticket.event_dates,
+    ticket.date
+  ); 
+
   const formattedTime = formatTimeRange(firstDate?.time || ticket.time, firstDate?.endTime);
+  const eventLocation = firstDate?.is_online
+    ? "Online Event"
+    : firstDate?.location || ticket.location || "TBA";
+  
   const MAX_VISIBLE_TAGS = 2;
   const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
   const hiddenTags = tags.slice(MAX_VISIBLE_TAGS);
@@ -139,18 +191,16 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       <div className="p-6 flex-1 flex flex-col">
         <div className="flex gap-x-2 mb-2">
           <Calendar size={20} className="text-indigo-500" />
-          <p className="text-gray-800 text-sm">{formattedDate}</p>
+          <p className="text-gray-800 text-sm font-semibold">{formattedDate}</p>
         </div>
         <div className="flex gap-x-2 mb-2">
           <Clock size={20} className="text-indigo-500" />
-          <p className="text-gray-800 text-sm">{formattedTime}</p>
+          <p className="text-gray-800 text-sm font-semibold">{formattedTime}</p>
         </div>
         <div className="flex gap-x-2 mb-4">
           <MapPin size={20} className="text-indigo-500" />
-          <p className="text-gray-800 text-sm">
-            {firstDate?.is_online
-              ? "Online Event"
-              : firstDate?.location || ticket.location || "TBA"}
+          <p className="text-gray-800 text-sm font-semibold">
+            {eventLocation}
           </p>
         </div>
         <hr className="mb-4" />
