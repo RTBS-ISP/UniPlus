@@ -241,7 +241,7 @@ export default function MyTicketsPage() {
             <div className="mb-4 text-6xl">🎫</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Tickets Yet</h2>
             <p className="text-gray-600 mb-6">
-              Your registered tickets will appear here once they are approved by the event organizerrrrrrrr
+              Your registered tickets will appear here once they are approved by the event organizer
             </p>
             <button
               onClick={() => router.push('/events')}
