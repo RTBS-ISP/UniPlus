@@ -218,7 +218,7 @@ function TicketDetailPage() {
         <Navbar/>
         <div className="min-h-screen bg-indigo-100">
           <div className="max-w-7xl mx-auto px-8 pt-16">
-            <Link href="/mytickets" className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit">
+            <Link href="/my-ticket" className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit">
               <ArrowLeft size={18} className="text-gray-800"/>
               <p className="text-gray-800 font-medium">Back to My Tickets</p>
             </Link>
@@ -247,7 +247,7 @@ function TicketDetailPage() {
         <Navbar/>
         <div className="min-h-screen bg-indigo-100">
           <div className="max-w-7xl mx-auto px-8 pt-16">
-            <Link href="/mytickets" className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit">
+            <Link href="/my-ticket" className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit">
               <ArrowLeft size={18} className="text-gray-800"/>
               <p className="text-gray-800 font-medium">Back to My Tickets</p>
             </Link>
@@ -268,7 +268,7 @@ function TicketDetailPage() {
       <div className="min-h-screen bg-indigo-100">
         {/* Back Button */}
         <div className="max-w-7xl mx-auto px-8 pt-16">
-          <Link href="/mytickets" className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit">
+          <Link href="/my-ticket" className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit">
             <ArrowLeft size={18} className="text-gray-800"/>
             <p className="text-gray-800 font-medium">Back to My Tickets</p>
           </Link>
