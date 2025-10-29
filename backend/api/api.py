@@ -751,40 +751,60 @@ def get_user_statistics(request):
         return 400, {"error": str(e)}
 
 
-@api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema})
+@api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_created_events(request):
-    """Get events created by the user (for organizers)"""
+    """Return events created by the logged-in user"""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
-    
     try:
-        created_events = Event.objects.filter(
-            organizer=request.user
-        ).order_by('-event_create_date')
-        
+        created_events = (
+            Event.objects.filter(organizer=request.user)
+            .select_related("organizer")
+            .order_by("-event_start_date")
+        )
         events_data = []
         for event in created_events:
-            attendee_count = len(event.attendee) if event.attendee else 0
-            
+            # Determine status (upcoming/past)
+            status = "upcoming" if (
+                event.event_start_date and event.event_start_date > timezone.now()
+            ) else "past"
+
+            # Parse tags safely
+            event_tags = []
+            if event.tags:
+                try:
+                    event_tags = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    event_tags = [event.tags] if event.tags else []
+
+            event_date_str = (
+                event.event_start_date.strftime("%Y-%m-%d")
+                if event.event_start_date
+                else None
+            )
             events_data.append({
-                "id": event.id,
+                "event_id": event.id,
                 "event_title": event.event_title,
                 "event_description": event.event_description,
-                "event_start_date": event.event_start_date.isoformat(),
-                "event_end_date": event.event_end_date.isoformat(),
-                "max_attendee": event.max_attendee,
-                "current_attendees": attendee_count,
-                "available_spots": (event.max_attendee - attendee_count) if event.max_attendee else 0,
-                "status_registration": event.status_registration,
-                "event_image": event.event_image.url if event.event_image else None,
-                "is_approved": event.is_approved,
-                "event_create_date": event.event_create_date.isoformat(),
+                "event_date": event_date_str,
+                "location": event.event_address, 
+                "is_online": event.is_online,
+                "meeting_link": event.event_meeting_link,  
+                "status": status,
+                "organizer": event.organizer.username if event.organizer else None,
+                "organizer_role": getattr(event.organizer, "role", "organizer") if event.organizer else "organizer",
+                "event_tags": event_tags,
+                "user_name": request.user.username,
+                "user_email": request.user.email,
+                "purchase_date": None,
+                "qr_code": None,
             })
-        
         return 200, {
             "events": events_data,
-            "total_created": len(events_data),
+            "total_count": len(events_data),
         }
     except Exception as e:
-        print(f"Error fetching created events: {e}")
+        import traceback
+        print("Error fetching created events:")
+        traceback.print_exc()
         return 400, {"error": str(e)}

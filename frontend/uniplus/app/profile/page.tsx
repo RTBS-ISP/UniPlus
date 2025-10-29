@@ -84,6 +84,7 @@ function ProfilePage() {
   const [statistics, setStatistics] = useState<StatisticsData | null>(null);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
+  const [createdEvents, setCreatedEvents] = useState<EventData[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -91,6 +92,7 @@ function ProfilePage() {
       router.push('/login');
     } else if (user) {
       fetchEventHistory();
+      fetchCreatedEvents();
       fetchStatistics();
     }
   }, [user, router]);
@@ -110,6 +112,26 @@ function ProfilePage() {
       }
     } catch (error) {
       console.error('Error fetching event history:', error);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
+  const fetchCreatedEvents = async () => {
+    try {
+      setLoadingEvents(true);
+      const response = await fetch("http://localhost:8000/api/user/created-events", {
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCreatedEvents(data.events || []);
+      } else {
+        console.error("Failed to fetch created events");
+      }
+    } catch (error) {
+      console.error("Error fetching created events:", error);
     } finally {
       setLoadingEvents(false);
     }
@@ -194,6 +216,17 @@ function ProfilePage() {
     return bDate - aDate; 
   });
 
+  const createdEventItems = createdEvents.map((event, idx) =>
+    transformEventToItem(event, idx)
+  );
+
+  const sortedCreatedEventItems = [...createdEventItems].sort((a, b) => {
+    const aDate = a.date ? new Date(a.date).getTime() : 0;
+    const bDate = b.date ? new Date(b.date).getTime() : 0;
+    return bDate - aDate;
+  });
+
+
   const items = [
     {
       title: "Event History",
@@ -217,6 +250,37 @@ function ProfilePage() {
                 <EventCard 
                   key={eventItem.id} 
                   item={eventItem} 
+                  index={idx}
+                  stagger={0.04}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      title: "My Events",
+      content: (
+        <div className="mt-4 rounded-xl">
+          {loadingEvents ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-gray-500">Loading your events...</div>
+            </div>
+          ) : sortedCreatedEventItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-800 bg-white rounded-xl">
+              <Calendar className="mb-2.5" size={52} />
+              <p className="font-semibold text-xl">No events created yet</p>
+              <p className="text-sm text-gray-600 mt-2">
+                Create an event to see it here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {sortedCreatedEventItems.map((eventItem, idx) => (
+                <EventCard
+                  key={eventItem.id}
+                  item={eventItem}
                   index={idx}
                   stagger={0.04}
                 />
