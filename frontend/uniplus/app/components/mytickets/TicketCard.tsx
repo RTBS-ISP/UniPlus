@@ -106,6 +106,9 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   const firstDate = ticket.event_dates?.[0];
   const formattedDate = formatDate(firstDate?.date || ticket.date);
   const formattedTime = formatTimeRange(firstDate?.time || ticket.time, firstDate?.endTime);
+  const MAX_VISIBLE_TAGS = 2;
+  const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
+  const hiddenTags = tags.slice(MAX_VISIBLE_TAGS);
 
   if (loading) {
     return (
@@ -153,23 +156,55 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
         <hr className="mb-4" />
 
         {/* Tags Section */}
-        <div className="flex flex-wrap gap-2 mt-auto">
-          {tags.length > 0 ? (
-            tags.map((tag, i) => (
-              <span
-                key={i}
-                className="px-3 py-1 bg-indigo-100 text-gray-800 text-sm font-bold rounded-lg"
-              >
-                {tag}
-              </span>
-            ))
-          ) : (
-            <span className="px-3 py-1 bg-gray-100 text-gray-500 text-sm rounded-lg">
-              No Tags
-            </span>
-          )}
+        {tags.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 mt-auto">
+            <div className="flex flex-wrap gap-2">
+              {visibleTags.map((t) => (
+                <span
+                  key={t}
+                  className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
+                >
+                  {t}
+                </span>
+              ))}
+
+              {hiddenTags.length > 0 && (
+                <span className="relative group inline-block">
+                  <button
+                    type="button"
+                    className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
+                  >
+                    +{hiddenTags.length}
+                  </button>
+
+                  {/* hover dropdown */}
+                  <div
+                    className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(420px,90vw)]
+                              -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
+                              shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
+                              group-hover:opacity-100 group-hover:scale-100"
+                  >
+                    <div className="flex flex-wrap gap-2">
+                      {hiddenTags.map((t) => (
+                        <span
+                          key={t}
+                          className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <span className="px-3 py-1 bg-gray-100 text-gray-500 text-sm rounded-lg">
+            No Tags
+          </span>
+        )}
         </div>
-      </div>
     </Link>
   );
 }
