@@ -1,8 +1,7 @@
 from ninja import Schema
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, validator
+from typing import Optional, Dict, Any, List
 from datetime import datetime
-
 
 
 class AboutMeSchema(BaseModel):
@@ -24,6 +23,28 @@ class RegisterSchema(BaseModel):
 class LoginSchema(Schema):
     email: str
     password: str   
+    
+class EventDateSchema(Schema):
+    date: str
+    time: str
+    endTime: Optional[str] = None
+    location: str
+    is_online: bool
+    meeting_link: Optional[str] = None
+    
+class TicketInfoSchema(Schema):
+    date: Optional[str] = None
+    time: Optional[str] = None
+    location: Optional[str] = None
+    organizer: Optional[str] = None
+    user_information: Optional[Dict[str, str]] = None
+    event_title: Optional[str] = None
+    event_description: Optional[str] = None
+    ticket_number: Optional[str] = None
+    event_id: Optional[int] = None
+    is_online: bool = False
+    event_meeting_link: Optional[str] = None
+    event_dates: List[EventDateSchema] = []
      
 # For returning user data (no password)
 class UserSchema(Schema):
@@ -35,7 +56,8 @@ class UserSchema(Schema):
     role: str = None
     aboutMe: Optional[Dict[str, Any]] = None
     profilePic: Optional[str] = None
-    
+    tickets: List[TicketInfoSchema] = [] 
+
 class UpdateUserSchema(Schema):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
@@ -55,24 +77,35 @@ class SuccessSchema(Schema):
     success: bool
     message: str = None
     user: UserSchema = None
+    event_id: Optional[int] = None
+    tickets_count: Optional[int] = None
+    ticket_numbers: Optional[List[str]] = None
 
 
-# Event Schema for event creation
+# Event Schema for event creation with validators for optional fields
 class EventCreateSchema(Schema):
     event_title: str
     event_description: str
+    category: Optional[str] = None
     start_date_register: datetime
     end_date_register: datetime
+    schedule_days: List[Dict[str, Any]]  
     max_attendee: Optional[int] = None
     event_address: Optional[str] = None 
     is_online: bool = False
     event_meeting_link: Optional[str] = None
-    event_category: Optional[str] = None
-    tags: Optional[str] = None
+    tags: Optional[List[str]] = None
     event_email: Optional[str] = None
     event_phone_number: Optional[str] = None
     event_website_url: Optional[str] = None
     terms_and_conditions: Optional[str] = None
+    
+    # Validators to handle empty strings as None
+    @validator('event_email', 'event_phone_number', 'event_website_url', 'event_address', 'event_meeting_link', 'terms_and_conditions', pre=True)
+    def empty_str_to_none(cls, v):
+        if v == '':
+            return None
+        return v
 
 class EventSchema(Schema):
     id: int
@@ -82,7 +115,67 @@ class EventSchema(Schema):
     event_create_date: datetime
     start_date_register: datetime
     end_date_register: datetime
-    max_attendee: Optional[int]
-    event_address: Optional[str]
+    event_start_date: datetime 
+    event_end_date: datetime   
+    max_attendee: Optional[int] = None
+    current_attendees: int
+    event_address: Optional[str] = None
     is_online: bool
     status_registration: str
+    attendee: list
+    tags: list
+    event_image: Optional[str] = None
+    schedule: Optional[List[Dict[str, Any]]] = None
+
+
+class UserEventSchema(Schema):
+    id: int
+    event_title: str
+    event_description: str
+    event_address: Optional[str]
+    is_online: bool
+    event_meeting_link: Optional[str]
+    start_date_register: datetime
+    end_date_register: datetime
+    organizer_username: str
+    registration_date: datetime
+    ticket_number: str
+
+class EventDetailSchema(Schema):
+    id: int
+    title: str  
+    event_title: str
+    event_description: str
+    excerpt: str  
+    organizer_username: str
+    host: List[str]  
+    start_date_register: datetime
+    end_date_register: datetime
+    event_start_date: datetime  
+    event_end_date: datetime   
+    max_attendee: int
+    capacity: int  
+    current_attendees: int
+    available: int  
+    event_address: str
+    location: str  
+    is_online: bool
+    event_meeting_link: str
+    tags: list
+    event_image: Optional[str] = None
+    image: Optional[str] = None  
+    is_registered: bool
+    schedule: Optional[List[Dict[str, Any]]] = []
+
+class TicketDetailSchema(Schema):
+    qr_code: str
+    event_title: str
+    event_description: str
+    start_date: datetime
+    location: str
+    event_date: str
+    meeting_link: Optional[str] = None
+    is_online: bool
+    organizer: str
+    user_name: str
+    user_email: str

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Menu, LogOut, User } from "lucide-react";
+import { Menu, LogOut, User, Plus } from "lucide-react";
 import { useUser } from "@/app/context/UserContext";
 
 export default function Navbar() {
@@ -108,23 +108,35 @@ export default function Navbar() {
                   </Link>
                 </>
               ) : (
-                <div ref={profileRef} className="relative flex items-center space-x-2">
-                  <button
-                    onClick={toggleProfileMenu}
-                    className="flex items-center space-x-2 focus:outline-none"
+                <>
+                  {/* Create Event Button */}
+                  <Link
+                    href="/events/create"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition"
                   >
-                    <img
-                      src={
-                        user.profilePic.startsWith("/images")
-                          ? user.profilePic
-                          : `http://localhost:8000${user.profilePic}`
-                      }
-                      alt="profile"
-                      className="w-10 h-10 object-cover rounded-md border border-gray-300"
-                    />
-                    <span className="font-semibold">{user.firstName} {user.lastName}</span>
-                  </button>
-                </div>
+                    <Plus className="w-4 h-4" />
+                    Create Event
+                  </Link>
+
+                  {/* Profile Menu */}
+                  <div ref={profileRef} className="relative flex items-center space-x-2">
+                    <button
+                      onClick={toggleProfileMenu}
+                      className="flex items-center space-x-2 focus:outline-none"
+                    >
+                      <img
+                        src={
+                          user.profilePic.startsWith("/images")
+                            ? user.profilePic
+                            : `http://localhost:8000${user.profilePic}`
+                        }
+                        alt="profile"
+                        className="w-10 h-10 object-cover rounded-md border border-gray-300"
+                      />
+                      <span className="font-semibold">{user.firstName} {user.lastName}</span>
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -149,11 +161,11 @@ export default function Navbar() {
               <User className="w-4 h-4" /> Profile
             </Link>
             <Link
-              href="/my-ticket#"
+              href="/my-ticket"
               className="block px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
               onClick={() => setProfileMenuOpen(false)}
             >
-              🎟️ My Ticket
+              🎟️ My Tickets
             </Link>
             <hr className="my-1 border-gray-200" />
             <button
