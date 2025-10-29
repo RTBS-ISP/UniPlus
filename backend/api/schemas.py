@@ -148,6 +148,7 @@ class EventDetailSchema(Schema):
     event_description: str
     excerpt: str  
     organizer_username: str
+    organizer_role: str
     host: List[str]  
     start_date_register: datetime
     end_date_register: datetime

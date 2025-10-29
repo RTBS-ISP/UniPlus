@@ -577,6 +577,7 @@ def get_event_detail(request, event_id: int):
                 date_str = day.get('date', '')
                 start_iso = day.get('start_iso', '')
                 end_iso = day.get('end_iso', '')
+                location = day.get('address', '') or day.get('location', '')
                 start_time = '00:00'
                 end_time = '00:00'
                 
@@ -596,6 +597,7 @@ def get_event_detail(request, event_id: int):
                     "date": date_str,
                     "startTime": start_time,
                     "endTime": end_time,
+                    "location": location,
                 })
         except Exception as e:
             print(f"Error parsing schedule: {e}")
@@ -618,6 +620,7 @@ def get_event_detail(request, event_id: int):
         "event_description": event.event_description,
         "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
         "organizer_username": event.organizer.username if event.organizer else "Unknown",
+        "organizer_role": event.organizer.role or "Organizer",
         "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
         "start_date_register": event.start_date_register,
         "end_date_register": event.end_date_register,
@@ -664,6 +667,33 @@ def get_user_event_history(request):
         return 401, {"error": "Not authenticated"}
     
     try:
+        tickets = Ticket.objects.filter(
+            attendee=request.user
+        ).select_related('event').order_by('-purchase_date')
+        
+        events_data = []
+        for ticket in tickets:
+            event = ticket.event
+            events_data.append({
+                "event_id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_date": ticket.event_date.isoformat() if ticket.event_date else event.event_start_date.isoformat(),
+                "location": ticket.location,
+                "organizer": event.organizer.username,
+                "status": ticket.status,  
+                "purchase_date": ticket.purchase_date.isoformat(),
+                "qr_code": ticket.qr_code,
+                "is_online": ticket.is_online,
+                "meeting_link": ticket.meeting_link,
+            })
+        
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data)
+        }
+    except Exception as e:
+        print(f"Error fetching event history: {e}")
         tickets = (
             Ticket.objects.filter(attendee=request.user)
             .select_related("event", "event__organizer")
@@ -751,6 +781,43 @@ def get_user_statistics(request):
         return 400, {"error": str(e)}
 
 
+@api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema})
+def get_user_created_events(request):
+    """Get events created by the user (for organizers)"""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    
+    try:
+        created_events = Event.objects.filter(
+            organizer=request.user
+        ).order_by('-event_create_date')
+        
+        events_data = []
+        for event in created_events:
+            attendee_count = len(event.attendee) if event.attendee else 0
+            
+            events_data.append({
+                "id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_start_date": event.event_start_date.isoformat(),
+                "event_end_date": event.event_end_date.isoformat(),
+                "max_attendee": event.max_attendee,
+                "current_attendees": attendee_count,
+                "available_spots": (event.max_attendee - attendee_count) if event.max_attendee else 0,
+                "status_registration": event.status_registration,
+                "event_image": event.event_image.url if event.event_image else None,
+                "is_approved": event.is_approved,
+                "event_create_date": event.event_create_date.isoformat(),
+            })
+        
+        return 200, {
+            "events": events_data,
+            "total_created": len(events_data),
+        }
+    except Exception as e:
+        print(f"Error fetching created events: {e}")
+        
 @api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_created_events(request):
     """Return events created by the logged-in user"""
