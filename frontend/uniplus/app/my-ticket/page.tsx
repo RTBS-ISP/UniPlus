@@ -33,7 +33,7 @@ function formatTime(timeStr: string) {
 /* ---------- Types ---------- */
 interface Ticket {
   ticket_id: number;
-  ticket_qr: string;
+  qr_code: string;
   event_id: number | null;
   event_title: string;
   event_description: string | null;
@@ -121,7 +121,8 @@ export default function MyTicketsPage() {
         data.tickets.forEach((ticket: Ticket, idx: number) => {
           console.log(`Ticket ${idx + 1}:`, {
             title: ticket.event_title,
-            ticket_qr: ticket.ticket_qr,
+            ticket_id: ticket.ticket_id,
+            qr_code: ticket.qr_code,
             approval_status: ticket.approval_status,
             date: ticket.date,
             time: ticket.time,
@@ -262,7 +263,7 @@ export default function MyTicketsPage() {
                     <TicketCard
                       key={`upcoming-${ticket.ticket_id}`}
                       ticket={ticket}
-                      onClick={() => router.push(`/my-ticket/${ticket.ticket_id}`)}
+                      onClick={() => router.push(`/my-ticket/${ticket.qr_code}`)}
                     />
                   ))}
                 </div>
@@ -283,7 +284,7 @@ export default function MyTicketsPage() {
                     <TicketCard
                       key={`past-${ticket.ticket_id}`}
                       ticket={ticket}
-                      onClick={() => router.push(`/my-ticket/${ticket.ticket_id}`)}
+                      onClick={() => router.push(`/my-ticket/${ticket.qr_code}`)}
                       isPast
                     />
                   ))}
