@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "../components/navbar";
 import EditPopup from "../components/profile/EditPopup";
 import Tabs from '../components/profile/Tabs';
+import EventCard from "../components/events/EventCard";
 import { useUser } from "../context/UserContext"; 
 import { Calendar, Zap } from 'lucide-react';
 
@@ -12,9 +13,13 @@ interface EventData {
   event_id: number;
   event_title: string;
   event_date: string;
+  event_description: string;
   location: string;
   organizer: string;
+  organizer_role: string;
   status: string;
+  event_tags: string[];
+  is_online: boolean;
 }
 
 interface StatisticsData {
@@ -22,6 +27,54 @@ interface StatisticsData {
   upcoming_events: number;
   attended_events: number;
   total_registrations: number;
+}
+
+// Transform event history data to EventCard format
+function transformEventToItem(event: any, index: number) {
+  const eventDateStr = event.event_date || '';
+  const eventDate = eventDateStr ? new Date(eventDateStr) : null;
+  const now = new Date();
+  const isPast = eventDate ? eventDate < now : false;
+  
+  const organizerRole = event.organizer_role 
+    ? event.organizer_role.charAt(0).toUpperCase() + event.organizer_role.slice(1)
+    : 'Organizer';
+  
+  let eventTags = [];
+  if (event.event_tags) {
+    try {
+      eventTags = Array.isArray(event.event_tags) 
+        ? event.event_tags 
+        : JSON.parse(event.event_tags);
+    } catch {
+      eventTags = [];
+    }
+  }
+  
+  // Extract category from tags (first tag is usually the category)
+  const category = eventTags.length > 0 ? eventTags[0] : undefined;
+  
+  // Create excerpt from event description
+  const excerpt = event.event_description 
+    ? (event.event_description.length > 150 
+        ? event.event_description.substring(0, 150) + '...' 
+        : event.event_description)
+    : 'No description available';
+
+  return {
+    id: event.event_id || index,
+    title: event.event_title || 'Untitled Event',
+    host: [organizerRole],
+    tags: eventTags,
+    category: category,
+    excerpt: excerpt,
+    date: eventDateStr,
+    createdAt: eventDateStr || new Date().toISOString(),
+    popularity: 0,
+    startDate: eventDateStr,
+    endDate: eventDateStr,
+    location: event.is_online ? 'Online Event' : (event.location || 'TBA'),
+  };
 }
 
 function ProfilePage() {
@@ -121,17 +174,37 @@ function ProfilePage() {
 
   if (!user) return <p>Loading.....</p>
 
+  // Transform event history to EventCard format
+  const eventItems = eventHistory.map((event, idx) => 
+    transformEventToItem(event, idx)
+  );
+
+  // Sort events: upcoming first, then past
+  const sortedEventItems = [...eventItems].sort((a, b) => {
+    const aDate = a.date ? new Date(a.date).getTime() : 0;
+    const bDate = b.date ? new Date(b.date).getTime() : 0;
+    const now = Date.now();
+    
+    const aIsUpcoming = aDate >= now;
+    const bIsUpcoming = bDate >= now;
+    
+    if (aIsUpcoming && !bIsUpcoming) return -1;
+    if (!aIsUpcoming && bIsUpcoming) return 1;
+    
+    return bDate - aDate; 
+  });
+
   const items = [
     {
       title: "Event History",
       content: (
-        <div className="bg-white p-6 rounded-xl shadow-md">
+        <div className="mt-4 rounded-xl">
           {loadingEvents ? (
             <div className="flex items-center justify-center h-64">
               <div className="text-gray-500">Loading events...</div>
             </div>
-          ) : eventHistory.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-800">
+          ) : sortedEventItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-800 bg-white rounded-xl">
               <Calendar className="mb-2.5" size={52} />
               <p className="font-semibold text-xl">No registered events yet</p>
               <p className="text-sm text-gray-600 mt-2">
@@ -140,42 +213,13 @@ function ProfilePage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {eventHistory.map((event, idx) => (
-                <div
-                  key={idx}
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-lg text-gray-900">
-                        {event.event_title}
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {new Date(event.event_date).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        📍 {event.location}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        👤 Organized by {event.organizer}
-                      </p>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                      event.status === 'active'
-                        ? 'bg-green-100 text-green-800'
-                        : event.status === 'used'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {event.status}
-                    </span>
-                  </div>
-                </div>
+              {sortedEventItems.map((eventItem, idx) => (
+                <EventCard 
+                  key={eventItem.id} 
+                  item={eventItem} 
+                  index={idx}
+                  stagger={0.04}
+                />
               ))}
             </div>
           )}
