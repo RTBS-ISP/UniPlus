@@ -24,6 +24,14 @@ class LoginSchema(Schema):
     email: str
     password: str   
     
+class EventDateSchema(Schema):
+    date: str
+    time: str
+    endTime: Optional[str] = None
+    location: str
+    is_online: bool
+    meeting_link: Optional[str] = None
+    
 class TicketInfoSchema(Schema):
     date: Optional[str] = None
     time: Optional[str] = None
@@ -36,6 +44,7 @@ class TicketInfoSchema(Schema):
     event_id: Optional[int] = None
     is_online: bool = False
     event_meeting_link: Optional[str] = None
+    event_dates: List[EventDateSchema] = []
      
 # For returning user data (no password)
 class UserSchema(Schema):
@@ -139,6 +148,7 @@ class EventDetailSchema(Schema):
     event_description: str
     excerpt: str  
     organizer_username: str
+    organizer_role: str
     host: List[str]  
     start_date_register: datetime
     end_date_register: datetime

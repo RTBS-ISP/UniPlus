@@ -15,12 +15,15 @@ from api.model.event import Event
 from api.model.ticket import Ticket
 from api.model.comment import Comment
 from api.model.rating import Rating
+from api.model.event_schedule import EventSchedule
 from api import schemas
 from typing import List, Optional
 import json
 from datetime import datetime
 from django.db.models import Count
 from django.db.models import Avg, Count
+import uuid 
+import traceback
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
@@ -143,10 +146,41 @@ def get_user(request):
             for ticket in request.user.my_tickets.all().select_related('event', 'event__organizer'):
                 try:
                     event = ticket.event
+                    
+                    event_dates = []
+                    if ticket.event_dates:
+                        try:
+                            event_dates = json.loads(ticket.event_dates) if isinstance(ticket.event_dates, str) else ticket.event_dates
+                        except:
+                            event_dates = []
+                    if not event_dates:
+                        schedules = EventSchedule.objects.filter(event=event).order_by("event_date", "start_time_event")
+
+                        # And when building the event_dates array:
+                        for s in schedules:
+                            event_dates.append({
+                                "date": s.event_date.isoformat(), 
+                                "time": s.start_time_event.isoformat(),  
+                                "endTime": s.end_time_event.isoformat() if s.end_time_event else None,  
+                                "location": event.event_address or "TBA",
+                                "is_online": event.is_online,
+                                "meeting_link": event.event_meeting_link or "",
+                            })
+                    if not event_dates and event.event_start_date:
+                        event_dates = [{
+                            'date': event.event_start_date.date().isoformat(),
+                            'time': event.event_start_date.time().isoformat(),
+                            'location': event.event_address or 'TBA',
+                            'is_online': event.is_online,
+                            'meeting_link': event.event_meeting_link
+                        }]
+                    display_date = event_dates[0]['date'] if event_dates else (event.event_start_date.date().isoformat() if event.event_start_date else None)
+                    display_time = event_dates[0]['time'] if event_dates else (event.event_start_date.time().isoformat() if event.event_start_date else '00:00:00')
+                    
                     ticket_data = {
-                        "date": event.start_date_register.strftime("%Y-%m-%d") if event and event.start_date_register else None,
-                        "time": event.start_date_register.strftime("%H:%M:%S") if event and event.start_date_register else None,
-                        "location": event.event_address if event else None,
+                        "date": display_date,
+                        "time": display_time,
+                        "location": event_dates[0]['location'] if event_dates else (event.event_address or 'TBA'),
                         "organizer": event.organizer.username if event and event.organizer else None,
                         "user_information": {
                             "name": f"{request.user.first_name} {request.user.last_name}",
@@ -160,7 +194,9 @@ def get_user(request):
                         "ticket_number": ticket.qr_code,
                         "event_id": event.id if event else None,
                         "is_online": ticket.is_online,
-                        "event_meeting_link": ticket.meeting_link
+                        "event_meeting_link": ticket.meeting_link,
+                        "event_image": event.event_image.url if event and event.event_image else None,
+                        "event_dates": event_dates,  
                     }
                     tickets.append(ticket_data)
                 except Exception as e:
@@ -181,102 +217,6 @@ def get_user(request):
     return 401, {"error": "Not authenticated"}
 
 
-@api.get("/check-auth")
-def check_auth(request):
-    return {
-        "authenticated": request.user.is_authenticated,
-        "username": request.user.username if request.user.is_authenticated else None
-    }
-
-
-@api.post("/events/create", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
-def create_event(
-    request,
-    event_title: str = Form(...),
-    event_description: str = Form(...),
-    category: Optional[str] = Form(default=""),
-    start_date_register: str = Form(...),
-    end_date_register: str = Form(...),
-    schedule_days: str = Form(...),  # Changed from event_dates
-    max_attendee: Optional[str] = Form(default=""),
-    tags: Optional[str] = Form(default=""),
-    event_email: Optional[str] = Form(default=""),
-    event_phone_number: Optional[str] = Form(default=""),
-    event_website_url: Optional[str] = Form(default=""),
-    terms_and_conditions: Optional[str] = Form(default=""),
-    event_image: Optional[UploadedFile] = File(default=None),
-):
-    try:
-        # Parse schedule days from frontend
-        schedule = json.loads(schedule_days)
-        
-        # Helper function to clean empty strings
-        def clean_empty_string(value):
-            if value and isinstance(value, str) and value.strip():
-                return value.strip()
-            return None
-        
-        # Determine overall online status and location
-        first_day = schedule[0] if schedule else {}
-        is_online = first_day.get('is_online', False)
-        event_address = None if is_online else clean_empty_string(first_day.get('address'))
-        event_meeting_link = clean_empty_string(first_day.get('meeting_link')) if is_online else None
-        
-        # Parse registration dates
-        start_reg = datetime.fromisoformat(start_date_register.replace('Z', '+00:00'))
-        end_reg = datetime.fromisoformat(end_date_register.replace('Z', '+00:00'))
-        
-        # Get event start and end dates from schedule
-        event_start = datetime.fromisoformat(schedule[0]['start_iso'].replace('Z', '+00:00'))
-        event_end = datetime.fromisoformat(schedule[-1]['end_iso'].replace('Z', '+00:00'))
-        
-        # Parse tags - ensure they include category
-        tags_list = json.loads(tags) if tags and tags.strip() else []
-        if category and category.strip() and category not in tags_list:
-            tags_list.insert(0, category)
-        
-        # Clean optional fields
-        event_email_clean = clean_empty_string(event_email)
-        event_phone_clean = clean_empty_string(event_phone_number)
-        event_website_clean = clean_empty_string(event_website_url)
-        terms_clean = clean_empty_string(terms_and_conditions)
-        
-        event = Event.objects.create(
-            organizer=request.user,
-            event_title=event_title,
-            event_description=event_description,
-            start_date_register=start_reg,
-            end_date_register=end_reg,
-            event_start_date=event_start,
-            event_end_date=event_end,
-            max_attendee=int(max_attendee) if max_attendee and max_attendee.strip() else None,
-            event_address=event_address,
-            is_online=is_online,
-            event_meeting_link=event_meeting_link,
-            tags=json.dumps(tags_list),  # Store as JSON
-            event_email=event_email_clean,
-            event_phone_number=event_phone_clean,
-            event_website_url=event_website_clean,
-            terms_and_conditions=terms_clean,
-            event_image=event_image if event_image else None,
-        )
-        
-        # Store schedule information in a new field or related model if needed
-        # For now, we'll store it in the event model as JSON
-        event.schedule = json.dumps(schedule)
-        event.save()
-        
-        return 200, {
-            "success": True,
-            "message": "Event created successfully",
-            "event_id": event.id
-        }
-        
-    except Exception as e:
-        print(f"Error creating event: {str(e)}")
-        return 400, {"error": str(e)}
-
-
 @api.get("/events")
 def get_events_list(request):
     """
@@ -288,12 +228,9 @@ def get_events_list(request):
         
         events_data = []
         for event in events:
-            # Get organizer info
             organizer_name = f"{event.organizer.first_name} {event.organizer.last_name}".strip()
             if not organizer_name:
                 organizer_name = event.organizer.username or event.organizer.email
-            
-            # Parse tags
             tags_list = []
             if event.tags:
                 try:
@@ -301,10 +238,8 @@ def get_events_list(request):
                 except:
                     tags_list = [event.tags] if event.tags else []
             
-            # Calculate attendee count
             attendee_count = len(event.attendee) if event.attendee else 0
             
-            # Parse schedule if available
             schedule = []
             if hasattr(event, 'schedule') and event.schedule:
                 try:
@@ -345,6 +280,172 @@ def get_events_list(request):
         print(f"Error fetching events: {str(e)}")
         return {"error": str(e)}
 
+@api.post("/events/create", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def create_event(
+    request,
+    event_title: str = Form(...),
+    event_description: str = Form(...),
+    category: str = Form(default=""),
+    start_date_register: str = Form(...),
+    end_date_register: str = Form(...),
+    schedule_days: str = Form(...),  # JSON string: [{"date":"2025-11-05", "time":"06:47", "endTime":"08:47", "location":"starz", "is_online":false}, ...]
+    max_attendee: str = Form(default=""),
+    tags: str = Form(default=""),
+    event_email: str = Form(default=""),
+    event_phone_number: str = Form(default=""),
+    event_website_url: str = Form(default=""),
+    terms_and_conditions: str = Form(default=""),
+    event_image: UploadedFile = File(default=None),
+):
+    """
+    Create a new event with multiple schedule days.
+    
+    Frontend sends schedule_days as a JSON array:
+    [
+        {
+            "date": "2025-11-05",
+            "time": "06:47",
+            "endTime": "08:47",
+            "location": "starz",
+            "is_online": false,
+            "meeting_link": null,
+            "start_iso": "2025-11-05T06:47:00.000Z",
+            "end_iso": "2025-11-05T08:47:00.000Z"
+        },
+        {
+            "date": "2025-11-06",
+            "time": "06:47",
+            "endTime": "08:47",
+            "location": "galaxy theater",
+            "is_online": false,
+            "meeting_link": null,
+            "start_iso": "2025-11-06T06:47:00.000Z",
+            "end_iso": "2025-11-06T08:47:00.000Z"
+        }
+    ]
+    """
+    try:
+        # Parse the schedule days from the frontend
+        schedule = json.loads(schedule_days)
+        
+        if not schedule or len(schedule) == 0:
+            return 400, {"error": "At least one event date is required"}
+        
+        # Helper function to clean empty strings
+        def clean_empty_string(value):
+            if value and isinstance(value, str) and value.strip():
+                return value.strip()
+            return None
+        
+        # Get the first day's info to determine overall event settings
+        first_day = schedule[0]
+        last_day = schedule[-1]
+        
+        # Determine if event is online (use first day's setting)
+        is_online = first_day.get('is_online', False)
+        
+        # Get location info from first day
+        event_address = None if is_online else clean_empty_string(first_day.get('location'))
+        event_meeting_link = clean_empty_string(first_day.get('meeting_link')) if is_online else None
+        
+        # Parse registration dates
+        start_reg = datetime.fromisoformat(start_date_register.replace('Z', '+00:00'))
+        end_reg = datetime.fromisoformat(end_date_register.replace('Z', '+00:00'))
+        
+        # Get event start and end dates from the schedule
+        event_start = datetime.fromisoformat(first_day['start_iso'].replace('Z', '+00:00'))
+        event_end = datetime.fromisoformat(last_day['end_iso'].replace('Z', '+00:00'))
+        
+        # Parse tags - ensure category is included
+        tags_list = json.loads(tags) if tags and tags.strip() else []
+        if category and category.strip() and category not in tags_list:
+            tags_list.insert(0, category)
+        
+        # Clean optional fields
+        event_email_clean = clean_empty_string(event_email)
+        event_phone_clean = clean_empty_string(event_phone_number)
+        event_website_clean = clean_empty_string(event_website_url)
+        terms_clean = clean_empty_string(terms_and_conditions)
+        
+        # Create the Event
+        event = Event.objects.create(
+            organizer=request.user,
+            event_title=event_title,
+            event_description=event_description,
+            start_date_register=start_reg,
+            end_date_register=end_reg,
+            event_start_date=event_start,
+            event_end_date=event_end,
+            max_attendee=int(max_attendee) if max_attendee and max_attendee.strip() else None,
+            event_address=event_address,
+            is_online=is_online,
+            event_meeting_link=event_meeting_link,
+            tags=json.dumps(tags_list),
+            event_email=event_email_clean,
+            event_phone_number=event_phone_clean,
+            event_website_url=event_website_clean,
+            terms_and_conditions=terms_clean,
+            event_image=event_image if event_image else None,
+        )
+        
+        # Store schedule as JSON for backwards compatibility (optional)
+        event.schedule = json.dumps(schedule)
+        event.save()
+        
+        print(f"DEBUG: Created event {event.id} - {event_title}")
+        
+        # ========== CRITICAL: CREATE EventSchedule ENTRIES ==========
+        # This is what was missing! We need to create EventSchedule rows
+        # for each day so that when users register, we can fetch them.
+        
+        created_schedules = []
+        for day_info in schedule:
+            try:
+                # Parse the ISO datetime strings
+                start_datetime = datetime.fromisoformat(day_info['start_iso'].replace('Z', '+00:00'))
+                end_datetime = datetime.fromisoformat(day_info['end_iso'].replace('Z', '+00:00'))
+                
+                # Create EventSchedule entry for this day
+                event_schedule = EventSchedule.objects.create(
+                    event=event,
+                    event_date=start_datetime.date(),
+                    start_time_event=start_datetime.time(),
+                    end_time_event=end_datetime.time()
+                )
+                
+                created_schedules.append({
+                    'date': event_schedule.event_date.isoformat(),
+                    'start_time': event_schedule.start_time_event.isoformat(),
+                    'end_time': event_schedule.end_time_event.isoformat()
+                })
+                
+                print(f"DEBUG: Created EventSchedule for {event_schedule.event_date}")
+                
+            except Exception as e:
+                print(f"ERROR: Failed to create EventSchedule for day {day_info}: {e}")
+                # Continue creating other days even if one fails
+                continue
+        
+        print(f"DEBUG: Created {len(created_schedules)} EventSchedule entries for event {event.id}")
+        
+        if len(created_schedules) == 0:
+            print(f"WARNING: No EventSchedule entries were created!")
+        
+        return 200, {
+            "success": True,
+            "message": f"Event created successfully with {len(created_schedules)} schedule entries",
+            "event_id": event.id,
+            "schedule_count": len(created_schedules)
+        }
+        
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Invalid JSON in schedule_days: {e}")
+        return 400, {"error": "Invalid schedule data format"}
+    except Exception as e:
+        print(f"ERROR: Failed to create event: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return 400, {"error": str(e)}
     
 @api.patch("/user", auth=django_auth, response={200: schemas.UserSchema, 400: schemas.ErrorSchema})
 def update_user(
@@ -387,59 +488,55 @@ def update_user(
 @api.post("/events/{event_id}/register", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
 def register_for_event(request, event_id: int):
     try:
-        import uuid
-
         event = get_object_or_404(Event, id=event_id)
         user = request.user
 
+        # Check if already registered
         if Ticket.objects.filter(event=event, attendee=user).exists():
             return 400, {"error": "You are already registered for this event"}
 
-        if timezone.now() > event.end_date_register:
-            return 400, {"error": "Event registration has closed"}
-
-        unique_attendees = Ticket.objects.filter(event=event).values('attendee').distinct().count()
-        if event.max_attendee and unique_attendees >= event.max_attendee:
-            return 400, {"error": "Event has reached maximum attendees"}
-
-        if event.status_registration != "OPEN":
-            return 400, {"error": "Event registration is not open"}
-
-        # Parse schedule to determine number of days
-        schedule = []
-        if hasattr(event, 'schedule') and event.schedule:
-            try:
-                schedule = json.loads(event.schedule)
-            except:
-                pass
+        # Fetch ALL EventSchedule entries
+        event_schedules = EventSchedule.objects.filter(event=event).order_by('event_date', 'start_time_event')
         
-        # If no schedule, create single ticket
+        schedule = []
+        for sched in event_schedules:
+            schedule.append({
+                'date': sched.event_date.isoformat(),
+                'time': sched.start_time_event.isoformat(),
+                'endTime': sched.end_time_event.isoformat(),
+                'location': event.event_address or 'TBA',
+                'is_online': event.is_online,
+                'meeting_link': event.event_meeting_link
+            })
+        
+        print(f"DEBUG: Event {event_id} has {len(schedule)} EventSchedule entries")
+        
+        # Fallback if no EventSchedule entries
         if not schedule:
+            print(f"DEBUG: No EventSchedule entries found, creating fallback")
             schedule = [{
                 'date': event.event_start_date.date().isoformat() if event.event_start_date else timezone.now().date().isoformat(),
+                'time': event.event_start_date.time().isoformat() if event.event_start_date else '00:00:00',
+                'endTime': '23:59:59',
+                'location': event.event_address or 'TBA',
                 'is_online': event.is_online,
-                'address': event.event_address,
                 'meeting_link': event.event_meeting_link
             }]
-        
-        tickets_created = []
-        for day_info in schedule:
-            qr_code_value = str(uuid.uuid4())
-            
-            ticket = Ticket.objects.create(
-                event=event,
-                attendee=user,
-                qr_code=qr_code_value,
-                event_date=datetime.fromisoformat(day_info['date']) if isinstance(day_info.get('date'), str) else event.event_start_date,
-                is_online=day_info.get('is_online', event.is_online),
-                meeting_link=day_info.get('meeting_link', event.event_meeting_link) if day_info.get('is_online', event.is_online) else None,
-                user_name=f"{user.first_name} {user.last_name}",
-                user_email=user.email,
-                event_title=event.event_title,
-                start_date=event.event_start_date,
-                location=day_info.get('address', event.event_address) if not day_info.get('is_online', event.is_online) else "Online",
-            )
-            tickets_created.append(qr_code_value)
+
+        # Create ticket
+        ticket = Ticket.objects.create(
+            event=event,
+            attendee=user,
+            qr_code=str(uuid.uuid4()),
+            user_name=f"{user.first_name} {user.last_name}".strip() or user.username,
+            user_email=user.email,
+            event_title=event.event_title,
+            start_date=event.event_start_date,
+            location=event.event_address or 'TBA',
+            is_online=event.is_online,
+            meeting_link=event.event_meeting_link,
+            event_dates=schedule,  # ← CHANGED: No json.dumps()! Just pass the list!
+        )
 
         # Update attendee list
         attendees = event.attendee if isinstance(event.attendee, list) else []
@@ -448,23 +545,19 @@ def register_for_event(request, event_id: int):
         event.attendee = attendees
         event.save()
 
-        num_tickets = len(tickets_created)
-        if num_tickets == 1:
-            message = "Successfully registered for the event"
-        else:
-            message = f"Successfully registered! You received {num_tickets} tickets (one for each day)"
+        print(f"DEBUG: Ticket {ticket.qr_code} created with {len(schedule)} dates")
 
         return 200, {
             "success": True,
-            "message": message,
-            "tickets_count": num_tickets,
-            "ticket_numbers": tickets_created
+            "message": "Successfully registered for the event",
+            "tickets_count": 1,
+            "ticket_number": ticket.qr_code
         }
 
-    except Event.DoesNotExist:
-        return 400, {"error": "Event not found"}
     except Exception as e:
         print(f"Error registering for event: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return 400, {"error": str(e)}
 
 
@@ -472,7 +565,6 @@ def register_for_event(request, event_id: int):
 def get_event_detail(request, event_id: int):
     event = get_object_or_404(Event, id=event_id)
     
-    # Parse tags
     tags_list = []
     if event.tags:
         try:
@@ -480,27 +572,21 @@ def get_event_detail(request, event_id: int):
         except:
             tags_list = [event.tags] if event.tags else []
     
-    # Parse and transform schedule to frontend format
     schedule = []
     if hasattr(event, 'schedule') and event.schedule:
         try:
             schedule_data = json.loads(event.schedule)
             
-            # Transform backend schedule format to frontend format
             for day in schedule_data:
-                # Extract date and times from the schedule
                 date_str = day.get('date', '')
-                
-                # Try to extract time from start_iso if available
                 start_iso = day.get('start_iso', '')
                 end_iso = day.get('end_iso', '')
-                
+                location = day.get('address', '') or day.get('location', '')
                 start_time = '00:00'
                 end_time = '00:00'
                 
                 if start_iso:
                     try:
-                        # Extract time from ISO format: "2025-10-07T14:00:00Z" -> "14:00"
                         start_time = start_iso.split('T')[1].split(':')[0] + ':' + start_iso.split('T')[1].split(':')[1]
                     except:
                         pass
@@ -515,12 +601,12 @@ def get_event_detail(request, event_id: int):
                     "date": date_str,
                     "startTime": start_time,
                     "endTime": end_time,
+                    "location": location,
                 })
         except Exception as e:
             print(f"Error parsing schedule: {e}")
             pass
     
-    # Check if user is registered
     is_registered = False
     if request.user.is_authenticated:
         is_registered = Ticket.objects.filter(
@@ -528,7 +614,6 @@ def get_event_detail(request, event_id: int):
             attendee=request.user
         ).exists()
     
-    # Calculate available spots
     attendee_count = len(event.attendee) if event.attendee else 0
     available = (event.max_attendee - attendee_count) if event.max_attendee else 100
     
@@ -539,6 +624,7 @@ def get_event_detail(request, event_id: int):
         "event_description": event.event_description,
         "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
         "organizer_username": event.organizer.username if event.organizer else "Unknown",
+        "organizer_role": event.organizer.role or "Organizer",
         "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
         "start_date_register": event.start_date_register,
         "end_date_register": event.end_date_register,
@@ -550,7 +636,7 @@ def get_event_detail(request, event_id: int):
         "available": available,
         "event_address": event.event_address or "",
         "location": event.event_address or "Online" if event.is_online else "TBA",
-        "address2": getattr(event, 'address2', "") or "",  # Add this field - add to Event model too
+        "address2": getattr(event, 'address2', "") or "", 
         "is_online": event.is_online,
         "event_meeting_link": event.event_meeting_link or "",
         "tags": tags_list,
@@ -724,3 +810,219 @@ def get_event_comments(request, event_id: int):
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
         return {"error": str(e)}
+      
+@api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def get_user_event_history(request):
+    """Get user's registered events and attendance history"""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    
+    try:
+        tickets = Ticket.objects.filter(
+            attendee=request.user
+        ).select_related('event').order_by('-purchase_date')
+        
+        events_data = []
+        for ticket in tickets:
+            event = ticket.event
+            events_data.append({
+                "event_id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_date": ticket.event_date.isoformat() if ticket.event_date else event.event_start_date.isoformat(),
+                "location": ticket.location,
+                "organizer": event.organizer.username,
+                "status": ticket.status,  
+                "purchase_date": ticket.purchase_date.isoformat(),
+                "qr_code": ticket.qr_code,
+                "is_online": ticket.is_online,
+                "meeting_link": ticket.meeting_link,
+            })
+        
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data)
+        }
+    except Exception as e:
+        print(f"Error fetching event history: {e}")
+        tickets = (
+            Ticket.objects.filter(attendee=request.user)
+            .select_related("event", "event__organizer")
+            .order_by("-purchase_date")
+        )
+        events_data = []
+        for ticket in tickets:
+            event_obj = ticket.event
+            status = "upcoming" if (
+                (ticket.event_date or ticket.start_date or (event_obj and getattr(event_obj, "event_start_date", None)))
+                and (ticket.event_date or ticket.start_date or event_obj.event_start_date) > timezone.now()
+            ) else "past"
+
+            # Parse event tags
+            event_tags = []
+            if event_obj and event_obj.tags:
+                try:
+                    event_tags = json.loads(event_obj.tags) if isinstance(event_obj.tags, str) else event_obj.tags
+                except:
+                    event_tags = [event_obj.tags] if event_obj.tags else []
+
+            event_date_str = None
+            if ticket.event_date:
+                event_date_str = ticket.event_date.strftime("%Y-%m-%d")
+            elif ticket.start_date:
+                event_date_str = ticket.start_date.date().strftime("%Y-%m-%d") if hasattr(ticket.start_date, 'date') else ticket.start_date.strftime("%Y-%m-%d")
+            elif event_obj and event_obj.event_start_date:
+                event_date_str = event_obj.event_start_date.date().strftime("%Y-%m-%d") if hasattr(event_obj.event_start_date, 'date') else event_obj.event_start_date.strftime("%Y-%m-%d")
+
+            events_data.append({
+                "ticket_id": ticket.id,
+                "event_id": event_obj.id if event_obj else None,
+                "event_title": ticket.event_title,
+                "event_description": event_obj.event_description if event_obj else None,
+                "event_date": event_date_str,  # Now returns YYYY-MM-DD format
+                "location": ticket.location,
+                "is_online": ticket.is_online,
+                "meeting_link": ticket.meeting_link,
+                "status": ticket.status,
+                "organizer": event_obj.organizer.username if event_obj and event_obj.organizer else None,
+                "organizer_role": event_obj.organizer.role if event_obj and event_obj.organizer else "organizer",
+                "event_tags": event_tags,
+                "user_name": ticket.user_name,
+                "user_email": ticket.user_email,
+                "purchase_date": ticket.purchase_date.isoformat() if ticket.purchase_date else None,
+                "qr_code": ticket.qr_code,
+            })
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data),
+        }
+    except Exception as e:
+        print("Error fetching event history:")
+        traceback.print_exc()
+        return 400, {"error": str(e)}
+
+
+@api.get("/user/statistics", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema})
+def get_user_statistics(request):
+    """Get user's event statistics"""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    
+    try:
+        from django.utils import timezone
+        all_tickets = Ticket.objects.filter(attendee=request.user)
+        total_events = all_tickets.values('event').distinct().count()
+        upcoming_tickets = all_tickets.filter(
+            event__event_end_date__gt=timezone.now()
+        ).values('event').distinct()
+        upcoming_count = upcoming_tickets.count()
+        past_tickets = all_tickets.filter(
+            event__event_end_date__lte=timezone.now()
+        ).values('event').distinct()
+        attended_count = past_tickets.count()
+        
+        return 200, {
+            "total_events": total_events,
+            "upcoming_events": upcoming_count,
+            "attended_events": attended_count,
+            "total_registrations": all_tickets.count(),  
+        }
+    except Exception as e:
+        print(f"Error calculating statistics: {e}")
+        return 400, {"error": str(e)}
+
+
+@api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema})
+def get_user_created_events(request):
+    """Get events created by the user (for organizers)"""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    
+    try:
+        created_events = Event.objects.filter(
+            organizer=request.user
+        ).order_by('-event_create_date')
+        
+        events_data = []
+        for event in created_events:
+            attendee_count = len(event.attendee) if event.attendee else 0
+            
+            events_data.append({
+                "id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_start_date": event.event_start_date.isoformat(),
+                "event_end_date": event.event_end_date.isoformat(),
+                "max_attendee": event.max_attendee,
+                "current_attendees": attendee_count,
+                "available_spots": (event.max_attendee - attendee_count) if event.max_attendee else 0,
+                "status_registration": event.status_registration,
+                "event_image": event.event_image.url if event.event_image else None,
+                "is_approved": event.is_approved,
+                "event_create_date": event.event_create_date.isoformat(),
+            })
+        
+        return 200, {
+            "events": events_data,
+            "total_created": len(events_data),
+        }
+    except Exception as e:
+        print(f"Error fetching created events: {e}")
+        
+@api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def get_user_created_events(request):
+    """Return events created by the logged-in user"""
+    if not request.user.is_authenticated:
+        return 401, {"error": "Not authenticated"}
+    try:
+        created_events = (
+            Event.objects.filter(organizer=request.user)
+            .select_related("organizer")
+            .order_by("-event_start_date")
+        )
+        events_data = []
+        for event in created_events:
+            # Determine status (upcoming/past)
+            status = "upcoming" if (
+                event.event_start_date and event.event_start_date > timezone.now()
+            ) else "past"
+
+            # Parse tags safely
+            event_tags = []
+            if event.tags:
+                try:
+                    event_tags = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    event_tags = [event.tags] if event.tags else []
+
+            event_date_str = (
+                event.event_start_date.strftime("%Y-%m-%d")
+                if event.event_start_date
+                else None
+            )
+            events_data.append({
+                "event_id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_date": event_date_str,
+                "location": event.event_address, 
+                "is_online": event.is_online,
+                "meeting_link": event.event_meeting_link,  
+                "status": status,
+                "organizer": event.organizer.username if event.organizer else None,
+                "organizer_role": getattr(event.organizer, "role", "organizer") if event.organizer else "organizer",
+                "event_tags": event_tags,
+                "user_name": request.user.username,
+                "user_email": request.user.email,
+                "purchase_date": None,
+                "qr_code": None,
+            })
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data),
+        }
+    except Exception as e:
+        import traceback
+        print("Error fetching created events:")
+        traceback.print_exc()
+        return 400, {"error": str(e)}

@@ -26,7 +26,7 @@ function formatMDY(dateStr?: string): string {
   const m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) return dateStr;
   const [, y, mo, d] = m;
-  return `${mo}/${d}/${y}`;
+  return `${d}/${mo}/${y}`;
 }
 
 const KNOWN_CATEGORIES = [
@@ -70,7 +70,7 @@ function HostPill({ label }: { label: string }) {
   } else if (normalized === "student") {
     bg = "#E0F2FE";
     color = "#1F1F1F";
-  } else if (normalized === "university") {
+  } else if (normalized === "professor") {
     bg = "#C7D2FE";
     color = "#1F1F1F";
   }
@@ -86,7 +86,16 @@ function HostPill({ label }: { label: string }) {
 }
 
 // ---------- Main Component ----------
-export default function EventCard({ item }: { item: EventItem }) {
+// NEW: optional index/stagger props to cascade cards from parent lists
+export default function EventCard({
+  item,
+  index = 0,
+  stagger = 0.06,
+}: {
+  item: EventItem;
+  index?: number;
+  stagger?: number;
+}) {
   const shouldReduce = useReducedMotion();
   const hostBadge = item.host?.[0] ?? "Organizer";
 
@@ -103,75 +112,37 @@ export default function EventCard({ item }: { item: EventItem }) {
   );
 
   // --- dynamic tag fitting ---
-  const pillsRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const [visibleCount, setVisibleCount] = useState<number>(tagList.length);
+  const MAX_VISIBLE_TAGS = 2;
+  const visibleTags = tagList.slice(0, MAX_VISIBLE_TAGS);
+  const hiddenTags = tagList.slice(MAX_VISIBLE_TAGS);
 
-  useEffect(() => {
-    function recalc() {
-      const pillsWrap = pillsRef.current;
-      const measure = measureRef.current;
-      if (!pillsWrap || !measure) return;
+  // --- motion: entrance + hover ---
+  const entranceDelay = shouldReduce ? 0 : index * stagger;
+  const entranceInitial = shouldReduce
+    ? { opacity: 0 }
+    : { opacity: 0, y: 10, scale: 0.98 };
+  const entranceWhileInView = shouldReduce
+    ? { opacity: 1 }
+    : { opacity: 1, y: 0, scale: 1 };
 
-      const containerWidth = pillsWrap.clientWidth;
-      if (containerWidth <= 0) {
-        setVisibleCount(tagList.length);
-        return;
-      }
-
-      const tagSpans = Array.from(
-        measure.querySelectorAll<HTMLElement>('[data-role="pill"]')
-      );
-      const widths = tagSpans.map((el) => el.offsetWidth);
-
-      const plusSpan = measure.querySelector<HTMLElement>('[data-role="plus"]');
-      const plusWidthBase = plusSpan ? plusSpan.offsetWidth : 40;
-
-      const GAP = 8;
-      let used = 0;
-      let count = 0;
-
-      for (let i = 0; i < widths.length; i++) {
-        const w = widths[i] + (i > 0 ? GAP : 0);
-        const remaining = widths.length - (i + 1);
-        const reserve = remaining > 0 ? GAP + plusWidthBase : 0;
-
-        if (used + w + reserve <= containerWidth) {
-          used += w;
-          count++;
-        } else {
-          break;
-        }
-      }
-      setVisibleCount(count);
-    }
-
-    recalc();
-    const t = setTimeout(recalc, 0);
-    const ro = new ResizeObserver(recalc);
-    if (pillsRef.current) ro.observe(pillsRef.current);
-    window.addEventListener("resize", recalc);
-
-    return () => {
-      clearTimeout(t);
-      ro.disconnect();
-      window.removeEventListener("resize", recalc);
-    };
-  }, [tagList]);
-
-  const visibleTags = tagList.slice(0, visibleCount);
-  const hiddenTags = tagList.slice(visibleCount);
-
-  // --- motion variants ---
   const cardHover = shouldReduce ? {} : { scale: 1.015, y: -4 };
-  const cardTransition = shouldReduce
+  const transition = shouldReduce
     ? { duration: 0 }
-    : { type: "spring", stiffness: 320, damping: 22, mass: 0.6 };
+    : {
+        type: "spring",
+        stiffness: 320,
+        damping: 22,
+        mass: 0.6,
+        delay: entranceDelay,
+      };
 
   return (
     <motion.div
+      initial={entranceInitial}
+      whileInView={entranceWhileInView}
+      viewport={{ once: true, amount: 0.25 }}
       whileHover={cardHover}
-      transition={cardTransition}
+      transition={transition}
       className="group rounded-2xl border border-[#6CA8FF] bg-white p-5 shadow-sm hover:shadow-lg
                  [backface-visibility:hidden] [transform-style:preserve-3d]"
     >
@@ -209,7 +180,7 @@ export default function EventCard({ item }: { item: EventItem }) {
               <span className="font-semibold text-[#0B1220]/80">Tag</span>
 
               {/* visible pills */}
-              <div ref={pillsRef} className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 {visibleTags.map((t) => (
                   <BluePill key={t}>{t}</BluePill>
                 ))}
@@ -226,9 +197,9 @@ export default function EventCard({ item }: { item: EventItem }) {
                     {/* hovercard */}
                     <div
                       className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(420px,90vw)]
-                                 -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
-                                 shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
-                                 group-hover:opacity-100 group-hover:scale-100"
+                                -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
+                                shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
+                                group-hover:opacity-100 group-hover:scale-100"
                     >
                       <div className="flex flex-wrap gap-2">
                         {hiddenTags.map((t) => (
@@ -238,29 +209,6 @@ export default function EventCard({ item }: { item: EventItem }) {
                     </div>
                   </span>
                 )}
-              </div>
-
-              {/* hidden measurer */}
-              <div
-                ref={measureRef}
-                className="invisible absolute left-[-9999px] top-0 -z-10 flex flex-wrap gap-2"
-                aria-hidden
-              >
-                {tagList.map((t) => (
-                  <span
-                    key={t}
-                    data-role="pill"
-                    className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
-                  >
-                    {t}
-                  </span>
-                ))}
-                <span
-                  data-role="plus"
-                  className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
-                >
-                  +99
-                </span>
               </div>
             </div>
           )}
@@ -316,13 +264,7 @@ function MotionDetailButton({ id }: { id: number }) {
       onHoverEnd={() => setHovered(false)}
       className="inline-flex items-center rounded-full bg-[#6366F1] text-xs font-semibold text-white
                  shadow-sm focus:outline-none hover:bg-[#4F46E5]"
-      style={{
-        paddingLeft: 12,
-        paddingRight: 12,
-        paddingTop: 6,
-        paddingBottom: 6,
-        gap: 4,
-      }}
+      style={{ paddingLeft: 12, paddingRight: 12, paddingTop: 6, paddingBottom: 6, gap: 4 }}
       whileHover={
         shouldReduce
           ? {}

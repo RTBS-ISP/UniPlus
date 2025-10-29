@@ -7,6 +7,9 @@ import { useAlert } from '../../components/ui/AlertProvider';
 interface TagSelectorProps {
   tags: string[];
   setTags: (tags: string[]) => void;
+  required?: boolean;
+  minTags?: number;
+  requiredMessage?: string;
 }
 
 const MAX_TAGS = 30;
@@ -22,7 +25,13 @@ const AVAILABLE_TAGS = [
   'Custom'
 ];
 
-export default function TagSelector({ tags, setTags }: TagSelectorProps) {
+export default function TagSelector({
+  tags,
+  setTags,
+  required = false,
+  minTags = 1,
+  requiredMessage = 'Please select a tag.',
+}: TagSelectorProps) {
   const toast = useAlert();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -30,6 +39,17 @@ export default function TagSelector({ tags, setTags }: TagSelectorProps) {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customInput, setCustomInput] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const validityRef = useRef<HTMLInputElement>(null);
+
+  // Keep validity in sync with current selection
+  useEffect(() => {
+    if (!validityRef.current) return;
+    if (required && tags.length < minTags) {
+      validityRef.current.setCustomValidity(requiredMessage);
+    } else {
+      validityRef.current.setCustomValidity('');
+    }
+  }, [required, minTags, requiredMessage, tags.length]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -88,7 +108,29 @@ export default function TagSelector({ tags, setTags }: TagSelectorProps) {
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <label className="block text-sm font-semibold text-black mb-2">Tags <span className="text-red-500">*</span></label>
+      <label className="block text-sm font-semibold text-black mb-2">
+        Tags {required && <span className="text-red-500">*</span>}
+      </label>
+
+      {/* Off-screen input that participates in native form validation */}
+      <input
+        ref={validityRef}
+        type="text"
+        tabIndex={-1}
+        aria-hidden="true"
+        value={tags.length ? tags.join(',') : ''}
+        onChange={() => {}}
+        required={required}
+        name="tags_value"
+        // IMPORTANT: give it non-zero size & place it where bubble can anchor
+        className="absolute left-0 top-0 h-px w-px opacity-0 pointer-events-none"
+        onInvalid={(e) => {
+          (e.currentTarget as HTMLInputElement).setCustomValidity(requiredMessage);
+        }}
+        onInput={(e) => {
+          (e.currentTarget as HTMLInputElement).setCustomValidity('');
+        }}
+      />
 
       {/* Selected */}
       <div className="mb-2 min-h-[42px] p-2 border-2 border-gray-200 rounded-xl bg-white flex flex-wrap gap-2">

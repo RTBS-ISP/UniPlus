@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import Navbar from "../components/navbar";
 import SearchBar from "../components/events/SearchBar";
 import SortPanel from "../components/events/SortPanel";
@@ -8,31 +9,15 @@ import FilterPanel, { FilterValues } from "../components/events/FilterPanel";
 import EventCard from "../components/events/EventCard";
 import Pagination from "../components/events/Pagination";
 
-interface EventItem {
-  id: number;
-  title: string;
-  host: string[];
-  tags: string[];
-  excerpt: string;
-  date: string;
-  createdAt: string;
-  popularity: number;
-  available?: number;
-  startDate?: string;
-  endDate?: string;
-  location?: string;
-  image?: string;
-  hostRole?: string;
-  category?: string;
-}
-
 export default function EventsPage() {
-  const [events, setEvents] = useState<EventItem[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"recent" | "popular" | "upcoming">("recent");
-  const [filters, setFilters] = useState<FilterValues>({
+  const [sort, setSort] = 
+    useState<"recent" | "popular" | "upcoming">("recent");
+  const [filters, setFilters] = useState({
     category: "",
     host: "",
     dateFrom: "",
@@ -42,97 +27,112 @@ export default function EventsPage() {
   const [page, setPage] = useState(1);
   const pageSize = 5;
 
-  // Fetch events from Django backend
+  const reduce = useReducedMotion();
+
+  // Fetch events from API
   useEffect(() => {
-    const fetchEvents = async () => {
+    async function fetchEvents() {
       try {
         setLoading(true);
-        const res = await fetch("http://localhost:8000/api/events", {
-          method: "GET",
-          credentials: "include",
-        });
-
-        if (!res.ok) {
-          throw new Error("Failed to fetch events");
-        }
-
-        const data = await res.json();
-        
-        // Transform backend data to match frontend interface
-        const transformedEvents: EventItem[] = data.map((event: any) => {
-          // Parse tags if they're stored as JSON string
-          let parsedTags: string[] = [];
-          try {
-            parsedTags = event.tags ? JSON.parse(event.tags) : [];
-          } catch {
-            parsedTags = event.tags ? [event.tags] : [];
-          }
-
-          return {
-            id: event.id,
-            title: event.event_title,
-            host: [event.organizer_name || "Unknown Organizer"],
-            tags: parsedTags,
-            excerpt: event.event_description?.substring(0, 150) + "..." || "",
-            date: event.event_start_date,
-            createdAt: event.event_create_date,
-            popularity: event.attendee?.length || 0, // Number of attendees
-            available: event.max_attendee 
-              ? event.max_attendee - (event.attendee?.length || 0)
-              : undefined,
-            startDate: event.event_start_date,
-            endDate: event.event_end_date,
-            location: event.is_online ? "Online" : (event.event_address || "TBA"),
-            image: event.event_image || "/placeholder-event.jpg",
-            hostRole: event.organizer_role || "Organizer",
-            category: parsedTags[0] || "General", // Use first tag as category
-          };
-        });
+        const response = await fetch('http://localhost:8000/api/events');
+        if (!response.ok) throw new Error('Failed to fetch events');
+        const data = await response.json();
+        console.log(response);
+        const transformedEvents = data.map((event: any) => ({
+          id: event.id,
+          title: event.event_title,
+          host: [
+          event.organizer_role
+            ? event.organizer_role.charAt(0).toUpperCase() + event.organizer_role.slice(1).toLowerCase()
+            : "Organizer"
+          ],
+          tags: event.tags || [],
+          excerpt: event.event_description,
+          date: event.event_start_date || event.start_date_register,
+          createdAt: event.event_create_date,
+          popularity: event.attendee_count || 0,
+          category: event.tags?.[0] || "",
+          startDate: event.event_start_date?.split('T')[0],
+          endDate: event.event_end_date?.split('T')[0],
+          location: event.event_address || (event.is_online ? "Online" : ""),
+          capacity: event.max_attendee,
+          registered: event.attendee_count,
+          spotsAvailable: event.max_attendee ? event.max_attendee - event.attendee_count : undefined,
+        }));
 
         setEvents(transformedEvents);
+        console.log(transformedEvents);
+        setError(null);
       } catch (err) {
-        console.error("Error fetching events:", err);
-        setError("Failed to load events. Please try again later.");
+        setError(err instanceof Error ? err.message : 'Failed to load events');
+        console.error('Error fetching events:', err);
       } finally {
         setLoading(false);
       }
-    };
-
+    }
     fetchEvents();
   }, []);
 
-  // Build dropdown options from fetched data
+  // Build dropdown options from data
   const categoryOptions = useMemo(() => {
     const set = new Set<string>();
     events.forEach((e) => {
       if (e.category) set.add(e.category);
-      e.tags?.forEach((tag) => set.add(tag));
+      if (e.tags) {
+        e.tags.forEach((tag: string) => set.add(tag));
+      }
     });
     return Array.from(set).sort();
   }, [events]);
 
   const hostOptions = useMemo(() => {
-    const set = new Set<string>();
-    events.forEach((e) => {
-      if (e.host?.[0]) set.add(e.host[0]);
-    });
-    return Array.from(set).sort();
-  }, [events]);
+    return ["Student", "Organizer", "Professor"];
+  }, []);
 
-  // Filter + Sort
+  // ---- Helper: percent filled (0..1). Lower availability => higher score ----
+  const pctFilled = (e: any) => {
+    const capacity = Number(
+      e.capacity ?? e.maxAttendee ?? e.maxSeats ?? e.limit ?? 0
+    );
+
+    // Prefer direct registered/attending counts
+    const registered = Number(
+      e.registered ?? e.attending ?? e.rsvpCount ?? e.enrolled ?? NaN
+    );
+    if (capacity > 0 && !Number.isNaN(registered)) {
+      return Math.min(1, Math.max(0, registered / capacity));
+    }
+  
+    // Fallback: derive from spotsAvailable if present
+    const spotsAvailable = Number(
+      e.spotsAvailable ?? e.available ?? e.seatsLeft ?? NaN
+    );
+    if (capacity > 0 && !Number.isNaN(spotsAvailable)) {
+      return Math.min(1, Math.max(0, 1 - spotsAvailable / capacity));
+    }
+
+    // If we only have a single "available" without capacity, invert via a soft heuristic
+    if (!Number.isNaN(spotsAvailable) && spotsAvailable >= 0) {
+      // Without capacity we can't get a real percent; treat smaller availability as more filled.
+      // Map smaller numbers to higher scores using 1/(1+x).
+      return 1 - 1 / (1 + spotsAvailable);
+    }
+
+    // No data => treat as 0% filled
+    return 0;
+  };
+
+  // ---- Filter + Sort ----
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
 
     let list = events.filter((e) => {
-      const matchesText = [
-        e.title,
-        e.excerpt,
-        ...(e.tags || []),
-        ...(e.host || []),
-      ].some((x) => x.toLowerCase().includes(q));
+      const matchesText = [e.title, e.excerpt, ...(e.tags || []), ...(e.host || [])]
+        .some((x) => x?.toLowerCase().includes(q));
 
       const matchesCategory = filters.category
-        ? e.category === filters.category || (e.tags || []).includes(filters.category)
+        ? e.category === filters.category || 
+          (e.tags || []).includes(filters.category)
         : true;
 
       const matchesHost = filters.host
@@ -145,14 +145,14 @@ export default function EventsPage() {
 
       const matchesDateFrom = filters.dateFrom
         ? e.startDate
-          ? e.startDate >= filters.dateFrom
-          : false
+         ? e.startDate >= filters.dateFrom
+         : false
         : true;
 
       const matchesDateTo = filters.dateTo
         ? e.endDate
-          ? e.endDate <= filters.dateTo
-          : false
+         ? e.endDate <= filters.dateTo
+         : false
         : true;
 
       return (
@@ -165,193 +165,214 @@ export default function EventsPage() {
       );
     });
 
-    if (sort === "popular")
-      list = [...list].sort((a, b) => b.popularity - a.popularity);
+    if (sort === "popular") {
+      list = [...list].sort((a, b) => {
+        const fb = pctFilled(b);
+        const fa = pctFilled(a);
+        if (fb !== fa) return fb - fa; // more filled first
+        // tie-breaker: original popularity if present
+        return (b.popularity ?? 0) - (a.popularity ?? 0);
+      });
+    }
+
     if (sort === "recent")
       list = [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
     if (sort === "upcoming")
       list = [...list].sort((a, b) => a.date.localeCompare(b.date));
 
     return list;
-  }, [events, query, sort, filters]);
+  }, [query, sort, filters, events]);
 
-  // Pagination
+  // ---- Pagination ----
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const start = (page - 1) * pageSize;
   const pageItems = filtered.slice(start, start + pageSize);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50 to-indigo-50">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <div className="animate-pulse">
-            <div className="text-2xl font-semibold text-gray-600">Loading events...</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Smooth-scroll to list top on page change
+  const handlePageChange = (p: number) => {
+    setPage(p);
+    const el = document.getElementById("events");
+    if (el) el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  };
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#E0E7FF]">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <div className="text-2xl font-semibold text-red-600 mb-4">{error}</div>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Light entrance for sections (not the cards themselves)
+  const sectionIn = {
+    hidden: { opacity: 0, y: reduce ? 0 : 8 },
+    show: { opacity: 1, y: 0, transition: { duration: reduce ? 0 : 0.25 } },
+  };
 
   return (
     <div className="min-h-screen bg-[#E0E7FF]">
       <Navbar />
 
       {/* Header */}
-      <section className="mx-auto max-w-6xl px-4 py-8">
+      <motion.section
+        variants={sectionIn}
+        initial="hidden"
+        animate="show"
+        className="mx-auto max-w-6xl px-4 py-8"
+      >
         <h1 className="text-3xl text-black font-bold">Discover Events</h1>
         <p className="mt-2 max-w-2xl text-sm text-gray-600">
           Explore clubs, meetups, and university events happening around campus.
-          Use the search and filters to find exactly what you're looking for.
+          Use the search and filters to find exactly what you’re looking for.
         </p>
 
-        <button
+        <motion.button
+          whileHover={reduce ? undefined : { scale: 1.03 }}
+          whileTap={reduce ? undefined : { scale: 0.98 }}
           onClick={() => (window.location.href = "/events/create")}
           className="mt-4 rounded-full bg-[#6366F1] px-4 py-2 text-sm font-semibold text-white hover:bg-[#4F46E5] transition"
         >
           + Create Event
-        </button>
-      </section>
+        </motion.button>
+      </motion.section>
 
       {/* Content */}
       <main className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-4 pb-16 md:grid-cols-12">
         {/* Left: Sort + Filter */}
-        <aside className="pt-[52px] md:col-span-3">
+        <motion.aside
+          variants={sectionIn}
+          initial="hidden"
+          animate="show"
+          className="pt-[52px] md:col-span-3"
+        >
           <div className="sticky top-30 space-y-4">
             <SortPanel
               value={sort}
-              onChange={(v) => {
+              onChange={(v: any) => {
                 setPage(1);
                 setSort(v);
               }}
             />
-
             <FilterPanel
               categories={categoryOptions}
               hosts={hostOptions}
               value={filters}
-              onChange={(f) => {
+              onChange={(f: any) => {
                 setPage(1);
                 setFilters(f);
               }}
-              onClear={() => setPage(1)}
+              onClear={() => {
+                setPage(1);
+                setFilters({
+                  category: "",
+                  host: "",
+                  dateFrom: "",
+                  dateTo: "",
+                  location: "",
+                });
+              }}
             />
           </div>
-        </aside>
+        </motion.aside>
 
+        {/* Right: Search + Cards + Pagination */}
         <section className="md:col-span-9" id="events">
-          <div className="mb-6">
+          <motion.div
+            variants={sectionIn}
+            initial="hidden"
+            animate="show"
+            className="mb-4"
+          >
             <SearchBar
               value={query}
-              onChange={(v) => {
+              onChange={(v: string) => {
                 setPage(1);
                 setQuery(v);
               }}
             />
-          </div>
+          </motion.div>
 
-          <div className="space-y-5">
-            {pageItems.map((e) => (
-              <EventCard key={e.id} item={e} />
-            ))}
+          {/* Loading State */}
+          {loading && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="rounded-xl border border-gray-300 bg-white p-8 text-center"
+            >
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[#6366F1] border-r-transparent"></div>
+              <p className="mt-4 text-sm text-gray-600">Loading events...</p>
+            </motion.div>
+          )}
 
-            {pageItems.length === 0 && (
-              <div className="rounded-2xl border-2 border-dashed border-gray-300 bg-white p-12 text-center shadow-sm">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                  <svg
-                    className="w-8 h-8 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">
-                  {events.length === 0 ? "No events available yet" : "No events found"}
-                </h3>
-                <p className="text-gray-600">
-                  {events.length === 0
-                    ? "Check back soon for upcoming events!"
-                    : "Try adjusting your search or filters"}
-                </p>
-              </div>
-            )}
-          </div>
+          {/* Error State */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="rounded-xl border border-red-300 bg-red-50 p-8 text-center"
+            >
+              <p className="text-sm text-red-600">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm"
+              >
+                Retry
+              </button>
+            </motion.div>
+          )}
 
-          {totalPages > 1 && (
-            <div className="mt-10">
-              <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+          {/* Cards */}
+          {!loading && !error && (
+            <div className="space-y-4">
+              {pageItems.map((e, i) => (
+                <EventCard key={e.id} item={e} index={i} stagger={0.06} />
+              ))}
+
+              {pageItems.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: reduce ? 0 : 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="rounded-xl border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500"
+                >
+                  No events found.
+                </motion.div>
+              )}
             </div>
+          )}
+
+          {!loading && !error && (
+            <motion.div
+              variants={sectionIn}
+              initial="hidden"
+              animate="show"
+              className="mt-8"
+            >
+              <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} />
+            </motion.div>
           )}
         </section>
       </main>
 
-      <footer className="border-t border-gray-200 bg-white/80 backdrop-blur-sm py-12 mt-16">
-        <div className="mx-auto max-w-6xl px-4">
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-4 mb-8">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 mb-4">🎓 UniPLUS</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Connecting students through events and experiences.
-              </p>
+      {/* Footer */}
+      <footer className="border-t border-black/10 bg-white/60 py-10">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 md:grid-cols-4">
+          <div>
+            <p className="text-sm text-gray-700">Site name</p>
+            <div className="mt-3 flex items-center gap-3 text-gray-500">
+              <div className="h-5 w-5 rounded-full border" />
+              <div className="h-5 w-5 rounded-full border" />
+              <div className="h-5 w-5 rounded-full border" />
+              <div className="h-5 w-5 rounded-full border" />
             </div>
+          </div>
 
-            {["Topic", "Topic", "Topic"].map((t, i) => (
-              <div key={i}>
-                <p className="text-sm font-medium text-gray-800">{t}</p>
-                <ul className="mt-3 space-y-1 text-sm text-gray-600">
-                  <li>
-                    <a href="#" className="hover:underline">
-                      Page
-                    </a>
-                  </li>
-                  <li>
-                    <a href="#" className="hover:underline">
-                      Page
-                    </a>
-                  </li>
-                  <li>
-                    <a href="#" className="hover:underline">
-                      Page
-                    </a>
-                  </li>
-                  <li>
-                    <a href="#" className="hover:underline">
-                      Page
-                    </a>
-                  </li>
-                </ul>
-              </div>
-            ))}
-          </div>
-          <div className="mx-auto mt-8 max-w-6xl px-4 text-xs text-gray-500">
-            © {new Date().getFullYear()} UniPLUS
-          </div>
+          {["Topic", "Topic", "Topic"].map((t, i) => (
+            <div key={i}>
+              <p className="text-sm font-medium text-gray-800">{t}</p>
+              <ul className="mt-3 space-y-1 text-sm text-gray-600">
+                <li><a href="#" className="hover:underline">Page</a></li>
+                <li><a href="#" className="hover:underline">Page</a></li>
+                <li><a href="#" className="hover:underline">Page</a></li>
+                <li><a href="#" className="hover:underline">Page</a></li>
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="mx-auto mt-8 max-w-6xl px-4 text-xs text-gray-500">
+          © {new Date().getFullYear()} UniPLUS
         </div>
       </footer>
     </div>
