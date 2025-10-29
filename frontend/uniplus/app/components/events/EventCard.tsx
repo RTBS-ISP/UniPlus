@@ -112,7 +112,7 @@ export default function EventCard({
   );
 
   // --- dynamic tag fitting ---
-  const MAX_VISIBLE_TAGS = 5;
+  const MAX_VISIBLE_TAGS = 2;
   const visibleTags = tagList.slice(0, MAX_VISIBLE_TAGS);
   const hiddenTags = tagList.slice(MAX_VISIBLE_TAGS);
 
