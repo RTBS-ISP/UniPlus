@@ -1,7 +1,3 @@
-
-
-
-
 "use client"
 import Navbar from "../components/navbar"
 import TicketCard from "../components/mytickets/TicketCard";
