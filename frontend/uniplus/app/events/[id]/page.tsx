@@ -634,19 +634,6 @@ export default function EventDetailPage({ params }: Params) {
           </div>
 
           <div className="mt-6">
-            <p className="text-sm font-semibold text-[#0B1220]">Location</p>
-            <p className="mt-1 text-sm font-semibold text-[#0B1220]">{location}</p>
-            {address2 && <p className="text-sm text-[#0B1220]">{address2}</p>}
-            {event.is_online && event.event_meeting_link && (
-              <p className="mt-1 text-sm text-[#0B1220]">
-                <a href={event.event_meeting_link} target="_blank" rel="noopener noreferrer" className="text-[#6366F1] hover:underline">
-                  Online Meeting Link
-                </a>
-              </p>
-            )}
-          </div>
-
-          <div className="mt-6">
             <p className="text-sm font-semibold text-[#0B1220]">Description</p>
             <p className="mt-2 text-sm text-[#0B1220] whitespace-pre-wrap">
               {event.event_description || event.excerpt || "No description available."}
