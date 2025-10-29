@@ -200,7 +200,7 @@ function ProfilePage() {
                 </div>
               </div>
 
-              {/* Upcoming */}
+              {/* Upcoming Events */}
               <div className="flex flex-col bg-white text-gray-800 p-6 rounded-xl shadow-md">
                 <div className="font-medium text-lg mb-2.5">Upcoming</div>
                 <div className="font-extrabold text-green-500 text-3xl">
@@ -331,7 +331,7 @@ function ProfilePage() {
           </div>
         </div>
 
-        {/* Event History & Stats*/}
+        {/* Event History & Stats */}
         <div className="flex flex-col w-full px-20">
           <Tabs items={items} />
         </div>

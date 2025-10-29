@@ -617,7 +617,7 @@ export default function EventDetailPage({ params }: Params) {
         {isRegistered && (
           <p className="mt-3 text-center text-sm text-green-600 font-medium">
             Check your tickets in{' '}
-            <Link href="/my-tickets" className="underline">
+            <Link href="/my-ticket" className="underline">
               My Tickets
             </Link>
           </p>

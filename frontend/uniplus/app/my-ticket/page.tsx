@@ -49,6 +49,7 @@ interface Ticket {
   event_id: number;
   is_online: boolean;
   event_meeting_link?: string;
+  approval_status?: string; // Added this field
 }
 
 /* ---------- Main Page ---------- */
@@ -80,12 +81,47 @@ export default function MyTicketsPage() {
       }
 
       const data = await response.json();
+      
+      // DEBUG: Log the API response
+      console.log('=== MY TICKETS PAGE DEBUG ===');
+      console.log('Full API Response:', data);
+      console.log('Tickets from API:', data.tickets);
+      
       if (data.tickets && Array.isArray(data.tickets)) {
-        setTickets(data.tickets);
+        console.log('Total tickets received:', data.tickets.length);
+        
+        // Log each ticket's details
+        data.tickets.forEach((ticket: Ticket, idx: number) => {
+          console.log(`Ticket ${idx + 1}:`, {
+            title: ticket.event_title,
+            ticket_number: ticket.ticket_number,
+            approval_status: ticket.approval_status,
+            date: ticket.date,
+            time: ticket.time,
+          });
+        });
+
+        // FILTER: Only show approved tickets
+        // If you want to show ALL tickets (including pending), remove the filter below
+        const approvedTickets = data.tickets.filter(
+          (ticket: Ticket) => ticket.approval_status === 'approved'
+        );
+        
+        console.log('Approved tickets:', approvedTickets.length);
+        console.log('Pending/rejected tickets:', data.tickets.length - approvedTickets.length);
+        
+        // OPTION 1: Show only approved tickets (uncomment line below)
+        setTickets(approvedTickets);
+        
+        // OPTION 2: Show all tickets regardless of approval status (uncomment line below)
+        // setTickets(data.tickets);
+        
       } else {
+        console.log('No tickets array found in response');
         setTickets([]);
       }
     } catch (err) {
+      console.error('Error fetching tickets:', err);
       setError(err instanceof Error ? err.message : 'Failed to load tickets');
     } finally {
       setLoading(false);
@@ -98,7 +134,9 @@ export default function MyTicketsPage() {
       const eventDate = new Date(dateStr);
       if (isNaN(eventDate.getTime())) return false;
       const now = new Date();
-      return eventDate > now;
+      // Set time to end of day for the event to consider it upcoming until the day ends
+      eventDate.setHours(23, 59, 59, 999);
+      return eventDate >= now;
     } catch {
       return false;
     }
@@ -145,7 +183,7 @@ export default function MyTicketsPage() {
             <div className="mb-4 text-6xl">🎫</div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">No Tickets Yet</h2>
             <p className="text-gray-600 mb-6">
-              Register for events to get your tickets here
+              Your registered tickets will appear here once they are approved by the event organizer
             </p>
             <button
               onClick={() => router.push('/events')}
