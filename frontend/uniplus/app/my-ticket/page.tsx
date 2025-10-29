@@ -222,9 +222,6 @@ export default function MyTicketsPage() {
           </div>
         </div>
 
-        <p className="text-gray-600 mb-8">
-          {tickets.length} approved ticket{tickets.length !== 1 ? 's' : ''} displayed
-        </p>
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
