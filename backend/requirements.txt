@@ -1,7 +1,7 @@
 Django>=5.0,<6.0
 psycopg2-binary>=2.9
 django-ninja>=1.1.0,<2.0.0
-django-cors-headers>=4.0.0   
-djangorestframework
-python-dotenv
-Pillow
+django-cors-headers>=4.0.0
+djangorestframework>=3.14.0,<4.0.0
+python-dotenv>=1.0.0,<2.0.0
+Pillow>=10.0.0,<11.0.0

@@ -38,21 +38,6 @@ services:
       db:
         condition: service_healthy
 
-  frontend:
-    build: ./frontend
-    container_name: uniplus_frontend
-    command: npm run dev
-    volumes:
-      - ./frontend/uniplus:/uniplus
-      - /uniplus/node_modules
-      - /uniplus/.next
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-    depends_on:
-      - web
      
   pgadmin:
     image: dpage/pgadmin4
