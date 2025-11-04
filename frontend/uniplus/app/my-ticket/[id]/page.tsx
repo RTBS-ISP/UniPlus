@@ -1,6 +1,6 @@
 "use client"
 import Navbar from "../../components/navbar"
-import { Calendar, Clock, MapPin, ArrowLeft, User, Mail, AlertCircle } from "lucide-react"
+import { Calendar, Clock, MapPin, ArrowLeft, User, Mail, AlertCircle, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState, useEffect } from "react"
@@ -62,6 +62,7 @@ function TicketDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
+  const [dropdownOpen, setDropdownOpen] = useState(false); 
 
   useEffect(() => {
     console.log('Params:', params);
@@ -153,27 +154,6 @@ function TicketDetailPage() {
               generatedTags.push(...eventData.tags);
             }
             
-            // Add online tag
-            if (parsedTicket.is_online) {
-              generatedTags.push('Online Event');
-            }
-            
-            // Add multi-day tag
-            if (parsedTicket.event_dates && Array.isArray(parsedTicket.event_dates) && parsedTicket.event_dates.length > 1) {
-              generatedTags.push(`${parsedTicket.event_dates.length} Days`);
-            }
-            
-            console.log('Final event tags:', generatedTags);
-            setTags(generatedTags);
-          } else {
-            // Fallback tags if no event data
-            const generatedTags = [];
-            if (parsedTicket.is_online) {
-              generatedTags.push('Online Event');
-            }
-            if (parsedTicket.event_dates && Array.isArray(parsedTicket.event_dates) && parsedTicket.event_dates.length > 1) {
-              generatedTags.push(`${parsedTicket.event_dates.length} Days`);
-            }
             setTags(generatedTags);
           }
         } else {
@@ -330,18 +310,55 @@ function TicketDetailPage() {
           <div className="rounded-lg shadow-sm bg-white overflow-hidden">
             {/* Header Section with Event Tags (NOT approval status) */}
             <div className="bg-indigo-500 p-8">
-              <h1 className="text-white text-4xl font-bold mb-4">{ticket.event_title}</h1>
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
-                  >
-                    {tag}
-                  </span>
-                ))}
-                {/* Status is now ONLY shown in the approval notice below, not in tags */}
-              </div>
+              <h1 className="text-white text-4xl font-bold mb-4">{ticket.event_title}</h1>              
+              {tags.length > 0 && (() => {
+                const MAX_VISIBLE_TAGS = 3;
+                const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
+                const hiddenTags = tags.slice(MAX_VISIBLE_TAGS);
+
+                return (
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {visibleTags.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+
+                    {hiddenTags.length > 0 && (
+                      <span className="relative group inline-block">
+                        <button
+                          type="button"
+                          className="px-3 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
+                        >
+                          +{hiddenTags.length} more
+                        </button>
+
+                        {/* hover dropdown */}
+                        <div
+                          className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(400px,90vw)]
+                                    -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
+                                    shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
+                                    group-hover:opacity-100 group-hover:scale-100"
+                        >
+                          <div className="flex flex-wrap gap-2">
+                            {hiddenTags.map((tag, idx) => (
+                              <span
+                                key={idx}
+                                className="px-4 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Content Grid */}
@@ -361,7 +378,7 @@ function TicketDetailPage() {
                     >
                       {ticket.event_dates.map((eventDate, index) => (
                         <option key={index} value={index}>
-                          Day {index + 1}: {formatDate(eventDate.date)} - {formatTime(eventDate.time)}
+                          Day {index + 1} — {formatDate(eventDate.date)}
                         </option>
                       ))}
                     </select>
@@ -472,7 +489,7 @@ function TicketDetailPage() {
 
                 {/* User Information - Replaces Description */}
                 <div>
-                  <h2 className="text-gray-800 font-bold text-lg mb-4">USER INFORMATION</h2>
+                  <h2 className="text-gray-800 font-bold text-lg mb-4">TICKET HOLDER</h2>
                   <div className="space-y-4">
                     <div className="flex gap-4">
                       <div className="flex items-center justify-center w-10 h-10 rounded-full bg-indigo-100">
