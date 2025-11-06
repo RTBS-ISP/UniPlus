@@ -999,7 +999,7 @@ export default function EventDetailPage({ params }: Params) {
             <span className="relative group inline-block">
               <button
                 type="button"
-                className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
+                className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]"
               >
                 +{hiddenTags.length}
               </button>
