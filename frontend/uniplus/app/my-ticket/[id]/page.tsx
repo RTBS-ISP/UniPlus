@@ -176,10 +176,11 @@ function TicketDetailPage() {
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return dateString;
-      return date.toLocaleDateString('en-US', { 
-        day: 'numeric', 
-        month: 'long', 
-        year: 'numeric' 
+
+      return date.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
       });
     } catch {
       return dateString || 'TBD';
