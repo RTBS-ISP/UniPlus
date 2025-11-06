@@ -23,6 +23,8 @@ import json
 from datetime import datetime
 import uuid 
 import traceback
+from django.http import HttpResponse
+import csv
 
 
 
@@ -1674,3 +1676,59 @@ def get_user_created_events(request):
         print("Error fetching created events:")
         traceback.print_exc()
         return 400, {"error": str(e)}
+
+
+# exported into csv
+
+
+@api.post("/events/{event_id}/export", auth=django_auth)
+def export_event_registrations(request, event_id: int):
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Proper authorization check
+        if event.organizer != request.user:
+            return HttpResponse("Unauthorized", status=403)
+        
+        # Get tickets with related data
+        tickets = Ticket.objects.filter(event=event).select_related('attendee')
+        
+        if not tickets.exists():
+            return HttpResponse("No registrations found", status=404)
+
+        # Create CSV with better filename
+        response = HttpResponse(content_type='text/csv')
+        filename = f"{event.event_title}_registrations_{timezone.now().date()}.csv"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        writer = csv.writer(response)
+        
+        # Enhanced headers
+        writer.writerow([
+            'Ticket ID', 'Attendee Name', 'Attendee Email', 
+            'Phone', 'Registration Date', 'Status', 'QR Code'
+        ])
+        
+        for ticket in tickets:
+            attendee = ticket.attendee
+            attendee_name = f"{attendee.first_name} {attendee.last_name}".strip()
+            if not attendee_name:
+                attendee_name = attendee.username
+                
+            writer.writerow([
+                ticket.id,
+                attendee_name,
+                attendee.email,
+                attendee.phone_number or 'N/A',
+                ticket.purchase_date.strftime('%Y-%m-%d %H:%M:%S') if ticket.purchase_date else 'N/A',
+                ticket.approval_status,  # Include approval status
+                ticket.qr_code
+            ])
+        
+        return response
+        
+    except Event.DoesNotExist:
+        return HttpResponse("Event not found", status=404)
+    except Exception as e:
+        print(f"Export error: {str(e)}")
+        return HttpResponse("Export failed", status=500)
