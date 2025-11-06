@@ -47,8 +47,18 @@ interface UserData {
   tickets: any[];
 }
 
+interface ScheduleDay {
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+}
+
 interface EventDetail {
   tags: string[];
+  schedule?: ScheduleDay[];
+  is_online?: boolean;
+  event_meeting_link?: string | null;
 }
 
 function TicketDetailPage() {
@@ -227,22 +237,35 @@ function TicketDetailPage() {
     return start;
   };
 
+  // Helper function to match date from ticket.event_dates to eventDetail.schedule to get real location:
+  const getLocationFromSchedule = (date: string | null) => {
+    if (!eventDetail || !eventDetail.schedule || !date) return null;
+
+    const scheduleItem = eventDetail.schedule.find((s: any) => s.date === date);
+    return scheduleItem ? scheduleItem.location : null;
+  };
+
   // Get current event date based on selection
   const getCurrentEventDate = () => {
     if (!ticket) return null;
     
+    let eventDateObj;
+
     if (ticket.event_dates && Array.isArray(ticket.event_dates) && ticket.event_dates.length > 0) {
-      return ticket.event_dates[selectedDateIndex];
+      eventDateObj = ticket.event_dates[selectedDateIndex];
+    } else {
+      eventDateObj = {
+        date: ticket.date,
+        time: ticket.time,
+        endTime: null,
+        location: ticket.location,
+        is_online: ticket.is_online,
+        meeting_link: ticket.event_meeting_link
+      };
     }
-    
-    return {
-      date: ticket.date,
-      time: ticket.time,
-      endTime: null,
-      location: ticket.location,
-      is_online: ticket.is_online,
-      meeting_link: ticket.event_meeting_link
-    };
+
+    const scheduleLocation = getLocationFromSchedule(eventDateObj.date);
+    return { ...eventDateObj, location: scheduleLocation ?? eventDateObj.location };
   };
 
   if (loading) {
