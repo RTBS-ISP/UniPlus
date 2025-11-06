@@ -792,17 +792,15 @@ def get_event_detail(request, event_id: int):
             # normalize trailing Z into +00:00 so fromisoformat can parse it
             if iso_str.endswith("Z"):
                 iso_str = iso_str[:-1] + "+00:00"
-            # Python's fromisoformat supports the offset form like 2025-11-05T03:00:00+00:00
             dt = datetime.fromisoformat(iso_str)
             # If no tzinfo, assume UTC (safe default for stored ISO times)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            # Convert to Django/current timezone (or change to a fixed timezone if you prefer)
+            # Convert to Django/current timezone 
             local_tz = timezone.get_current_timezone()
             local_dt = dt.astimezone(local_tz)
             return local_dt.strftime("%H:%M")
         except Exception as e:
-            # fallback: attempt naive slice (old behavior) but usually not needed
             try:
                 return iso_str.split("T")[1].split(":")[0] + ":" + iso_str.split("T")[1].split(":")[1]
             except:
@@ -826,6 +824,8 @@ def get_event_detail(request, event_id: int):
                     "startTime": start_time,
                     "endTime": end_time,
                     "location": location,
+                    "is_online": day.get('is_online', event.is_online),
+                    "meeting_link": day.get('meeting_link', event.event_meeting_link),
                 })
         except Exception as e:
             print(f"Error parsing schedule: {e}")
