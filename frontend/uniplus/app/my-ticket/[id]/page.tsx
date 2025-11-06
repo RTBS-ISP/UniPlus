@@ -345,7 +345,7 @@ function TicketDetailPage() {
                           type="button"
                           className="px-3 py-1.5 bg-indigo-100 text-gray-800 text-sm font-semibold rounded-lg"
                         >
-                          +{hiddenTags.length} more
+                          +{hiddenTags.length}
                         </button>
 
                         {/* hover dropdown */}
