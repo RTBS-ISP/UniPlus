@@ -1115,7 +1115,7 @@ def get_user_event_history(request):
                 "event_id": event_obj.id if event_obj else None,
                 "event_title": ticket.event_title,
                 "event_description": event_obj.event_description if event_obj else None,
-                "event_date": event_date_str,  # Now returns YYYY-MM-DD format
+                "event_date": event_date_str, 
                 "location": ticket.location,
                 "is_online": ticket.is_online,
                 "meeting_link": ticket.meeting_link,
@@ -1275,11 +1275,6 @@ def get_event_dashboard(request, event_id: int):
         traceback.print_exc()
         return 400, {"error": str(e)}
 
-
-# ============================================================================
-# NEW: APPROVAL ENDPOINTS
-# ============================================================================
-
 @api.post("/events/{event_id}/registrations/bulk-action", auth=django_auth, response={200: schemas.ApprovalResponseSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequestSchema):
     """
@@ -1301,39 +1296,33 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
         tickets = Ticket.objects.filter(
             event=event,
             ticket_number__in=payload.ticket_ids
-        )
+        ).select_related('attendee', 'event')  
         
         # Also try QR codes if no tickets found
         if tickets.count() == 0:
             tickets = Ticket.objects.filter(
                 event=event,
                 qr_code__in=payload.ticket_ids
-            )
+            ).select_related('attendee', 'event')  
         
         if tickets.count() == 0:
             return 400, {"error": "No tickets found"}
         
-        # Update all tickets
+        # Update status and send notifications for each ticket
         new_status = 'approved' if payload.action == 'approve' else 'rejected'
-        updated_count = tickets.update(approval_status=new_status)
-
-        # 🔔 SEND NOTIFICATIONS TO ALL AFFECTED TICKETS
-        # Re-fetch tickets to get updated objects (after .update())
-        tickets = Ticket.objects.filter(
-            event=event,
-            ticket_number__in=payload.ticket_ids
-        )
-        if tickets.count() == 0:
-            tickets = Ticket.objects.filter(
-                event=event,
-                qr_code__in=payload.ticket_ids
-            )
-
+        updated_count = 0
+        
         for ticket in tickets:
+            ticket.approval_status = new_status
+            ticket.save()
+            
+            # 🔔 Send notification
             if new_status == 'approved':
                 send_approval_notification(ticket)
             else:
                 send_rejection_notification(ticket)
+            
+            updated_count += 1
 
         # Return response
         return 200, {
@@ -1365,12 +1354,15 @@ def approve_registration(request, event_id: int, ticket_id: str):
         # Find ticket
         ticket = None
         try:
-            ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(ticket_number=ticket_id, event=event)
         except Ticket.DoesNotExist:
-            ticket = Ticket.objects.get(qr_code=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
         ticket.approval_status = 'approved'
         ticket.save()
+        
+        # 🔔 Send notification
+        send_approval_notification(ticket)
         
         return 200, {
             "success": True,
@@ -1400,12 +1392,15 @@ def reject_registration(request, event_id: int, ticket_id: str):
         # Find ticket
         ticket = None
         try:
-            ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(ticket_number=ticket_id, event=event)
         except Ticket.DoesNotExist:
-            ticket = Ticket.objects.get(qr_code=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
         ticket.approval_status = 'rejected'
         ticket.save()
+        
+        # 🔔 Send notification
+        send_rejection_notification(ticket)
         
         return 200, {
             "success": True,
@@ -1418,11 +1413,6 @@ def reject_registration(request, event_id: int, ticket_id: str):
     except Exception as e:
         print(f"Error rejecting ticket: {e}")
         return 400, {"error": str(e)}
-
-
-# ============================================================================
-# NEW: CHECK-IN ENDPOINT
-# ============================================================================
 
 @api.post("/checkin", auth=django_auth, response={200: schemas.CheckInResponseSchema, 400: schemas.ErrorSchema, 403: schemas.ErrorSchema})
 def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
@@ -1485,11 +1475,6 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
         import traceback
         traceback.print_exc()
         return 400, {"error": str(e)}
-
-
-# ============================================================================
-# LEGACY ENDPOINTS (Keep for backwards compatibility, but deprecated)
-# ============================================================================
 
 @api.post("/events/{event_id}/approve-ticket", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def approve_ticket(request, event_id: int, ticket_id: str, approval_status: str):
