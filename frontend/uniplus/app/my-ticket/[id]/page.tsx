@@ -197,36 +197,24 @@ function TicketDetailPage() {
     }
   };
 
-  // Helper function to convert ISO/UTC time to local time in "HH:MM AM/PM" format
-  const convertTimeToLocal = (timeString: string | null) => {
-    if (!timeString) return timeString;
+  const formatTime = (timeString: string | null) => {
+    if (!timeString) return 'TBD';
+    
     try {
-      const [h, m, s = "00"] = timeString.split(":");
-      const date = new Date();
-      date.setUTCHours(Number(h), Number(m), Number(s));
-
-      // Format 24-hour time
-      const time24 = date.toLocaleTimeString("en-GB", {
-        timeZone: "Asia/Bangkok",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      });
-
-      // Format AM/PM separately
-      const ampm = date.toLocaleTimeString("en-US", {
-        timeZone: "Asia/Bangkok",
-        hour: "numeric",
-        hour12: true,
-      }).split(" ")[1];
-
-      return `${time24} ${ampm}`;
-    } catch {
+      const [h, m] = timeString.split(":");
+      const hour = parseInt(h);
+      const minute = m;
+      
+      // Convert to 12-hour format with AM/PM
+      const hour12 = hour % 12 || 12;
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      
+      return `${hour12}:${minute} ${ampm}`;
+    } catch (e) {
+      console.error('Error formatting time:', e);
       return timeString;
     }
   };
-
-  const formatTime = (timeString: string | null) => convertTimeToLocal(timeString);
 
   const formatTimeRange = (startTime: string | null, endTime?: string | null) => {
     const start = formatTime(startTime);
