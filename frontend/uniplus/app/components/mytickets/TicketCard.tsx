@@ -11,6 +11,12 @@ interface EventDay {
   is_online: boolean;
   meeting_link?: string | null;
 }
+interface ScheduleDay {
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+}
 
 interface TicketInfo {
   date: string;
@@ -36,10 +42,14 @@ interface TicketInfo {
 
 interface EventDetail {
   tags: string[];
+  schedule?: ScheduleDay[];
+  is_online: boolean;
 }
 
 export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   const [tags, setTags] = useState<string[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleDay[]>([]);
+  const [isOnline, setIsOnline] = useState(ticket.is_online);
   const [loading, setLoading] = useState(true);
 
   const fetchEventDetail = async (eventId: number) => {
@@ -51,6 +61,8 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       if (response.ok) {
         const data: EventDetail = await response.json();
         setTags(data.tags || []);
+        setSchedule(data.schedule || []);
+        setIsOnline(data.is_online);
       }
     } catch (error) {
       console.error("Error fetching event detail:", error);
@@ -146,6 +158,33 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     }
   };
 
+  // Get location from the fetched schedule instead of ticket data
+  const getEventLocation = () => {
+    const hasPhysicalLocation =
+      schedule && schedule.some(s => s.location && s.location.trim() !== "");
+
+    if (isOnline && hasPhysicalLocation) {
+      return "Hybrid (Online & Onsite)";
+    }
+
+    if (isOnline) {
+      return "Online Event";
+    }
+
+    if (hasPhysicalLocation) {
+      const locations = schedule.map(s => s.location).filter(Boolean);
+      const uniqueLocations = [...new Set(locations)];
+      if (uniqueLocations.length === 1) {
+        return uniqueLocations[0];
+      }
+      return `${uniqueLocations[0]} (+${uniqueLocations.length - 1} more)`;
+    }
+
+    // Fallback
+    const firstDate = ticket.event_dates?.[0];
+    return firstDate?.location || ticket.location || "TBA";
+  };
+
   const firstDate = ticket.event_dates?.[0];
   // Summary function for the date display
   const formattedDate = formatDateRangeSummary(
@@ -154,9 +193,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   ); 
 
   const formattedTime = formatTimeRange(firstDate?.time || ticket.time, firstDate?.endTime);
-  const eventLocation = firstDate?.is_online
-    ? "Online Event"
-    : firstDate?.location || ticket.location || "TBA";
+  const eventLocation = getEventLocation();
   
   const MAX_VISIBLE_TAGS = 2;
   const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
@@ -199,7 +236,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
         </div>
         <div className="flex gap-x-2 mb-4">
           <MapPin size={20} className="text-indigo-500" />
-          <p className="text-gray-800 text-sm font-semibold">
+          <p className="text-gray-800 text-sm font-semibold line-clamp-1">
             {eventLocation}
           </p>
         </div>
