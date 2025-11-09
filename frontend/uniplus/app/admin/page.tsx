@@ -11,6 +11,9 @@ import {
   User
 } from "lucide-react";
 
+// Add the Navbar component import - adjust the path based on your project structure
+import Navbar from "../components/navbar";
+
 interface Event {
   id: number;
   title: string;
@@ -340,6 +343,7 @@ export default function AdminPage() {
   if (userRole && userRole !== "admin") {
     return (
       <div className="min-h-screen bg-indigo-100 flex items-center justify-center">
+        <Navbar /> {/* Add Navbar here too */}
         <div className="text-center">
           <div className="text-2xl text-red-600 mb-4">Access Denied</div>
           <div className="text-gray-600 mb-4">{error}</div>
@@ -356,23 +360,29 @@ export default function AdminPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-indigo-100 flex items-center justify-center">
-        <div className="text-2xl text-gray-600">Loading admin dashboard...</div>
+      <div className="min-h-screen bg-indigo-100">
+        <Navbar /> {/* Add Navbar here too */}
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-2xl text-gray-600">Loading admin dashboard...</div>
+        </div>
       </div>
     );
   }
 
   if (error && !allEvents.length) {
     return (
-      <div className="min-h-screen bg-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-2xl text-red-600 mb-4">{error}</div>
-          <button
-            onClick={fetchData}
-            className="px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600"
-          >
-            Retry
-          </button>
+      <div className="min-h-screen bg-indigo-100">
+        <Navbar /> {/* Add Navbar here too */}
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="text-2xl text-red-600 mb-4">{error}</div>
+            <button
+              onClick={fetchData}
+              className="px-6 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -380,6 +390,8 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-indigo-100">
+      <Navbar /> {/* Add Navbar at the top */}
+      
       <div className="max-w-7xl mx-auto px-8 py-8">
         <div className="flex flex-col items-start gap-y-4">
           <h1 className="text-gray-800 text-5xl font-extrabold pt-10">Admin Dashboard</h1>
