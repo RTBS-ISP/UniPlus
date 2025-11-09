@@ -1732,3 +1732,100 @@ def export_event_registrations(request, event_id: int):
     except Exception as e:
         print(f"Export error: {str(e)}")
         return HttpResponse("Export failed", status=500)
+    
+
+
+# ============================================================================
+# EVENT VERIFICATION ENDPOINTS
+# ============================================================================
+
+@api.post("/events/{event_id}/verify", auth=django_auth, response={200: schemas.SuccessSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def verify_event(request, event_id: int):
+    """
+    Verify an event 
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        if request.user.role != "admin":
+            return 403, {"error": "You are not authorized to verify events"}
+        
+        event.verification_status = "approved"
+        event.save()
+        
+        return 200, {
+            "success": True,
+            "message": "Event approved successfully",
+            "event_id": event_id,
+            "verification_status": "approved"
+        }
+    except Exception as e:
+        print(f"Error verifying event: {e}")
+        return 400, {"error": str(e)}
+
+@api.post("/events/{event_id}/reject", auth=django_auth, response={200: schemas.SuccessSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def reject_event(request, event_id: int):
+    """
+    Reject an event (admin only)
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Security check: Only admin users can reject events
+        if request.user.role != "admin":
+            return 403, {"error": "You are not authorized to reject events"}
+        
+        event.verification_status = "rejected"
+        event.save()
+        
+        return 200, {
+            "success": True,
+            "message": "Event rejected successfully",
+            "event_id": event_id,
+            "verification_status": "rejected"
+        }
+    except Exception as e:
+        print(f"Error rejecting event: {e}")
+        return 400, {"error": str(e)}
+    
+
+@api.get("/admin/statistics", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema})
+def get_admin_statistics(request):
+    """
+    Get admin dashboard statistics 
+    Returns counts of total, approved, pending, and rejected events
+    """
+    try:
+        # Security check: Only admin users can access this endpoint
+        if request.user.role != "admin":
+            return 403, {"error": "Admin privileges required"}
+        
+        # Get counts directly from database
+        total_events = Event.objects.count()
+        
+        approved_events = Event.objects.filter(
+            verification_status="approved"
+        ).count()
+        
+        rejected_events = Event.objects.filter(
+            verification_status="rejected"
+        ).count()
+        
+        # Pending events: everything that's not approved or rejected
+        pending_events = Event.objects.exclude(
+            verification_status__in=["approved", "rejected"]
+        ).count()
+        
+        # Alternative way to calculate pending (handles null/empty values)
+        # pending_events = total_events - approved_events - rejected_events
+
+        return 200, {
+            "total_events": total_events,
+            "approved_events": approved_events,
+            "pending_events": pending_events,
+            "rejected_events": rejected_events
+        }
+        
+    except Exception as e:
+        print(f"Error fetching admin statistics: {e}")
+        return 400, {"error": str(e)}
