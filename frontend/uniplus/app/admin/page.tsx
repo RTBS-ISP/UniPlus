@@ -316,6 +316,11 @@ export default function AdminPage() {
     }
   };
 
+  // Handle row click to redirect to event details
+  const handleRowClick = (eventId: number) => {
+    router.push(`/events/${eventId}`);
+  };
+
   // Show access denied for non-admin users
   if (userRole && userRole !== "admin") {
     return (
@@ -513,7 +518,11 @@ export default function AdminPage() {
                       const isActionLoading = actionLoading === event.id;
                       
                       return (
-                        <tr key={event.id} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                        <tr 
+                          key={event.id} 
+                          className="border-b border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
+                          onClick={() => handleRowClick(event.id)}
+                        >
                           {/* EVENT ID */}
                           <td className="px-6 py-4">
                             <div className="text-gray-800 font-mono font-medium">
@@ -561,7 +570,10 @@ export default function AdminPage() {
                           </td>
                           
                           {/* APPROVAL */}
-                          <td className="px-6 py-4 text-center">
+                          <td 
+                            className="px-6 py-4 text-center"
+                            onClick={(e) => e.stopPropagation()} // Prevent row click when clicking buttons
+                          >
                             {(event.verification_status !== "approved" && event.verification_status !== "rejected") ? (
                               <div className="flex justify-center gap-2">
                                 <button
