@@ -193,6 +193,7 @@ class EventDetailSchema(Schema):
     schedule: Optional[List[Dict[str, Any]]] = []
     
     # Organizer info
+    organizer_role: Optional[str] = None
     organizer_profile: Optional[PublicProfileSchema] = None
 
 

@@ -789,6 +789,28 @@ def get_event_detail(request, event_id: int):
         except:
             tags_list = [event.tags] if event.tags else []
     
+    # Helper function to parse ISO time and convert to local time format HH:MM
+    def iso_to_local_hhmm(iso_str):
+        if not iso_str:
+            return "00:00"
+        try:
+            # normalize trailing Z into +00:00 so fromisoformat can parse it
+            if iso_str.endswith("Z"):
+                iso_str = iso_str[:-1] + "+00:00"
+            dt = datetime.fromisoformat(iso_str)
+            # If no tzinfo, assume UTC (safe default for stored ISO times)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            # Convert to Django/current timezone 
+            local_tz = timezone.get_current_timezone()
+            local_dt = dt.astimezone(local_tz)
+            return local_dt.strftime("%H:%M")
+        except Exception as e:
+            try:
+                return iso_str.split("T")[1].split(":")[0] + ":" + iso_str.split("T")[1].split(":")[1]
+            except:
+                return "00:00"
+            
     schedule = []
     if hasattr(event, 'schedule') and event.schedule:
         try:
@@ -798,26 +820,17 @@ def get_event_detail(request, event_id: int):
                 date_str = day.get('date', '')
                 start_iso = day.get('start_iso', '')
                 end_iso = day.get('end_iso', '')
-                start_time = '00:00'
-                end_time = '00:00'
-                
-                if start_iso:
-                    try:
-                        start_time = start_iso.split('T')[1].split(':')[0] + ':' + start_iso.split('T')[1].split(':')[1]
-                    except:
-                        pass
-                
-                if end_iso:
-                    try:
-                        end_time = end_iso.split('T')[1].split(':')[0] + ':' + end_iso.split('T')[1].split(':')[1]
-                    except:
-                        pass
+                location = day.get('address', '') or day.get('location', '')
+                start_time = iso_to_local_hhmm(start_iso)
+                end_time = iso_to_local_hhmm(end_iso)
                 
                 schedule.append({
                     "date": date_str,
                     "startTime": start_time,
                     "endTime": end_time,
-                    "location": event.event_address or ("Online" if event.is_online else "TBA"),  # FIX: Use event.event_address
+                    "location": location,
+                    "is_online": day.get('is_online', event.is_online),
+                    "meeting_link": day.get('meeting_link', event.event_meeting_link),
                 })
         except Exception as e:
             print(f"Error parsing schedule: {e}")
