@@ -1829,3 +1829,46 @@ def get_admin_statistics(request):
     except Exception as e:
         print(f"Error fetching admin statistics: {e}")
         return 400, {"error": str(e)}
+    
+
+
+@api.get("/admin/events", auth=django_auth, response={200: List[schemas.AdminEventSchema], 403: schemas.ErrorSchema})
+def get_admin_events(request):
+    """
+    Get all events for admin dashboard with verification status
+    """
+    try:
+        # Security check: Only admin users can access this endpoint
+        if request.user.role != "admin":
+            return 403, {"error": "Admin privileges required"}
+        
+        events = Event.objects.select_related('organizer').all().order_by('-event_create_date')
+        
+        events_data = []
+        for event in events:
+            organizer_name = f"{event.organizer.first_name} {event.organizer.last_name}".strip()
+            if not organizer_name:
+                organizer_name = event.organizer.username or event.organizer.email
+            
+            # Get verification status - handle both string and None
+            verification_status = getattr(event, 'verification_status', None)
+            if verification_status is None:
+                verification_status = "pending"
+            
+            events_data.append({
+                "id": event.id,
+                "title": event.event_title,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_create_date": event.event_create_date.isoformat(),
+                "organizer_name": organizer_name,
+                "organizer_id": event.organizer.id,
+                "status_registration": event.status_registration,
+                "verification_status": verification_status,
+            })
+        
+        return events_data
+        
+    except Exception as e:
+        print(f"Error fetching admin events: {e}")
+        return 400, {"error": str(e)}

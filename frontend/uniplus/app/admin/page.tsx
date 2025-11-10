@@ -19,20 +19,11 @@ interface Event {
   title: string;
   event_title: string;
   event_description: string;
-  max_attendee: number;
-  current_attendees: number;
-  event_start_date: string;
-  event_end_date: string;
   event_create_date: string;
   organizer_name: string;
   organizer_id: number;
   status_registration: string;
-  is_online: boolean;
-  event_address: string;
-  event_image: string | null;
-  tags: string[];
-  attendee_count: number;
-  verification_status?: string;
+  verification_status: string; // This should be "approved", "rejected", or "pending"
 }
 
 interface Statistics {
@@ -107,7 +98,7 @@ export default function AdminPage() {
         fetch("http://localhost:8000/api/admin/statistics", {
           credentials: "include",
         }),
-        fetch("http://localhost:8000/api/events", {
+        fetch("http://localhost:8000/api/admin/events", { // Use the new admin events endpoint
           credentials: "include",
         })
       ]);
@@ -117,14 +108,25 @@ export default function AdminPage() {
       }
 
       if (!eventsResponse.ok) {
-        throw new Error("Failed to fetch events");
+        // Fallback to regular events endpoint if admin endpoint doesn't exist yet
+        console.log("Admin events endpoint not available, falling back to regular events");
+        const fallbackResponse = await fetch("http://localhost:8000/api/events", {
+          credentials: "include",
+        });
+        
+        if (!fallbackResponse.ok) {
+          throw new Error("Failed to fetch events");
+        }
+        
+        const eventsData = await fallbackResponse.json();
+        setAllEvents(eventsData);
+      } else {
+        const eventsData = await eventsResponse.json();
+        setAllEvents(eventsData);
       }
 
       const statsData = await statsResponse.json();
-      const eventsData = await eventsResponse.json();
-
       setStatistics(statsData);
-      setAllEvents(eventsData);
       
     } catch (err: any) {
       console.error("Error fetching data:", err);
@@ -196,31 +198,6 @@ export default function AdminPage() {
       };
     } else {
       // Everything else is pending (null, undefined, empty string, etc.)
-      return {
-        text: "Pending",
-        color: "bg-yellow-400 text-white",
-        icon: <Clock className="w-4 h-4" />
-      };
-    }
-  };
-
-  const getRegistrationStatus = (event: Event) => {
-    const status = event.status_registration?.toLowerCase();
-    
-    // CHANGED BACK TO OLD VERSION: Show "Approved" for open registration
-    if (status === "open" || status === "approved") {
-      return {
-        text: "Approved",
-        color: "bg-lime-500 text-white",
-        icon: <CheckCircle className="w-4 h-4" />
-      };
-    } else if (status === "closed") {
-      return {
-        text: "Closed",
-        color: "bg-gray-500 text-white",
-        icon: <XCircle className="w-4 h-4" />
-      };
-    } else {
       return {
         text: "Pending",
         color: "bg-yellow-400 text-white",
@@ -524,17 +501,15 @@ export default function AdminPage() {
                     <th className="px-6 py-3 text-left font-bold text-sm">EVENT ID</th>
                     <th className="px-6 py-3 text-left font-bold text-sm">EVENT NAME</th>
                     <th className="px-6 py-3 text-left font-bold text-sm">ORGANIZER</th>
-                    {/* CHANGED BACK: REGISTRATION → STATUS */}
                     <th className="px-6 py-3 text-center font-bold text-sm">STATUS</th>
                     <th className="px-6 py-3 text-center font-bold text-sm">CREATED DATE</th>
-                    <th className="px-6 py-3 text-center font-bold text-sm">VERIFICATION</th>
+                    <th className="px-6 py-3 text-center font-bold text-sm">APPROVAL</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white">
                   {filteredEvents.length > 0 ? (
                     filteredEvents.map((event) => {
                       const verificationStatus = getVerificationStatus(event);
-                      const registrationStatus = getRegistrationStatus(event);
                       const isActionLoading = actionLoading === event.id;
                       
                       return (
@@ -561,11 +536,11 @@ export default function AdminPage() {
                             </div>
                           </td>
                           
-                          {/* STATUS (CHANGED BACK: Shows "Approved" for open registration) */}
+                          {/* VERIFICATION STATUS */}
                           <td className="px-6 py-4 text-center">
-                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${registrationStatus.color}`}>
-                              {registrationStatus.icon}
-                              {registrationStatus.text}
+                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${verificationStatus.color}`}>
+                              {verificationStatus.icon}
+                              {verificationStatus.text}
                             </span>
                           </td>
                           
@@ -585,8 +560,8 @@ export default function AdminPage() {
                             </div>
                           </td>
                           
-                          {/* VERIFICATION */}
-                          <td className="px-6 py-4">
+                          {/* APPROVAL */}
+                          <td className="px-6 py-4 text-center">
                             {(event.verification_status !== "approved" && event.verification_status !== "rejected") ? (
                               <div className="flex justify-center gap-2">
                                 <button
@@ -607,11 +582,9 @@ export default function AdminPage() {
                                 </button>
                               </div>
                             ) : (
-                              <div className="flex justify-center">
-                                <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold ${verificationStatus.color}`}>
-                                  {verificationStatus.icon}
-                                  {verificationStatus.text}
-                                </span>
+                              // CHANGED: Show "—" instead of status badge for approved/rejected events
+                              <div className="text-gray-400 text-lg font-medium">
+                                —
                               </div>
                             )}
                           </td>
