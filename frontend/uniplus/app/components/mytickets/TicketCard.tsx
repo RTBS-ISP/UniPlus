@@ -52,6 +52,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   const [isOnline, setIsOnline] = useState(ticket.is_online);
   const [loading, setLoading] = useState(true);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [showTitlePopover, setShowTitlePopover] = useState(false);
 
   const fetchEventDetail = async (eventId: number) => {
     try {
@@ -275,10 +276,52 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     >
       {/* Header */}
       <div className="flex items-start justify-between rounded-t-lg w-full min-h-24 bg-indigo-500 relative p-6 gap-4">
-        <div className="flex flex-col gap-y-3 flex-1 pr-2">
-          <h2 className="text-white text-xl font-bold line-clamp-2">
-            {ticket.event_title || "Untitled Event"}
-          </h2>
+        <div className="flex flex-col gap-y-3 flex-1 pr-2 relative">
+          <div className="relative group/title">
+            <h2 
+              className="text-white text-xl font-bold line-clamp-2 cursor-pointer"
+              onClick={(e) => {
+                if (ticket.event_title && ticket.event_title.length > 80) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowTitlePopover(!showTitlePopover);
+                }
+              }}
+            >
+              {ticket.event_title || "Untitled Event"}
+            </h2>
+            
+            {/* Popover - Shows on hover (desktop) or click (mobile) */}
+            {ticket.event_title && ticket.event_title.length > 80 && (
+              <div className={`absolute left-0 top-full mt-2 w-[min(400px,90vw)] bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 transition-all duration-200
+                ${showTitlePopover ? 'opacity-100 visible' : 'opacity-0 invisible'}
+                md:group-hover/title:opacity-100 md:group-hover/title:visible md:pointer-events-none
+              `}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-gray-900 text-sm font-semibold leading-relaxed flex-1">
+                    {ticket.event_title}
+                  </p>
+                  {/* Close button - only visible on mobile */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowTitlePopover(false);
+                    }}
+                    className="md:hidden flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    aria-label="Close"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+                <div className="absolute -top-2 left-6 w-4 h-4 bg-white border-l border-t border-gray-200 transform rotate-45"></div>
+              </div>
+            )}
+          </div>
+          
           <p className="text-white text-sm font-medium">
             {ticket.ticket_number}
           </p>
