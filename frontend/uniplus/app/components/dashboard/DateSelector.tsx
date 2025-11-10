@@ -40,8 +40,8 @@ export function DateSelector({
             min-w-[220px]
           "
         >
-          {days.map((d) => (
-            <option key={d.date} value={d.date}>
+          {days.map((d, i) => (
+            <option key={`${d.date}-${i}`} value={d.date}>
               {d.label}
             </option>
           ))}
