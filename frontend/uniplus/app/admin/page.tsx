@@ -259,7 +259,7 @@ export default function AdminPage() {
       // Refresh statistics from API to ensure accuracy
       await refreshStatistics();
 
-      alert("Event approved successfully!");
+      // Success alert removed - silent update
     } catch (err: any) {
       console.error("Error verifying event:", err);
       alert(`Failed to approve event: ${err.message}`);
@@ -307,7 +307,7 @@ export default function AdminPage() {
       // Refresh statistics from API to ensure accuracy
       await refreshStatistics();
 
-      alert("Event rejected successfully!");
+      // Success alert removed - silent update
     } catch (err: any) {
       console.error("Error rejecting event:", err);
       alert(`Failed to reject event: ${err.message}`);
