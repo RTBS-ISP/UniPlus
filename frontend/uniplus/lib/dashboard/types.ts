@@ -10,6 +10,7 @@ eventDate: string;
 phone?: string;
 role?: string;
 about_me?: any;
+checkedInDates?: string[];
 }
 
 
