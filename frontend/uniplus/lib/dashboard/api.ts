@@ -70,10 +70,24 @@ export async function bulkApproval(
   );
 }
 
-// Match approval pattern so CSRF/cookies are included
-export async function checkInOne(eventId: string, ticketId: string) {
+export async function checkInOne(
+  eventId: string,
+  ticketId: string,
+  date: string
+) {
   const csrf = await getCsrf();
-  return await getJSON(`${API_BASE}/events/${eventId}/check-in?ticket_id=${ticketId}`, {
+
+  const url = `${API_BASE}/events/${eventId}/check-in?ticket_id=${encodeURIComponent(
+    ticketId
+  )}&checkin_date=${encodeURIComponent(date)}`;
+
+  return await getJSON<{
+    success: boolean;
+    message: string;
+    ticket_id: string;
+    status: string;
+    checked_in_dates?: string[];
+  }>(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
