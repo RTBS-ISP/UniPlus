@@ -73,28 +73,43 @@ export function useDashboard(eventId: string | undefined) {
   const visibleAttendees = useMemo(() => {
     const base =
       state.tableView === "attendance"
-        // show ONLY approved on the selected date
-        ? state.attendees.filter(
-            (a) => a.eventDate === state.selectedDate && a.approvalStatus === "approved"
-          )
+        ? state.attendees.filter((a) => a.approvalStatus === "approved")
         : state.attendees;
 
     const q = state.search.trim().toLowerCase();
 
-    return base.filter((a) => {
+    const withDayStatus: Attendee[] = base.map((a) => {
+      if (state.tableView !== "attendance" || !state.selectedDate) return a;
+
+      const checkedInDates = a.checkedInDates ?? [];
+      const isPresentForSelectedDay = checkedInDates.includes(state.selectedDate);
+
+      return {
+        ...a,
+        status: isPresentForSelectedDay ? "present" : "pending",
+        checkedIn: isPresentForSelectedDay ? a.checkedIn : "",
+      };
+    });
+
+    const filtered = withDayStatus.filter((a) => {
       const filterOk =
         state.tableView === "attendance"
           ? state.activeFilter === "all" || a.status === state.activeFilter
           : state.activeFilter === "all" || a.approvalStatus === state.activeFilter;
 
+      if (!filterOk) return false;
+
+      if (!q) return true;
+
       const searchOk =
-        q === "" ||
         a.name.toLowerCase().includes(q) ||
         a.email.toLowerCase().includes(q) ||
         a.ticketId.toLowerCase().includes(q);
 
-      return filterOk && searchOk;
+      return searchOk;
     });
+
+    return filtered;
   }, [state.attendees, state.tableView, state.selectedDate, state.activeFilter, state.search]);
 
   const attendanceStats = useMemo(() => {
@@ -108,7 +123,13 @@ export function useDashboard(eventId: string | undefined) {
   // setters
   const setTableView = (v: TableView) =>
     setState((s) => ({ ...s, tableView: v, activeFilter: "all", selectedTickets: [] }));
-  const setSelectedDate = (d: string) => setState((s) => ({ ...s, selectedDate: d }));
+
+  const setSelectedDate = (d: string) =>
+    setState((s) => ({
+      ...s,
+      selectedDate: d,
+    }));
+
   const setSearch = (q: string) => setState((s) => ({ ...s, search: q }));
   const setActiveFilter = (f: string) => setState((s) => ({ ...s, activeFilter: f }));
 
@@ -129,7 +150,7 @@ export function useDashboard(eventId: string | undefined) {
           : visibleAttendees.map((a) => a.ticketId),
     }));
 
-  // single approve/reject
+  // approve/reject single ticket
   const approveReject = async (ticketId: string, action: ApprovalAction) => {
     if (!state.event) return;
     try {
@@ -141,7 +162,7 @@ export function useDashboard(eventId: string | undefined) {
     }
   };
 
-  // bulk approve/reject — only pending; friendly skips
+  // bulk approve/reject
   const bulkAct = async (action: ApprovalAction) => {
     if (!state.event) return;
 
@@ -176,12 +197,17 @@ export function useDashboard(eventId: string | undefined) {
     }
   };
 
-  // check-in — only approved tickets
+  // check-in for specific selected date
   const checkIn = async (ticketId: string) => {
     if (!state.event) return;
     const trimmed = ticketId.trim();
     if (!trimmed) {
       alert({ text: "Please provide a Ticket ID.", variant: "info" });
+      return;
+    }
+
+    if (!state.selectedDate) {
+      alert({ text: "Please select a schedule day first.", variant: "warning" });
       return;
     }
 
@@ -196,8 +222,8 @@ export function useDashboard(eventId: string | undefined) {
     }
 
     try {
-      await checkInOne(String(state.event.id), trimmed);
-      alert({ text: `Checked in ${trimmed}.`, variant: "success" });
+      await checkInOne(String(state.event.id), trimmed, state.selectedDate);
+      alert({ text: `Checked in ${trimmed} for ${state.selectedDate}.`, variant: "success" });
       await load();
     } catch (err: any) {
       alert({ text: err?.message || "Check-in failed.", variant: "error" });
