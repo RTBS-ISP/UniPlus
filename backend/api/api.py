@@ -1106,7 +1106,7 @@ def get_user_event_history(request):
                 "event_id": event_obj.id if event_obj else None,
                 "event_title": ticket.event_title,
                 "event_description": event_obj.event_description if event_obj else None,
-                "event_date": event_date_str,  # Now returns YYYY-MM-DD format
+                "event_date": event_date_str,
                 "location": ticket.location,
                 "is_online": ticket.is_online,
                 "meeting_link": ticket.meeting_link,
@@ -1227,6 +1227,7 @@ def get_event_dashboard(request, event_id: int):
                 "phone": user.phone_number,
                 "role": user.role,
                 "about_me": about_me,
+                "checkedInDates": ticket.checked_in_dates or [],
             })
         
         # Calculate statistics
@@ -1495,37 +1496,87 @@ def approve_ticket(request, event_id: int, ticket_id: str, approval_status: str)
         return 400, {"error": str(e)}
 
 
-@api.post("/events/{event_id}/check-in", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
-def check_in_attendee_legacy(request, event_id: int, ticket_id: str):
+@api.post(
+    "/events/{event_id}/check-in",
+    auth=django_auth,
+    response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema},
+)
+def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_date: str):
     """
-    DEPRECATED: Use /checkin endpoint instead
+    Check in an attendee for a specific schedule date (YYYY-MM-DD).
+
+    DEPRECATED: Use /checkin endpoint instead, but kept for backwards compatibility.
     """
     try:
         event = get_object_or_404(Event, id=event_id)
-        
+
         if event.organizer != request.user:
             return 403, {"error": "You are not authorized to perform this action"}
-        
+
+        # Resolve ticket by ticket_number first, then fallback to numeric ID
         try:
             ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
         except Ticket.DoesNotExist:
-            ticket_id_num = int(ticket_id.replace('T', '')) if ticket_id.startswith('T') else int(ticket_id)
+            ticket_id_num = int(ticket_id.replace("T", "")) if ticket_id.startswith("T") else int(ticket_id)
             ticket = get_object_or_404(Ticket, id=ticket_id_num, event=event)
+
+        # Parse date string from query param
+        try:
+            parsed_date = datetime.strptime(checkin_date, "%Y-%m-%d").date()
+        except ValueError:
+            return 400, {"error": "Invalid date format. Use YYYY-MM-DD."}
+
+        # Normalised date string (YYYY-MM-DD)
+        date_str = parsed_date.isoformat()
         
-        ticket.status = 'present'
-        from django.utils import timezone
+        # Normalise ticket.event_dates into 'YYYY-MM-DD' strings
+        valid_dates: list[str] = []
+        for d in ticket.event_dates or []:
+            if isinstance(d, str):
+                try:
+                    dt = datetime.fromisoformat(d)
+                    valid_dates.append(dt.date().isoformat())
+                except ValueError:
+                    if len(d) >= 10:
+                        valid_dates.append(d[:10])
+            else:
+                try:
+                    if hasattr(d, "date"):  # datetime
+                        valid_dates.append(d.date().isoformat())
+                    elif hasattr(d, "isoformat"):  # date
+                        valid_dates.append(d.isoformat())
+                except Exception:
+                    pass
+
+        # Validate that this date is in the ticket's event_dates (if event_dates is set)
+        if valid_dates and date_str not in valid_dates:
+            return 400, {"error": "This ticket is not valid for the selected date."}
+
+        # Ensure checked_in_dates exists
+        if ticket.checked_in_dates is None:
+            ticket.checked_in_dates = []
+
+        # Add date if not already present (using normalised YYYY-MM-DD string)
+        if date_str not in ticket.checked_in_dates:
+            ticket.checked_in_dates.append(date_str)
+
+        # keep last check-in timestamp + overall status
         ticket.checked_in_at = timezone.now()
+        ticket.status = "present"
         ticket.save()
-        
+
         return 200, {
             "success": True,
-            "message": f"Attendee checked in",
+            "message": "Attendee checked in",
             "ticket_id": ticket_id,
-            "status": "present"
+            "status": "present",
+            "checked_in_dates": ticket.checked_in_dates,
         }
+
     except Exception as e:
         print(f"Error checking in: {e}")
         return 400, {"error": str(e)}
+
     
 
 @api.get("/user/tickets", auth=django_auth, response={200: schemas.UserTicketsResponse, 401: schemas.ErrorSchema})
