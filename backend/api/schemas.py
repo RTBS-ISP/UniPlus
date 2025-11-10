@@ -301,6 +301,7 @@ class AttendeeSchema(Schema):
     phone: Optional[str] = None
     role: Optional[str] = None
     about_me: Optional[Dict[str, Any]] = None
+    checkedInDates: List[str] = []
 
 
 class ApprovalRequestSchema(Schema):
