@@ -26,7 +26,7 @@ export function DateSelector({
 
       <div className="relative">
         <select
-          value={selected}
+          value={selected || ""}
           onChange={(e) => onChange(e.target.value)}
           className="
             appearance-none
@@ -40,13 +40,13 @@ export function DateSelector({
             min-w-[220px]
           "
         >
-          {days.map((d, i) => (
-            <option key={`${d.date}-${i}`} value={d.date}>
+          {days.map((d) => (
+            <option key={d.date} value={d.date}>
               {d.label}
             </option>
           ))}
         </select>
-
+        
         <ChevronDown
           size={18}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none"
