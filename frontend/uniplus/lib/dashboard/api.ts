@@ -1,9 +1,7 @@
-// lib/dashboard/api.ts
 import type { Attendee, EventData, ScheduleDay, Statistics } from "@/lib/dashboard/types";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api").replace(/\/$/, "");
 
-// Small helper with friendly errors (no external util needed)
 async function getJSON<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const res = await fetch(input, { credentials: "include", ...init });
   if (!res.ok) {
