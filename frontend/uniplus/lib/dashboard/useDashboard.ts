@@ -180,12 +180,24 @@ export function useDashboard(eventId: string | undefined) {
   // approve/reject single ticket
   const approveReject = async (ticketId: string, action: ApprovalAction) => {
     if (!state.event) return;
+
+    // optimistic update for smoother UX
+    setState((s) => ({
+      ...s,
+      attendees: s.attendees.map((a) =>
+        a.ticketId === ticketId
+          ? { ...a, approvalStatus: action === "approve" ? "approved" : "rejected" }
+          : a
+      ),
+    }));
+
     try {
       await approveRejectOne(String(state.event.id), ticketId, action);
       alert({ text: `Ticket ${ticketId} ${action}ed.`, variant: "success" });
-      await load();
+      await load(); // still refresh to ensure sync
     } catch (err: any) {
       alert({ text: err?.message || "Action failed.", variant: "error" });
+      await load(); // rollback in case of failure
     }
   };
 
