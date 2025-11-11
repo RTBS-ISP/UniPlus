@@ -18,17 +18,17 @@ export function AttendanceStatCards({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <div className="bg-indigo-500 rounded-lg p-6 flex flex-col shadow-md">
-        <User size={32} className="font-extrabold mb-3" />
+        <User size={32} className="text-white font-extrabold mb-3" />
         <div className="flex text-white text-3xl font-extrabold mb-1">{total}</div>
         <div className="text-white font-extrabold">Total Registered</div>
       </div>
       <div className="bg-lime-500 rounded-lg p-6 flex flex-col shadow-md">
-        <UserCheck size={32} className="font-extrabold mb-3" />
+        <UserCheck size={32} className="text-white font-extrabold mb-3" />
         <div className="flex text-white text-3xl font-extrabold mb-1">{present}</div>
         <div className="text-white font-extrabold">Checked In</div>
       </div>
       <div className="bg-yellow-400 rounded-lg p-6 flex flex-col shadow-md">
-        <Clock size={32} className="font-extrabold mb-3" />
+        <Clock size={32} className="text-white font-extrabold mb-3" />
         <div className="flex text-white text-3xl font-extrabold mb-1">{pending}</div>
         <div className="text-white font-extrabold">Pending Check-In</div>
       </div>
@@ -50,28 +50,28 @@ export function ApprovalStatCards({ stats }: { stats: Statistics | null }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       <div className="bg-indigo-500 rounded-lg p-6 flex flex-col shadow-md">
-        <User size={32} className="font-extrabold mb-3" />
+        <User size={32} className="text-white font-extrabold mb-3" />
         <div className="flex text-white text-3xl font-extrabold mb-1">
           {stats?.total_registered || 0}
         </div>
         <div className="text-white font-extrabold">Total Registered</div>
       </div>
       <div className="bg-lime-500 rounded-lg p-6 flex flex-col shadow-md">
-        <UserCheck size={32} className="font-extrabold mb-3" />
+        <UserCheck size={32} className="text-white font-extrabold mb-3" />
         <div className="flex text-white text-3xl font-extrabold mb-1">
           {stats?.approved || 0}
         </div>
         <div className="text-white font-extrabold">Approved</div>
       </div>
       <div className="bg-yellow-400 rounded-lg p-6 flex flex-col shadow-md">
-        <Clock size={32} className="font-extrabold mb-3" />
+        <Clock size={32} className="text-white font-extrabold mb-3" />
         <div className="flex text-white text-3xl font-extrabold mb-1">
           {stats?.pending_approval || 0}
         </div>
         <div className="text-white font-extrabold">Pending Approval</div>
       </div>
       <div className="bg-red-400 rounded-lg p-6 flex flex-col shadow-md">
-        <XCircle size={32} className="font-extrabold mb-3" />
+        <XCircle size={32} className="text-white font-extrabold mb-3" />
         <div className="flex text-white text-3xl font-extrabold mb-1">
           {stats?.rejected || 0}
         </div>
