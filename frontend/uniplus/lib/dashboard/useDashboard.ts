@@ -50,15 +50,30 @@ export function useDashboard(eventId: string | undefined) {
     setState((s) => ({ ...s, loading: true, error: "" }));
     try {
       const data = await fetchDashboard(eventId);
-      setState((s) => ({
-        ...s,
-        loading: false,
-        event: data.event,
-        schedule: data.schedule_days || [],
-        attendees: data.attendees || [],
-        statistics: data.statistics || null,
-        selectedDate: data.schedule_days?.[0]?.date ?? s.selectedDate,
-      }));
+      const schedule = data.schedule_days || [];
+
+      setState((s) => {
+        // keep user's selected date if it still exists
+        let nextSelected = s.selectedDate;
+
+        if (!nextSelected) {
+          // first load: default to first day
+          nextSelected = schedule[0]?.date ?? "";
+        } else if (!schedule.some((d) => d.date === nextSelected)) {
+          // if that date vanished, fall back to first
+          nextSelected = schedule[0]?.date ?? nextSelected;
+        }
+
+        return {
+          ...s,
+          loading: false,
+          event: data.event,
+          schedule,
+          attendees: data.attendees || [],
+          statistics: data.statistics || null,
+          selectedDate: nextSelected,
+        };
+      });
     } catch (e: any) {
       const msg = e?.message || "Failed to load dashboard.";
       setState((s) => ({ ...s, loading: false, error: msg }));
@@ -71,6 +86,7 @@ export function useDashboard(eventId: string | undefined) {
   }, [load]);
 
   const visibleAttendees = useMemo(() => {
+    // base list
     const base =
       state.tableView === "attendance"
         ? state.attendees.filter((a) => a.approvalStatus === "approved")
@@ -78,8 +94,11 @@ export function useDashboard(eventId: string | undefined) {
 
     const q = state.search.trim().toLowerCase();
 
+    // per-day status for attendance view
     const withDayStatus: Attendee[] = base.map((a) => {
-      if (state.tableView !== "attendance" || !state.selectedDate) return a;
+      if (state.tableView !== "attendance" || !state.selectedDate) {
+        return a;
+      }
 
       const checkedInDates = a.checkedInDates ?? [];
       const isPresentForSelectedDay = checkedInDates.includes(state.selectedDate);
@@ -87,10 +106,12 @@ export function useDashboard(eventId: string | undefined) {
       return {
         ...a,
         status: isPresentForSelectedDay ? "present" : "pending",
+        // we only show the global checkedIn timestamp if present for that day
         checkedIn: isPresentForSelectedDay ? a.checkedIn : "",
       };
     });
 
+    // filter + search
     const filtered = withDayStatus.filter((a) => {
       const filterOk =
         state.tableView === "attendance"
@@ -110,7 +131,13 @@ export function useDashboard(eventId: string | undefined) {
     });
 
     return filtered;
-  }, [state.attendees, state.tableView, state.selectedDate, state.activeFilter, state.search]);
+  }, [
+    state.attendees,
+    state.tableView,
+    state.selectedDate,
+    state.activeFilter,
+    state.search,
+  ]);
 
   const attendanceStats = useMemo(() => {
     const total = visibleAttendees.length;
@@ -200,6 +227,7 @@ export function useDashboard(eventId: string | undefined) {
   // check-in for specific selected date
   const checkIn = async (ticketId: string) => {
     if (!state.event) return;
+
     const trimmed = ticketId.trim();
     if (!trimmed) {
       alert({ text: "Please provide a Ticket ID.", variant: "info" });
@@ -222,8 +250,16 @@ export function useDashboard(eventId: string | undefined) {
     }
 
     try {
-      await checkInOne(String(state.event.id), trimmed, state.selectedDate);
-      alert({ text: `Checked in ${trimmed} for ${state.selectedDate}.`, variant: "success" });
+      const res = await checkInOne(String(state.event.id), trimmed, state.selectedDate);
+      const msg = (res as any)?.message || `Checked in ${trimmed} for ${state.selectedDate}.`;
+
+      // if backend says "already checked in", treat as info instead of success
+      if (msg.toLowerCase().includes("already")) {
+        alert({ text: msg, variant: "info" });
+      } else {
+        alert({ text: msg, variant: "success" });
+      }
+
       await load();
     } catch (err: any) {
       alert({ text: err?.message || "Check-in failed.", variant: "error" });
