@@ -1163,7 +1163,11 @@ def get_user_statistics(request):
         return 400, {"error": str(e)}
 
 
-@api.get("/events/{event_id}/dashboard", auth=django_auth, response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+@api.get(
+    "/events/{event_id}/dashboard",
+    auth=django_auth,
+    response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema},
+)
 def get_event_dashboard(request, event_id: int):
     """Get dashboard data for event organizer - UPDATED VERSION"""
     try:
@@ -1174,10 +1178,10 @@ def get_event_dashboard(request, event_id: int):
             return 403, {"error": "You are not authorized to view this dashboard"}
         
         # Get all tickets for this event
-        tickets = Ticket.objects.filter(event=event).select_related('attendee')
+        tickets = Ticket.objects.filter(event=event).select_related("attendee")
         
         # Get event schedule days
-        schedules = EventSchedule.objects.filter(event=event).order_by('event_date', 'start_time_event')
+        schedules = EventSchedule.objects.filter(event=event).order_by("event_date", "start_time_event")
         
         schedule_days = []
         for idx, schedule in enumerate(schedules, 1):
@@ -1196,18 +1200,25 @@ def get_event_dashboard(request, event_id: int):
         for ticket in tickets:
             user = ticket.attendee
             
-            # Determine status based on check-in and approval
+            # Determine status based on check-in and approval (event-wide)
             if ticket.checked_in_at:
-                status = 'present'
-            elif ticket.approval_status == 'pending':
-                status = 'pending'
+                status = "present"
+            elif ticket.approval_status == "pending":
+                status = "pending"
             else:
-                status = 'absent'
+                status = "absent"
             
             # Get event date (first date if multi-day)
             event_date_str = ""
             if ticket.event_dates and isinstance(ticket.event_dates, list) and len(ticket.event_dates) > 0:
-                event_date_str = ticket.event_dates[0].get('date', '')
+                first = ticket.event_dates[0]
+                if isinstance(first, dict):
+                    event_date_str = str(first.get("date") or "")
+                else:
+                    event_date_str = str(first)
+                # normalise to just YYYY-MM-DD
+                if len(event_date_str) >= 10:
+                    event_date_str = event_date_str[:10]
             
             if not event_date_str and event.event_start_date:
                 event_date_str = event.event_start_date.date().isoformat()
@@ -1233,9 +1244,9 @@ def get_event_dashboard(request, event_id: int):
         # Calculate statistics
         total_registered = tickets.count()
         checked_in = tickets.filter(checked_in_at__isnull=False).count()
-        approved = tickets.filter(approval_status='approved').count()
-        pending = tickets.filter(approval_status='pending').count()
-        rejected = tickets.filter(approval_status='rejected').count()
+        approved = tickets.filter(approval_status="approved").count()
+        pending = tickets.filter(approval_status="pending").count()
+        rejected = tickets.filter(approval_status="rejected").count()
         
         # Attendance rate (checked in / approved)
         attendance_rate = (checked_in / approved * 100) if approved > 0 else 0
@@ -1259,13 +1270,14 @@ def get_event_dashboard(request, event_id: int):
                 "pending_approval": pending,
                 "rejected": rejected,
                 "attendance_rate": round(attendance_rate, 1),
-            }
+            },
         }
     except Exception as e:
         print(f"Error fetching dashboard: {e}")
         import traceback
         traceback.print_exc()
         return 400, {"error": str(e)}
+
 
 
 # ============================================================================
@@ -1556,9 +1568,17 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
         if ticket.checked_in_dates is None:
             ticket.checked_in_dates = []
 
+        if date_str in ticket.checked_in_dates:
+            return 200, {
+                "success": True,
+                "message": "Attendee already checked in for this date",
+                "ticket_id": ticket_id,
+                "status": "present",
+                "checked_in_dates": ticket.checked_in_dates,
+            }
+
         # Add date if not already present (using normalised YYYY-MM-DD string)
-        if date_str not in ticket.checked_in_dates:
-            ticket.checked_in_dates.append(date_str)
+        ticket.checked_in_dates.append(date_str)
 
         # keep last check-in timestamp + overall status
         ticket.checked_in_at = timezone.now()
@@ -1576,6 +1596,7 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
     except Exception as e:
         print(f"Error checking in: {e}")
         return 400, {"error": str(e)}
+
 
     
 
