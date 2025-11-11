@@ -261,6 +261,24 @@ export function useDashboard(eventId: string | undefined) {
       return;
     }
 
+    // Optimistically update the state BEFORE the API call
+    const now = new Date().toISOString();
+    setState((s) => ({
+      ...s,
+      attendees: s.attendees.map((attendee) =>
+        attendee.ticketId === trimmed
+          ? {
+              ...attendee,
+              checkedIn: now,
+              checkedInDates: [
+                ...(attendee.checkedInDates || []),
+                s.selectedDate
+              ].filter((v, i, arr) => arr.indexOf(v) === i), // remove duplicates
+            }
+          : attendee
+      ),
+    }));
+
     try {
       const res = await checkInOne(String(state.event.id), trimmed, state.selectedDate);
       const msg = (res as any)?.message || `Checked in ${trimmed} for ${state.selectedDate}.`;
@@ -272,9 +290,10 @@ export function useDashboard(eventId: string | undefined) {
         alert({ text: msg, variant: "success" });
       }
 
-      await load();
     } catch (err: any) {
       alert({ text: err?.message || "Check-in failed.", variant: "error" });
+      // Reload on error to revert optimistic update
+      await load();
     }
   };
 
