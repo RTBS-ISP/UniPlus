@@ -1,6 +1,9 @@
 import type { Attendee, EventData, ScheduleDay, Statistics } from "@/lib/dashboard/types";
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api").replace(/\/$/, "");
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api").replace(
+  /\/$/,
+  ""
+);
 
 async function getJSON<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const res = await fetch(input, { credentials: "include", ...init });
@@ -70,11 +73,8 @@ export async function bulkApproval(
   );
 }
 
-export async function checkInOne(
-  eventId: string,
-  ticketId: string,
-  date: string
-) {
+// Check in for a specific date
+export async function checkInOne(eventId: string, ticketId: string, date: string) {
   const csrf = await getCsrf();
 
   const url = `${API_BASE}/events/${eventId}/check-in?ticket_id=${encodeURIComponent(
@@ -84,8 +84,7 @@ export async function checkInOne(
   return await getJSON<{
     success: boolean;
     message: string;
-    ticket_id: string;
-    status: string;
+    status?: string;
     checked_in_dates?: string[];
   }>(url, {
     method: "POST",
