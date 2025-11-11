@@ -3,6 +3,7 @@
 import React from "react";
 import { CheckCircle, XCircle } from "lucide-react";
 import type { Attendee, TableView } from "@/lib/dashboard/types";
+import { formatDate } from "@/lib/utils/formatDate";
 
 export function AttendeeTable({
   view,
@@ -91,7 +92,7 @@ export function AttendeeTable({
                 </td>
 
                 <td className="px-6 py-4 text-gray-800">
-                  {a.registered ? new Date(a.registered).toLocaleString() : "—"}
+                  {a.registered ? formatDate(a.registered) : "—"}
                 </td>
 
                 {isAttendance ? (
@@ -104,7 +105,7 @@ export function AttendeeTable({
                         Check In
                       </button>
                     ) : (
-                      new Date(a.checkedIn).toLocaleString()
+                      formatDate(a.checkedIn)
                     )}
                   </td>
                 ) : (
