@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  Calendar, 
   CheckCircle, 
   XCircle, 
   Clock, 
@@ -11,8 +10,8 @@ import {
   User
 } from "lucide-react";
 
-// Add the Navbar component import - adjust the path based on your project structure
 import Navbar from "../components/navbar";
+import { AdminStatCards } from "../components/AdminStatCard";
 
 interface Event {
   id: number;
@@ -382,51 +381,7 @@ export default function AdminPage() {
 
           {/* Statistics Cards */}
           {statistics && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
-              {/* Total Events */}
-              <div className="bg-white rounded-xl p-6 shadow-md">
-                <div className="flex items-center gap-3">
-                  <Calendar className="text-indigo-500" size={32} />
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">Total Events</p>
-                    <p className="text-3xl font-bold text-gray-800">{statistics.total_events}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Approved Events */}
-              <div className="bg-white rounded-xl p-6 shadow-md">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="text-lime-500" size={32} />
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">Approved</p>
-                    <p className="text-3xl font-bold text-gray-800">{statistics.approved_events}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pending Events */}
-              <div className="bg-white rounded-xl p-6 shadow-md">
-                <div className="flex items-center gap-3">
-                  <Clock className="text-yellow-400" size={32} />
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">Pending</p>
-                    <p className="text-3xl font-bold text-gray-800">{statistics.pending_events}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Rejected Events */}
-              <div className="bg-white rounded-xl p-6 shadow-md">
-                <div className="flex items-center gap-3">
-                  <XCircle className="text-red-400" size={32} />
-                  <div>
-                    <p className="text-gray-500 text-sm font-medium">Rejected</p>
-                    <p className="text-3xl font-bold text-gray-800">{statistics.rejected_events}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AdminStatCards stats={statistics} />
           )}
 
           {/* Events Table Section */}
