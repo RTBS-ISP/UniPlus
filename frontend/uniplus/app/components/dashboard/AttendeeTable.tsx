@@ -39,7 +39,7 @@ export function AttendeeTable({
             {isAttendance ? (
               <th className="px-6 py-3 text-left font-bold text-sm">CHECKED IN</th>
             ) : (
-              <th className="px-6 py-3 text-center font-bold text-sm">APPROVAL</th>
+              <th className="px-6 py-3 text-left font-bold text-sm">APPROVAL</th>
             )}
           </tr>
         </thead>
@@ -47,7 +47,10 @@ export function AttendeeTable({
         <tbody className="bg-white">
           {data.length > 0 ? (
             data.map((a) => (
-              <tr key={a.ticketId} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+              <tr
+                key={a.ticketId}
+                className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
+              >
                 {isApproval && (
                   <td className="px-6 py-4 text-center">
                     <input
@@ -67,7 +70,9 @@ export function AttendeeTable({
                   {isAttendance ? (
                     <span
                       className={`inline-block px-3 py-1 rounded-full text-sm font-semibold ${
-                        a.status === "present" ? "bg-lime-500 text-white" : "bg-yellow-400 text-white"
+                        a.status === "present"
+                          ? "bg-lime-500 text-white"
+                          : "bg-yellow-400 text-white"
                       }`}
                     >
                       {a.status === "present" ? "Present" : "Pending"}
@@ -109,14 +114,13 @@ export function AttendeeTable({
                     )}
                   </td>
                 ) : (
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 text-gray-800">
                     {a.approvalStatus === "pending" ? (
-                      <div className="flex justify-center gap-2">
+                      <div className="flex gap-2">
                         <button
                           onClick={() => onApprove(a.ticketId)}
                           className="p-2 bg-lime-500 hover:bg-lime-600 rounded-lg transition-colors"
                           title="Approve"
-                          aria-label={`Approve ${a.ticketId}`}
                         >
                           <CheckCircle size={20} className="text-white" />
                         </button>
@@ -124,13 +128,14 @@ export function AttendeeTable({
                           onClick={() => onReject(a.ticketId)}
                           className="p-2 bg-red-400 hover:bg-red-500 rounded-lg transition-colors"
                           title="Reject"
-                          aria-label={`Reject ${a.ticketId}`}
                         >
                           <XCircle size={20} className="text-white" />
                         </button>
                       </div>
                     ) : (
-                      <div className="text-center text-gray-500">—</div>
+                      <span className="text-gray-800">
+                        {a.checkedIn ? formatDate(a.checkedIn) : formatDate(a.registered)}
+                      </span>
                     )}
                   </td>
                 )}
