@@ -7,3 +7,4 @@ from .ticket import Ticket
 from .rating import Rating
 from .comment import Comment
 from .event_schedule import EventSchedule
+from .notification import Notification
