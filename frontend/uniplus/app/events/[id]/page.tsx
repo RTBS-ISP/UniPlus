@@ -29,6 +29,7 @@ type EventSession = {
   startTime: string;
   endTime: string;
   location?: string;
+  is_online: boolean;
   address?: string;
   address2?: string;
 };
@@ -586,11 +587,19 @@ function ScheduleList({
             transition={{ type: "spring", stiffness: 260, damping: 28 }}
             className="overflow-hidden"
           >
-            <motion.div className="mt-4 space-y-3" variants={staggerRow} initial="initial" animate="animate">
+            <motion.div
+              className="mt-4 space-y-3"
+              variants={staggerRow}
+              initial="initial"
+              animate="animate"
+            >
               {groups.map((g, idx) => {
                 const dateLabel = formatDateGB(g.start);
-                const loc = g.items[0].location ?? fallbackLocation;
-                const addr2 = g.items[0].address2 ?? fallbackAddress2;
+                const day = g.items[0];
+                const isOnline = day.is_online;
+                const loc = day.location ?? fallbackLocation;
+                const addr2 = day.address2 ?? fallbackAddress2;
+
                 return (
                   <motion.div
                     key={`${g.start}-${idx}`}
@@ -607,10 +616,24 @@ function ScheduleList({
                       </span>
                     </div>
 
+                    {/* Location or Online */}
                     <div className="mt-2 text-sm text-[#0B1220]/80">
-                      <div className="font-medium text-[#0B1220]">{loc}</div>
-                      {addr2 && <div>{addr2}</div>}
-                  </div>
+                      {isOnline ? (
+                        <div className="space-y-1">
+                          <div className="font-medium text-[#0B1220]">Online Event</div>
+                          <div className="text-xs text-[#0B1220]/60 italic">
+                            Meeting link will be available after registration
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="font-medium text-[#0B1220]">
+                            {loc || "Location not specified"}
+                          </div>
+                          {addr2 && <div>{addr2}</div>}
+                        </>
+                      )}
+                    </div>
                   </motion.div>
                 );
               })}
@@ -999,7 +1022,7 @@ export default function EventDetailPage({ params }: Params) {
             <span className="relative group inline-block">
               <button
                 type="button"
-                className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
+                className="inline-flex items-center rounded-md border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-[#0B1220]"
               >
                 +{hiddenTags.length}
               </button>
