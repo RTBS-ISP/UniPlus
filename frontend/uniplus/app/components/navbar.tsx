@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Menu, LogOut, User, Plus } from "lucide-react";
+import { Menu, LogOut, User, Plus, Shield } from "lucide-react";
 import { useUser } from "@/app/context/UserContext";
 import NotificationBell from "./Notificationbell";
 
@@ -98,7 +98,7 @@ export default function Navbar() {
             <ul className="hidden md:flex space-x-10 text-base font-medium">
               <li><Link href="/" className="hover:underline">Home</Link></li>
               <li><Link href="/events" className="hover:underline">Events</Link></li>
-              <li><Link href="/#" className="hover:underline">Support</Link></li>
+              <li><Link href="/support" className="hover:underline">Support</Link></li>
             </ul>
 
             {/* Right Side */}
@@ -117,6 +117,18 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
+                  {/* Admin Button - Only visible for admin users */}
+                  {user.role === "admin" && (
+                    <Link
+                      href="/admin"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition"
+                      title="Admin Dashboard"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Admin
+                    </Link>
+                  )}
+
                   {/* Create Event Button */}
                   <Link
                     href="/events/create"
@@ -178,6 +190,21 @@ export default function Navbar() {
             >
               🎟️ My Tickets
             </Link>
+            
+            {/* Admin Link in Dropdown */}
+            {user.role === "admin" && (
+              <>
+                <hr className="my-1 border-gray-200" />
+                <Link
+                  href="/admin"
+                  className="block px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 text-indigo-600 font-semibold"
+                  onClick={() => setProfileMenuOpen(false)}
+                >
+                  <Shield className="w-4 h-4" /> Admin Dashboard
+                </Link>
+              </>
+            )}
+            
             <hr className="my-1 border-gray-200" />
             <button
               onClick={handleLogout}

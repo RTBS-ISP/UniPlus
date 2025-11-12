@@ -138,3 +138,56 @@ def send_checkin_notification(ticket: Ticket):
         related_ticket=ticket,
         related_event=ticket.event
     )
+
+def send_event_creation_notification_to_admins(event):
+    """
+    Send notification to all admins when a new event is created
+    """
+    from api.model.user import AttendeeUser
+    
+    # Get all admin users
+    admins = AttendeeUser.objects.filter(role='admin')
+    
+    for admin in admins:
+        try:
+            notification = Notification.objects.create(
+                user=admin,
+                message=f"New event '{event.event_title}' created by {event.organizer.username} requires approval.",
+                notification_type='event_pending_approval',
+                related_event=event
+            )
+            print(f"✅ Admin notification sent to {admin.username} for event {event.id}")
+        except Exception as e:
+            print(f"❌ Failed to send admin notification to {admin.username}: {e}")
+
+
+def send_event_approval_notification(event):
+    """
+    Send notification to organizer when their event is approved
+    """
+    try:
+        notification = Notification.objects.create(
+            user=event.organizer,
+            message=f"Great news! Your event '{event.event_title}' has been approved and is now live.",
+            notification_type='event_approved',
+            related_event=event
+        )
+        print(f"✅ Event approval notification sent to {event.organizer.username}")
+    except Exception as e:
+        print(f"❌ Failed to send event approval notification: {e}")
+
+
+def send_event_rejection_notification(event):
+    """
+    Send notification to organizer when their event is rejected
+    """
+    try:
+        notification = Notification.objects.create(
+            user=event.organizer,
+            message=f"Your event '{event.event_title}' was not approved. Please contact support for more information.",
+            notification_type='event_rejected',
+            related_event=event
+        )
+        print(f"✅ Event rejection notification sent to {event.organizer.username}")
+    except Exception as e:
+        print(f"❌ Failed to send event rejection notification: {e}")

@@ -17,7 +17,17 @@ from api.model.ticket import Ticket
 from api.model.event_schedule import EventSchedule
 from api.model.comment import Comment
 from api.model.rating import Rating
-from api.model.notification import Notification, create_notification, send_registration_notification, send_approval_notification, send_rejection_notification, send_reminder_notification
+from api.model.notification import (
+    Notification, 
+    create_notification, 
+    send_registration_notification, 
+    send_approval_notification, 
+    send_rejection_notification, 
+    send_reminder_notification,
+    send_event_creation_notification_to_admins,
+    send_event_approval_notification,
+    send_event_rejection_notification
+)
 from api import schemas
 from typing import List, Optional, Union
 import json
@@ -582,7 +592,7 @@ def create_event(
         
         if len(created_schedules) == 0:
             print(f"WARNING: No EventSchedule entries were created!")
-        
+        send_event_creation_notification_to_admins(event)
         return 200, {
             "success": True,
             "message": f"Event created successfully with {len(created_schedules)} schedule entries",
@@ -1845,7 +1855,7 @@ def verify_event(request, event_id: int):
         
         event.verification_status = "approved"
         event.save()
-        
+        send_event_approval_notification(event)
         return 200, {
             "success": True,
             "message": "Event approved successfully",
@@ -1870,6 +1880,9 @@ def reject_event(request, event_id: int):
         
         event.verification_status = "rejected"
         event.save()
+        
+        # 🔔 Send notification to organizer
+        send_event_rejection_notification(event)
         
         return 200, {
             "success": True,
