@@ -275,7 +275,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       className="rounded-lg shadow-sm bg-white flex flex-col transition-transform hover:scale-[1.02] hover:shadow-md"
     >
       {/* Header */}
-      <div className="flex items-start justify-between rounded-t-lg w-full min-h-24 bg-indigo-500 relative p-6 gap-4">
+      <div className="flex items-start justify-between rounded-t-lg w-full h-36 bg-indigo-500 relative p-6 gap-4 overflow-hidden">
         <div className="flex flex-col gap-y-3 flex-1 pr-2 relative">
           <div className="relative group/title">
             <h2 
