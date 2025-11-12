@@ -24,12 +24,28 @@ import json
 from datetime import datetime
 import uuid 
 import traceback
+import pytz
 from django.http import HttpResponse
 import csv
 from api.schemas import NotificationOut, NotificationMarkReadIn, NotificationBulkMarkReadIn
 
 
 
+def convert_to_bangkok_time(dt):
+    """
+    Convert a datetime object to Bangkok timezone
+    Returns a timezone-aware datetime in Asia/Bangkok
+    """
+    bangkok_tz = pytz.timezone('Asia/Bangkok')
+    
+    if dt is None:
+        return None
+    
+    if dt.tzinfo is None:
+        dt = pytz.UTC.localize(dt)
+    
+    # Convert to Bangkok timezone
+    return dt.astimezone(bangkok_tz)
 
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
@@ -155,26 +171,66 @@ def get_user(request):
                     if not event_dates:
                         schedules = EventSchedule.objects.filter(event=event).order_by("event_date", "start_time_event")
                         for s in schedules:
+                            # Combine date and time, then convert to Bangkok
+                            start_dt = datetime.combine(s.event_date, s.start_time_event)
+                            end_dt = datetime.combine(s.event_date, s.end_time_event) if s.end_time_event else None
+                            
+                            start_bangkok = convert_to_bangkok_time(start_dt)
+                            end_bangkok = convert_to_bangkok_time(end_dt) if end_dt else None
+                            
                             event_dates.append({
-                                "date": s.event_date.isoformat(), 
-                                "time": s.start_time_event.isoformat(),  
-                                "endTime": s.end_time_event.isoformat() if s.end_time_event else None,  
+                                "date": start_bangkok.date().isoformat(),
+                                "time": start_bangkok.time().isoformat(),
+                                "endTime": end_bangkok.time().isoformat() if end_bangkok else None,
                                 "location": event.event_address or "TBA",
                                 "is_online": event.is_online,
                                 "meeting_link": event.event_meeting_link or "",
                             })
+                    else:
+                        # Convert existing event_dates to Bangkok time
+                        converted_dates = []
+                        for ed in event_dates:
+                            try:
+                                date_str = ed.get('date')
+                                time_str = ed.get('time')
+                                
+                                if date_str and time_str:
+                                    dt = datetime.fromisoformat(f"{date_str}T{time_str}")
+                                    bangkok_dt = convert_to_bangkok_time(dt)
+                                    
+                                    end_time_str = ed.get('endTime')
+                                    end_bangkok = None
+                                    if end_time_str:
+                                        end_dt = datetime.fromisoformat(f"{date_str}T{end_time_str}")
+                                        end_bangkok = convert_to_bangkok_time(end_dt)
+                                    
+                                    converted_dates.append({
+                                        "date": bangkok_dt.date().isoformat(),
+                                        "time": bangkok_dt.time().isoformat(),
+                                        "endTime": end_bangkok.time().isoformat() if end_bangkok else None,
+                                        "location": ed.get('location', event.event_address or "TBA"),
+                                        "is_online": ed.get('is_online', event.is_online),
+                                        "meeting_link": ed.get('meeting_link', event.event_meeting_link or ""),
+                                    })
+                            except Exception as e:
+                                print(f"Error converting event date: {e}")
+                                converted_dates.append(ed)
+                        
+                        event_dates = converted_dates
                     
+                    # Fallback if still no dates
                     if not event_dates and event.event_start_date:
+                        bangkok_start = convert_to_bangkok_time(event.event_start_date)
                         event_dates = [{
-                            'date': event.event_start_date.date().isoformat(),
-                            'time': event.event_start_date.time().isoformat(),
+                            'date': bangkok_start.date().isoformat(),
+                            'time': bangkok_start.time().isoformat(),
                             'location': event.event_address or 'TBA',
                             'is_online': event.is_online,
                             'meeting_link': event.event_meeting_link
                         }]
                     
-                    display_date = event_dates[0]['date'] if event_dates else (event.event_start_date.date().isoformat() if event.event_start_date else None)
-                    display_time = event_dates[0]['time'] if event_dates else (event.event_start_date.time().isoformat() if event.event_start_date else '00:00:00')
+                    display_date = event_dates[0]['date'] if event_dates else None
+                    display_time = event_dates[0]['time'] if event_dates else '00:00:00'
                     
                     ticket_data = {
                         "date": display_date,
@@ -196,74 +252,13 @@ def get_user(request):
                         "event_meeting_link": ticket.meeting_link,
                         "event_image": event.event_image.url if event and event.event_image else None,
                         "event_dates": event_dates,
-                        "approval_status": ticket.approval_status,  # Add approval status
+                        "approval_status": ticket.approval_status,
                     }
                     tickets.append(ticket_data)
                 except Exception as e:
                     print(f"Error processing ticket: {e}")
-                    continue
-
-        tickets = []
-        
-        if hasattr(request.user, 'my_tickets') and request.user.my_tickets.exists():
-            for ticket in request.user.my_tickets.all().select_related('event', 'event__organizer'):
-                try:
-                    event = ticket.event
-                    
-                    event_dates = []
-                    if ticket.event_dates:
-                        try:
-                            event_dates = json.loads(ticket.event_dates) if isinstance(ticket.event_dates, str) else ticket.event_dates
-                        except:
-                            event_dates = []
-                    if not event_dates:
-                        schedules = EventSchedule.objects.filter(event=event).order_by("event_date", "start_time_event")
-
-                        # And when building the event_dates array:
-                        for s in schedules:
-                            event_dates.append({
-                                "date": s.event_date.isoformat(), 
-                                "time": s.start_time_event.isoformat(),  
-                                "endTime": s.end_time_event.isoformat() if s.end_time_event else None,  
-                                "location": event.event_address or "TBA",
-                                "is_online": event.is_online,
-                                "meeting_link": event.event_meeting_link or "",
-                            })
-                    if not event_dates and event.event_start_date:
-                        event_dates = [{
-                            'date': event.event_start_date.date().isoformat(),
-                            'time': event.event_start_date.time().isoformat(),
-                            'location': event.event_address or 'TBA',
-                            'is_online': event.is_online,
-                            'meeting_link': event.event_meeting_link
-                        }]
-                    display_date = event_dates[0]['date'] if event_dates else (event.event_start_date.date().isoformat() if event.event_start_date else None)
-                    display_time = event_dates[0]['time'] if event_dates else (event.event_start_date.time().isoformat() if event.event_start_date else '00:00:00')
-                    
-                    ticket_data = {
-                        "date": display_date,
-                        "time": display_time,
-                        "location": event_dates[0]['location'] if event_dates else (event.event_address or 'TBA'),
-                        "organizer": event.organizer.username if event and event.organizer else None,
-                        "user_information": {
-                            "name": f"{request.user.first_name} {request.user.last_name}",
-                            "firstName": request.user.first_name,
-                            "lastName": request.user.last_name,
-                            "email": request.user.email,
-                            "phone": request.user.phone_number
-                        },
-                        "event_title": event.event_title if event else None,
-                        "event_description": event.event_description if event else None,
-                        "ticket_number": ticket.qr_code,
-                        "event_id": event.id if event else None,
-                        "is_online": ticket.is_online,
-                        "event_meeting_link": ticket.meeting_link,
-                        "event_image": event.event_image.url if event and event.event_image else None,
-                        "event_dates": event_dates,  
-                    }
-                    tickets.append(ticket_data)
-                except Exception as e:
-                    print(f"Error processing ticket: {e}")
+                    import traceback
+                    traceback.print_exc()
                     continue
 
         return 200, {
@@ -275,7 +270,7 @@ def get_user(request):
             "role": request.user.role,
             "aboutMe": about_me_data,
             "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC,
-            "tickets": tickets  
+            "tickets": tickets
         }
     return 401, {"error": "Not authenticated"}
 
@@ -1619,27 +1614,65 @@ def get_user_tickets(request, status: str = None):
                 if not event_dates and event:
                     schedules = EventSchedule.objects.filter(event=event).order_by("event_date", "start_time_event")
                     for s in schedules:
+                        start_dt = datetime.combine(s.event_date, s.start_time_event)
+                        end_dt = datetime.combine(s.event_date, s.end_time_event) if s.end_time_event else None
+                        
+                        start_bangkok = convert_to_bangkok_time(start_dt)
+                        end_bangkok = convert_to_bangkok_time(end_dt) if end_dt else None
+                        
                         event_dates.append({
-                            "date": s.event_date.isoformat(), 
-                            "time": s.start_time_event.isoformat(),  
-                            "endTime": s.end_time_event.isoformat() if s.end_time_event else None,  
+                            "date": start_bangkok.date().isoformat(),
+                            "time": start_bangkok.time().isoformat(),
+                            "endTime": end_bangkok.time().isoformat() if end_bangkok else None,
                             "location": event.event_address or "TBA",
                             "is_online": event.is_online,
                             "meeting_link": event.event_meeting_link or "",
                         })
+                else:
+                    # Convert existing event_dates
+                    converted_dates = []
+                    for ed in event_dates:
+                        try:
+                            date_str = ed.get('date')
+                            time_str = ed.get('time')
+                            
+                            if date_str and time_str:
+                                dt = datetime.fromisoformat(f"{date_str}T{time_str}")
+                                bangkok_dt = convert_to_bangkok_time(dt)
+                                
+                                end_time_str = ed.get('endTime')
+                                end_bangkok = None
+                                if end_time_str:
+                                    end_dt = datetime.fromisoformat(f"{date_str}T{end_time_str}")
+                                    end_bangkok = convert_to_bangkok_time(end_dt)
+                                
+                                converted_dates.append({
+                                    "date": bangkok_dt.date().isoformat(),
+                                    "time": bangkok_dt.time().isoformat(),
+                                    "endTime": end_bangkok.time().isoformat() if end_bangkok else None,
+                                    "location": ed.get('location', event.event_address or "TBA"),
+                                    "is_online": ed.get('is_online', event.is_online),
+                                    "meeting_link": ed.get('meeting_link', event.event_meeting_link or ""),
+                                })
+                        except Exception as e:
+                            print(f"Error converting date: {e}")
+                            converted_dates.append(ed)
+                    
+                    event_dates = converted_dates
                 
                 # Fallback
                 if not event_dates and event and event.event_start_date:
+                    bangkok_start = convert_to_bangkok_time(event.event_start_date)
                     event_dates = [{
-                        'date': event.event_start_date.date().isoformat(),
-                        'time': event.event_start_date.time().isoformat(),
+                        'date': bangkok_start.date().isoformat(),
+                        'time': bangkok_start.time().isoformat(),
                         'location': event.event_address or 'TBA',
                         'is_online': event.is_online,
                         'meeting_link': event.event_meeting_link
                     }]
                 
-                display_date = event_dates[0]['date'] if event_dates else (event.event_start_date.date().isoformat() if event and event.event_start_date else None)
-                display_time = event_dates[0]['time'] if event_dates else (event.event_start_date.time().isoformat() if event and event.event_start_date else '00:00:00')
+                display_date = event_dates[0]['date'] if event_dates else None
+                display_time = event_dates[0]['time'] if event_dates else '00:00:00'
                 
                 ticket_data = {
                     "ticket_id": ticket.id,

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Calendar, Clock, MapPin } from "lucide-react";
+import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface EventDay {
   date: string;
@@ -10,6 +10,12 @@ interface EventDay {
   location: string;
   is_online: boolean;
   meeting_link?: string | null;
+}
+interface ScheduleDay {
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: string;
 }
 
 interface TicketInfo {
@@ -36,11 +42,17 @@ interface TicketInfo {
 
 interface EventDetail {
   tags: string[];
+  schedule?: ScheduleDay[];
+  is_online: boolean;
 }
 
 export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   const [tags, setTags] = useState<string[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleDay[]>([]);
+  const [isOnline, setIsOnline] = useState(ticket.is_online);
   const [loading, setLoading] = useState(true);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [showTitlePopover, setShowTitlePopover] = useState(false);
 
   const fetchEventDetail = async (eventId: number) => {
     try {
@@ -51,6 +63,8 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       if (response.ok) {
         const data: EventDetail = await response.json();
         setTags(data.tags || []);
+        setSchedule(data.schedule || []);
+        setIsOnline(data.is_online);
       }
     } catch (error) {
       console.error("Error fetching event detail:", error);
@@ -78,8 +92,18 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       year: "numeric",
     });
   };
+
+  const formatShortDate = (dateString: string) => {
+    if (!dateString) return "TBA";
+    const date = new Date(dateString.split('T')[0]); 
+    if (isNaN(date.getTime())) return "TBA";
+    
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
   
-  // Function to summarize date range 
   const formatDateRangeSummary = (eventDates: EventDay[], fallbackDate: string) => {
     if (!eventDates || eventDates.length === 0) {
       return formatDate(fallbackDate);
@@ -97,24 +121,20 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     const startDate = sortedDates[0];
     const endDate = sortedDates[sortedDates.length - 1];
 
-    // Case 1: Single day event
     if (sortedDates.length === 1 || startDate.getTime() === endDate.getTime()) {
       return formatDate(eventDates[0].date);
     }
 
-    // Case 2: Consecutive multi-day event 
     const oneDay = 24 * 60 * 60 * 1000;
     const diffDays = Math.round(
       Math.abs((endDate.getTime() - startDate.getTime()) / oneDay)
     );
     
     if (diffDays === sortedDates.length - 1) {
-      // If the number of days in the array equals the span of days (consecutive)
       const formattedStart = formatDate(startDate.toISOString().split('T')[0]);
       const formattedEnd = formatDate(endDate.toISOString().split('T')[0]);
       return `${formattedStart} - ${formattedEnd}`;
     } else {
-      // Case 3: Non-consecutive/scattered event
       const formattedStart = formatDate(startDate.toISOString().split('T')[0]);
       return `${formattedStart} (${eventDates.length} Dates)`;
     }
@@ -146,21 +166,100 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     }
   };
 
-  const firstDate = ticket.event_dates?.[0];
-  // Summary function for the date display
-  const formattedDate = formatDateRangeSummary(
-    ticket.event_dates,
-    ticket.date
-  ); 
+  const getEventLocation = () => {
+    const hasPhysicalLocation =
+      schedule && schedule.some(s => s.location && s.location.trim() !== "");
 
-  const formattedTime = formatTimeRange(firstDate?.time || ticket.time, firstDate?.endTime);
-  const eventLocation = firstDate?.is_online
-    ? "Online Event"
-    : firstDate?.location || ticket.location || "TBA";
+    if (isOnline && hasPhysicalLocation) {
+      return "Hybrid (Online & Onsite)";
+    }
+
+    if (isOnline) {
+      return "Online Event";
+    }
+
+    if (hasPhysicalLocation) {
+      const locations = schedule.map(s => s.location).filter(Boolean);
+      const uniqueLocations = [...new Set(locations)];
+      if (uniqueLocations.length === 1) {
+        return uniqueLocations[0];
+      }
+      return `${uniqueLocations[0]} (+${uniqueLocations.length - 1} more)`;
+    }
+
+    const firstDate = ticket.event_dates?.[0];
+    return firstDate?.location || ticket.location || "TBA";
+  };
+
+  // Get current day info based on selected index
+  const getCurrentDayInfo = () => {
+    if (ticket.event_dates && ticket.event_dates.length > 0) {
+      return ticket.event_dates[selectedDayIndex];
+    }
+    return {
+      date: ticket.date,
+      time: ticket.time,
+      location: ticket.location,
+      is_online: ticket.is_online,
+    };
+  };
+
+  // Get location for the current selected day by matching with schedule
+  const getCurrentDayLocation = () => {
+    const currentDay = getCurrentDayInfo();
+    
+    // Try to find matching schedule entry for this day
+    if (schedule && schedule.length > 0) {
+      const currentDateStr = currentDay.date.split('T')[0]; // Get YYYY-MM-DD format
+      const matchingSchedule = schedule.find(s => s.date === currentDateStr);
+      
+      if (matchingSchedule && matchingSchedule.location && matchingSchedule.location.trim() !== "") {
+        if (isOnline) {
+          return "Hybrid (Online & Onsite)";
+        }
+        return matchingSchedule.location;
+      }
+    }
+    
+    if (isOnline) {
+      return "Online Event";
+    }
+    
+    // Fallback: check event_dates location
+    if (currentDay.location && currentDay.location.trim() !== "" && currentDay.location !== "TBA") {
+      return currentDay.location;
+    }
+    
+    // Final fallback
+    return ticket.location || "TBA";
+  };
+
+  const currentDay = getCurrentDayInfo();
+  const hasMultipleDays = ticket.event_dates && ticket.event_dates.length > 1;
+  
+  const formattedDate = formatDate(currentDay.date);
+  const formattedTime = formatTimeRange(currentDay.time, currentDay.endTime);
+  const eventLocation = getCurrentDayLocation();
   
   const MAX_VISIBLE_TAGS = 2;
   const visibleTags = tags.slice(0, MAX_VISIBLE_TAGS);
   const hiddenTags = tags.slice(MAX_VISIBLE_TAGS);
+
+  const handlePrevDay = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedDayIndex((prev) => 
+      prev === 0 ? ticket.event_dates.length - 1 : prev - 1
+    );
+  };
+
+  const handleNextDay = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedDayIndex((prev) => 
+      prev === ticket.event_dates.length - 1 ? 0 : prev + 1
+    );
+  };
 
   if (loading) {
     return (
@@ -176,15 +275,82 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       className="rounded-lg shadow-sm bg-white flex flex-col transition-transform hover:scale-[1.02] hover:shadow-md"
     >
       {/* Header */}
-      <div className="flex items-center rounded-t-lg w-full h-24 bg-indigo-500">
-        <div className="flex flex-col p-6 gap-y-3">
-          <h2 className="text-white text-xl font-bold">
-            {ticket.event_title || "Untitled Event"}
-          </h2>
+      <div className="flex items-start justify-between rounded-t-lg w-full h-36 bg-indigo-500 relative p-6 gap-4 overflow-hidden">
+        <div className="flex flex-col gap-y-3 flex-1 pr-2 relative">
+          <div className="relative group/title">
+            <h2 
+              className="text-white text-xl font-bold line-clamp-2 cursor-pointer"
+              onClick={(e) => {
+                if (ticket.event_title && ticket.event_title.length > 80) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowTitlePopover(!showTitlePopover);
+                }
+              }}
+            >
+              {ticket.event_title || "Untitled Event"}
+            </h2>
+            
+            {/* Popover - Shows on hover (desktop) or click (mobile) */}
+            {ticket.event_title && ticket.event_title.length > 80 && (
+              <div className={`absolute left-0 top-full mt-2 w-[min(400px,90vw)] bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 transition-all duration-200
+                ${showTitlePopover ? 'opacity-100 visible' : 'opacity-0 invisible'}
+                md:group-hover/title:opacity-100 md:group-hover/title:visible md:pointer-events-none
+              `}>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-gray-900 text-sm font-semibold leading-relaxed flex-1">
+                    {ticket.event_title}
+                  </p>
+                  {/* Close button - only visible on mobile */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowTitlePopover(false);
+                    }}
+                    className="md:hidden flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors p-1"
+                    aria-label="Close"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
+                <div className="absolute -top-2 left-6 w-4 h-4 bg-white border-l border-t border-gray-200 transform rotate-45"></div>
+              </div>
+            )}
+          </div>
+          
           <p className="text-white text-sm font-medium">
             {ticket.ticket_number}
           </p>
         </div>
+
+        {/* Day Selector - Top Right in Header */}
+        {hasMultipleDays && (
+          <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-full px-2 py-1.5 border border-white/30 flex-shrink-0">
+            <button
+              onClick={handlePrevDay}
+              className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
+              aria-label="Previous day"
+            >
+              <ChevronLeft size={14} className="text-white" />
+            </button>
+            
+            <span className="text-xs font-semibold text-white whitespace-nowrap px-1">
+              Day {selectedDayIndex + 1} of {ticket.event_dates.length}
+            </span>
+
+            <button
+              onClick={handleNextDay}
+              className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
+              aria-label="Next day"
+            >
+              <ChevronRight size={14} className="text-white" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Detail Section */}
@@ -199,7 +365,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
         </div>
         <div className="flex gap-x-2 mb-4">
           <MapPin size={20} className="text-indigo-500" />
-          <p className="text-gray-800 text-sm font-semibold">
+          <p className="text-gray-800 text-sm font-semibold line-clamp-1">
             {eventLocation}
           </p>
         </div>
