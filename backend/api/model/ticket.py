@@ -35,8 +35,10 @@ class Ticket(models.Model):
         ],
         default='pending'
     )
+    approved_at = models.DateTimeField(null=True, blank=True) 
+    rejected_at = models.DateTimeField(null=True, blank=True)
     checked_in_at = models.DateTimeField(null=True, blank=True)
-    checked_in_dates = models.JSONField(default=list, blank=True)
+    checked_in_dates = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return f"Ticket: {self.event_title} ({self.event.event_title})"
