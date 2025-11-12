@@ -1128,7 +1128,7 @@ def get_user_event_history(request):
                 "event_id": event_obj.id if event_obj else None,
                 "event_title": ticket.event_title,
                 "event_description": event_obj.event_description if event_obj else None,
-                "event_date": event_date_str, 
+                "event_date": event_date_str,
                 "location": ticket.location,
                 "is_online": ticket.is_online,
                 "meeting_link": ticket.meeting_link,
@@ -1185,7 +1185,11 @@ def get_user_statistics(request):
         return 400, {"error": str(e)}
 
 
-@api.get("/events/{event_id}/dashboard", auth=django_auth, response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+@api.get(
+    "/events/{event_id}/dashboard",
+    auth=django_auth,
+    response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema},
+)
 def get_event_dashboard(request, event_id: int):
     """Get dashboard data for event organizer - UPDATED VERSION"""
     try:
@@ -1196,10 +1200,10 @@ def get_event_dashboard(request, event_id: int):
             return 403, {"error": "You are not authorized to view this dashboard"}
         
         # Get all tickets for this event
-        tickets = Ticket.objects.filter(event=event).select_related('attendee')
+        tickets = Ticket.objects.filter(event=event).select_related("attendee")
         
         # Get event schedule days
-        schedules = EventSchedule.objects.filter(event=event).order_by('event_date', 'start_time_event')
+        schedules = EventSchedule.objects.filter(event=event).order_by("event_date", "start_time_event")
         
         schedule_days = []
         for idx, schedule in enumerate(schedules, 1):
@@ -1218,24 +1222,40 @@ def get_event_dashboard(request, event_id: int):
         for ticket in tickets:
             user = ticket.attendee
             
-            # Determine status based on check-in and approval
+            # Determine status based on check-in and approval (event-wide)
             if ticket.checked_in_at:
-                status = 'present'
-            elif ticket.approval_status == 'pending':
-                status = 'pending'
+                status = "present"
+            elif ticket.approval_status == "pending":
+                status = "pending"
             else:
-                status = 'absent'
+                status = "absent"
             
             # Get event date (first date if multi-day)
             event_date_str = ""
             if ticket.event_dates and isinstance(ticket.event_dates, list) and len(ticket.event_dates) > 0:
-                event_date_str = ticket.event_dates[0].get('date', '')
+                first = ticket.event_dates[0]
+                if isinstance(first, dict):
+                    event_date_str = str(first.get("date") or "")
+                else:
+                    event_date_str = str(first)
+                # normalise to just YYYY-MM-DD
+                if len(event_date_str) >= 10:
+                    event_date_str = event_date_str[:10]
             
             if not event_date_str and event.event_start_date:
                 event_date_str = event.event_start_date.date().isoformat()
             
             # Get user's about_me (now JSONField)
             about_me = user.about_me if isinstance(user.about_me, dict) else {}
+            
+            checked_in_dates_dict = {}
+            if isinstance(ticket.checked_in_dates, dict):
+                checked_in_dates_dict = ticket.checked_in_dates
+            elif isinstance(ticket.checked_in_dates, list):
+                # Convert old list format to dict format
+                for date_str in ticket.checked_in_dates:
+                    if isinstance(date_str, str) and len(date_str) >= 10:
+                        checked_in_dates_dict[date_str[:10]] = ticket.checked_in_at.isoformat() if ticket.checked_in_at else timezone.now().isoformat()
             
             attendees.append({
                 "ticketId": ticket.ticket_number or ticket.qr_code,
@@ -1244,19 +1264,22 @@ def get_event_dashboard(request, event_id: int):
                 "status": status,
                 "approvalStatus": ticket.approval_status,
                 "registered": ticket.purchase_date.isoformat(),
+                "approvedAt": ticket.approved_at.isoformat() if ticket.approved_at else "",
+                "rejectedAt": ticket.rejected_at.isoformat() if ticket.rejected_at else "",
                 "checkedIn": ticket.checked_in_at.isoformat() if ticket.checked_in_at else "",
                 "eventDate": event_date_str,
                 "phone": user.phone_number,
                 "role": user.role,
                 "about_me": about_me,
+                "checkedInDates": checked_in_dates_dict,
             })
         
         # Calculate statistics
         total_registered = tickets.count()
         checked_in = tickets.filter(checked_in_at__isnull=False).count()
-        approved = tickets.filter(approval_status='approved').count()
-        pending = tickets.filter(approval_status='pending').count()
-        rejected = tickets.filter(approval_status='rejected').count()
+        approved = tickets.filter(approval_status="approved").count()
+        pending = tickets.filter(approval_status="pending").count()
+        rejected = tickets.filter(approval_status="rejected").count()
         
         # Attendance rate (checked in / approved)
         attendance_rate = (checked_in / approved * 100) if approved > 0 else 0
@@ -1280,13 +1303,19 @@ def get_event_dashboard(request, event_id: int):
                 "pending_approval": pending,
                 "rejected": rejected,
                 "attendance_rate": round(attendance_rate, 1),
-            }
+            },
         }
     except Exception as e:
         print(f"Error fetching dashboard: {e}")
         import traceback
         traceback.print_exc()
         return 400, {"error": str(e)}
+
+
+
+# ============================================================================
+# NEW: APPROVAL ENDPOINTS
+# ============================================================================
 
 @api.post("/events/{event_id}/registrations/bulk-action", auth=django_auth, response={200: schemas.ApprovalResponseSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequestSchema):
@@ -1323,7 +1352,11 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
         
         # Update status and send notifications for each ticket
         new_status = 'approved' if payload.action == 'approve' else 'rejected'
-        updated_count = 0
+        
+        if new_status == 'approved':
+            updated_count = tickets.update(approval_status='approved', approved_at=timezone.now())
+        else:
+            updated_count = tickets.update(approval_status='rejected', rejected_at=timezone.now())
         
         for ticket in tickets:
             ticket.approval_status = new_status
@@ -1520,37 +1553,96 @@ def approve_ticket(request, event_id: int, ticket_id: str, approval_status: str)
         return 400, {"error": str(e)}
 
 
-@api.post("/events/{event_id}/check-in", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
-def check_in_attendee_legacy(request, event_id: int, ticket_id: str):
+@api.post(
+    "/events/{event_id}/check-in",
+    auth=django_auth,
+    response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema},
+)
+def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_date: str):
     """
-    DEPRECATED: Use /checkin endpoint instead
+    Check in an attendee for a specific schedule date (YYYY-MM-DD).
+
+    DEPRECATED: Use /checkin endpoint instead, but kept for backwards compatibility.
     """
     try:
         event = get_object_or_404(Event, id=event_id)
-        
+
         if event.organizer != request.user:
             return 403, {"error": "You are not authorized to perform this action"}
-        
+
+        # Resolve ticket by ticket_number first, then fallback to numeric ID
         try:
             ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
         except Ticket.DoesNotExist:
-            ticket_id_num = int(ticket_id.replace('T', '')) if ticket_id.startswith('T') else int(ticket_id)
+            ticket_id_num = int(ticket_id.replace("T", "")) if ticket_id.startswith("T") else int(ticket_id)
             ticket = get_object_or_404(Ticket, id=ticket_id_num, event=event)
+
+        # Parse date string from query param
+        try:
+            parsed_date = datetime.strptime(checkin_date, "%Y-%m-%d").date()
+        except ValueError:
+            return 400, {"error": "Invalid date format. Use YYYY-MM-DD."}
+
+        # Normalised date string (YYYY-MM-DD)
+        date_str = parsed_date.isoformat()
         
-        ticket.status = 'present'
-        from django.utils import timezone
+        # Normalise ticket.event_dates into 'YYYY-MM-DD' strings
+        valid_dates: list[str] = []
+        for d in ticket.event_dates or []:
+            if isinstance(d, str):
+                try:
+                    dt = datetime.fromisoformat(d)
+                    valid_dates.append(dt.date().isoformat())
+                except ValueError:
+                    if len(d) >= 10:
+                        valid_dates.append(d[:10])
+            else:
+                try:
+                    if hasattr(d, "date"):  # datetime
+                        valid_dates.append(d.date().isoformat())
+                    elif hasattr(d, "isoformat"):  # date
+                        valid_dates.append(d.isoformat())
+                except Exception:
+                    pass
+
+        # Validate that this date is in the ticket's event_dates (if event_dates is set)
+        if valid_dates and date_str not in valid_dates:
+            return 400, {"error": "This ticket is not valid for the selected date."}
+
+        # Initialize checked_in_dates as dict if it's a list or None
+        if not isinstance(ticket.checked_in_dates, dict):
+            ticket.checked_in_dates = {}
+
+        if date_str in ticket.checked_in_dates:
+            return 200, {
+                "success": True,
+                "message": "Attendee already checked in for this date",
+                "ticket_id": ticket_id,
+                "status": "present",
+                "checked_in_dates": ticket.checked_in_dates,
+            }
+
+        # Store check-in timestamp for this date
+        ticket.checked_in_dates[date_str] = timezone.now().isoformat()
+        
+        # keep last check-in timestamp + overall status
         ticket.checked_in_at = timezone.now()
+        ticket.status = "present"
         ticket.save()
-        
+
         return 200, {
             "success": True,
-            "message": f"Attendee checked in",
+            "message": "Attendee checked in",
             "ticket_id": ticket_id,
-            "status": "present"
+            "status": "present",
+            "checked_in_dates": ticket.checked_in_dates,
         }
+
     except Exception as e:
         print(f"Error checking in: {e}")
         return 400, {"error": str(e)}
+
+
     
 
 @api.get("/user/tickets", auth=django_auth, response={200: schemas.UserTicketsResponse, 401: schemas.ErrorSchema})

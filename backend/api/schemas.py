@@ -296,12 +296,15 @@ class AttendeeSchema(Schema):
     status: str  # 'present', 'pending', 'absent'
     approvalStatus: str  # 'approved', 'pending', 'rejected'
     registered: str  # ISO datetime string
+    approvedAt: Optional[str] = None   
+    rejectedAt: Optional[str] = None 
     checkedIn: str  # ISO datetime string or empty
     eventDate: str  # Which day they're registered for (multi-day support)
     # User profile info
     phone: Optional[str] = None
     role: Optional[str] = None
     about_me: Optional[Dict[str, Any]] = None
+    checkedInDates: Dict[str, str] = {}
 
 
 class ApprovalRequestSchema(Schema):
