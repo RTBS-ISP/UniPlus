@@ -16,13 +16,16 @@ from api.model.event import Event
 from api.model.ticket import Ticket
 from api.model.event_schedule import EventSchedule
 from api.model.comment import Comment
-from api.model.rating import Rating 
+from api.model.rating import Rating
+from api.model.notification import Notification, create_notification, send_registration_notification, send_approval_notification, send_rejection_notification, send_reminder_notification
 from api import schemas
 from typing import List, Optional, Union
 import json
 from datetime import datetime
 import uuid 
 import traceback
+from api.schemas import NotificationOut, NotificationMarkReadIn, NotificationBulkMarkReadIn
+
 
 
 
@@ -735,7 +738,7 @@ def register_for_event(request, event_id: int):
                 'meeting_link': event.event_meeting_link
             }]
 
-        # Create ticket with approval_status='pending' (new default)
+        # Create ticket
         ticket = Ticket.objects.create(
             event=event,
             attendee=user,
@@ -747,9 +750,11 @@ def register_for_event(request, event_id: int):
             location=event.event_address or 'TBA',
             is_online=event.is_online,
             meeting_link=event.event_meeting_link,
-            event_dates=schedule,  # Store as list directly (JSONField)
-            # approval_status='pending' is now the default in the model
+            event_dates=schedule,
         )
+
+        # 🔔 SEND REGISTRATION NOTIFICATION
+        send_registration_notification(ticket)
 
         attendees = event.attendee if isinstance(event.attendee, list) else []
         if user.id not in attendees:
@@ -874,6 +879,10 @@ def get_event_detail(request, event_id: int):
 @api.get("/tickets/{ticket_id}", auth=django_auth, response=schemas.TicketDetailSchema)
 def get_ticket_detail(request, ticket_id: int):
     ticket = get_object_or_404(Ticket, id=ticket_id, attendee=request.user)
+    
+    # Add this line to define event_dates:
+    event_dates = ticket.event_dates if ticket.event_dates else []
+    
     return {
         "qr_code": ticket.qr_code,
         "event_title": ticket.event.event_title,
@@ -1119,7 +1128,7 @@ def get_user_event_history(request):
                 "event_id": event_obj.id if event_obj else None,
                 "event_title": ticket.event_title,
                 "event_description": event_obj.event_description if event_obj else None,
-                "event_date": event_date_str,  # Now returns YYYY-MM-DD format
+                "event_date": event_date_str, 
                 "location": ticket.location,
                 "is_online": ticket.is_online,
                 "meeting_link": ticket.meeting_link,
@@ -1279,11 +1288,6 @@ def get_event_dashboard(request, event_id: int):
         traceback.print_exc()
         return 400, {"error": str(e)}
 
-
-# ============================================================================
-# NEW: APPROVAL ENDPOINTS
-# ============================================================================
-
 @api.post("/events/{event_id}/registrations/bulk-action", auth=django_auth, response={200: schemas.ApprovalResponseSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequestSchema):
     """
@@ -1305,22 +1309,34 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
         tickets = Ticket.objects.filter(
             event=event,
             ticket_number__in=payload.ticket_ids
-        )
+        ).select_related('attendee', 'event')  
         
         # Also try QR codes if no tickets found
         if tickets.count() == 0:
             tickets = Ticket.objects.filter(
                 event=event,
                 qr_code__in=payload.ticket_ids
-            )
+            ).select_related('attendee', 'event')  
         
         if tickets.count() == 0:
             return 400, {"error": "No tickets found"}
         
-        # Update all tickets
+        # Update status and send notifications for each ticket
         new_status = 'approved' if payload.action == 'approve' else 'rejected'
-        updated_count = tickets.update(approval_status=new_status)
+        updated_count = 0
         
+        for ticket in tickets:
+            ticket.approval_status = new_status
+            ticket.save()
+            
+            # 🔔 Send notification
+            if new_status == 'approved':
+                send_approval_notification(ticket)
+            else:
+                send_rejection_notification(ticket)
+            
+            updated_count += 1
+
         # Return response
         return 200, {
             "success": True,
@@ -1351,12 +1367,15 @@ def approve_registration(request, event_id: int, ticket_id: str):
         # Find ticket
         ticket = None
         try:
-            ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(ticket_number=ticket_id, event=event)
         except Ticket.DoesNotExist:
-            ticket = Ticket.objects.get(qr_code=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
         ticket.approval_status = 'approved'
         ticket.save()
+        
+        # 🔔 Send notification
+        send_approval_notification(ticket)
         
         return 200, {
             "success": True,
@@ -1386,12 +1405,15 @@ def reject_registration(request, event_id: int, ticket_id: str):
         # Find ticket
         ticket = None
         try:
-            ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(ticket_number=ticket_id, event=event)
         except Ticket.DoesNotExist:
-            ticket = Ticket.objects.get(qr_code=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
         ticket.approval_status = 'rejected'
         ticket.save()
+        
+        # 🔔 Send notification
+        send_rejection_notification(ticket)
         
         return 200, {
             "success": True,
@@ -1404,11 +1426,6 @@ def reject_registration(request, event_id: int, ticket_id: str):
     except Exception as e:
         print(f"Error rejecting ticket: {e}")
         return 400, {"error": str(e)}
-
-
-# ============================================================================
-# NEW: CHECK-IN ENDPOINT
-# ============================================================================
 
 @api.post("/checkin", auth=django_auth, response={200: schemas.CheckInResponseSchema, 400: schemas.ErrorSchema, 403: schemas.ErrorSchema})
 def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
@@ -1471,11 +1488,6 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
         import traceback
         traceback.print_exc()
         return 400, {"error": str(e)}
-
-
-# ============================================================================
-# LEGACY ENDPOINTS (Keep for backwards compatibility, but deprecated)
-# ============================================================================
 
 @api.post("/events/{event_id}/approve-ticket", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def approve_ticket(request, event_id: int, ticket_id: str, approval_status: str):
@@ -1687,3 +1699,83 @@ def get_user_created_events(request):
         print("Error fetching created events:")
         traceback.print_exc()
         return 400, {"error": str(e)}
+
+
+@api.get("/notifications", response=List[NotificationOut], auth=django_auth)
+def get_notifications(request):
+    """Get all notifications for the logged-in user"""
+    user = request.user  # Change from request.auth to request.user
+    
+    try:
+        notifications = Notification.objects.filter(user=user).select_related(
+            'related_ticket', 
+            'related_event'
+        )[:50]
+        
+        result = []
+        for notif in notifications:
+            event_title = None
+            
+            if notif.related_event:
+                event_title = notif.related_event.event_title
+            
+            result.append(NotificationOut(
+                id=notif.id,
+                message=notif.message,
+                notification_type=notif.notification_type,
+                is_read=notif.is_read,
+                created_at=notif.created_at,
+                related_ticket_id=notif.related_ticket_id,
+                related_event_id=notif.related_event_id,
+                event_title=event_title
+            ))
+        
+        return result
+    except Exception as e:
+        return []
+
+@api.get("/notifications/unread-count", auth=django_auth)
+def get_unread_count(request):
+    """Get count of unread notifications"""
+    user = request.user  # Change from request.auth to request.user
+    count = Notification.objects.filter(user=user, is_read=False).count()
+    return {"count": count}
+
+@api.post("/notifications/mark-read", auth=django_auth)
+def mark_notification_read(request, data: NotificationMarkReadIn):
+    """Mark a single notification as read"""
+    user = request.user  # Change from request.auth to request.user
+    
+    try:
+        notification = Notification.objects.get(id=data.notification_id, user=user)
+        notification.mark_as_read()
+        return {"success": True, "message": "Notification marked as read"}
+    except Notification.DoesNotExist:
+        return {"success": False, "error": "Notification not found"}
+
+@api.post("/notifications/mark-all-read", auth=django_auth)
+def mark_all_notifications_read(request):
+    """Mark all notifications as read for the user"""
+    user = request.user  # Change from request.auth to request.user
+    Notification.objects.filter(user=user, is_read=False).update(is_read=True)
+    return {"success": True, "message": "All notifications marked as read"}
+
+@api.delete("/notifications/{notification_id}", auth=django_auth)
+def delete_notification(request, notification_id: int):
+    """Delete a specific notification"""
+    user = request.user  # Change from request.auth to request.user
+    
+    try:
+        notification = Notification.objects.get(id=notification_id, user=user)
+        notification.delete()
+        return {"success": True, "message": "Notification deleted"}
+    except Notification.DoesNotExist:
+        return {"success": False, "error": "Notification not found"}
+
+@api.delete("/notifications/clear-all", auth=django_auth)
+def clear_all_notifications(request):
+    """Delete all notifications for the user"""
+    user = request.user  # Change from request.auth to request.user
+    count = Notification.objects.filter(user=user).count()
+    Notification.objects.filter(user=user).delete()
+    return {"success": True, "message": f"{count} notifications cleared"}

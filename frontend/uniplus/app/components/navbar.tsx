@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Menu, LogOut, User, Plus } from "lucide-react";
 import { useUser } from "@/app/context/UserContext";
+import NotificationBell from "./Notificationbell";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -82,15 +83,22 @@ export default function Navbar() {
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center">
             {/* Logo */}
-            <div className="text-2xl font-bold">
-              <Link href="/">🎓UniPLUS</Link>
+            <div className="flex items-center space-x-2 text-2xl font-bold">
+              <Link href="/" className="flex items-center space-x-2">
+                <img
+                  src="/images/monkey_1.png"
+                  alt="UniPLUS Logo"
+                  className="w-10 h-10 object-contain"
+                />
+                <span>UniPLUS</span>
+              </Link>
             </div>
 
             {/* Links */}
             <ul className="hidden md:flex space-x-10 text-base font-medium">
               <li><Link href="/" className="hover:underline">Home</Link></li>
               <li><Link href="/events" className="hover:underline">Events</Link></li>
-              <li><Link href="/#" className="hover:underline">Page</Link></li>
+              <li><Link href="/#" className="hover:underline">Support</Link></li>
             </ul>
 
             {/* Right Side */}
@@ -136,6 +144,9 @@ export default function Navbar() {
                       <span className="font-semibold">{user.firstName} {user.lastName}</span>
                     </button>
                   </div>
+
+                  {/* Notification Bell */}
+                  <NotificationBell />
                 </>
               )}
             </div>
