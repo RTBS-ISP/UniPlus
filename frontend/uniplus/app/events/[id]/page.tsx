@@ -184,6 +184,24 @@ function CommentsRatingsSection({
   const [error, setError] = useState<string | null>(null);
   const toast = useAlert();
 
+  // Helper to get profile picture URL with fallback
+  const getProfilePicUrl = (profilePic: string | null | undefined) => {
+    if (!profilePic) return "/images/logo.png";
+    
+    // If it's already a full URL, return it
+    if (profilePic.startsWith('http://') || profilePic.startsWith('https://')) {
+      return profilePic;
+    }
+    
+    // If it's the default logo, return it as-is
+    if (profilePic === "/images/logo.png") {
+      return profilePic;
+    }
+    
+    // Otherwise, prefix with backend URL
+    return `http://localhost:8000${profilePic.startsWith('/') ? '' : '/'}${profilePic}`;
+  };
+
   useEffect(() => {
     console.log(`Fetching comments for event ${eventId}`);
     fetchCommentsAndRatings();
@@ -468,7 +486,7 @@ function CommentsRatingsSection({
             <div key={comment.id} className="border-b border-gray-100 pb-4 last:border-0">
               <div className="flex items-start gap-3">
                 <img
-                  src={comment.user_profile_pic || "/images/default-avatar.png"}
+                  src={getProfilePicUrl(comment.user_profile_pic)}
                   alt={comment.user_name}
                   className="h-10 w-10 rounded-full object-cover"
                 />
