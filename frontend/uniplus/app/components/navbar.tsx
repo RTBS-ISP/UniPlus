@@ -126,9 +126,6 @@ export default function Navbar() {
                     Create Event
                   </Link>
 
-                  {/* ✨ NEW: Notification Bell */}
-                  <NotificationBell />
-
                   {/* Profile Menu */}
                   <div ref={profileRef} className="relative flex items-center space-x-2">
                     <button
@@ -147,6 +144,9 @@ export default function Navbar() {
                       <span className="font-semibold">{user.firstName} {user.lastName}</span>
                     </button>
                   </div>
+
+                  {/* Notification Bell */}
+                  <NotificationBell />
                 </>
               )}
             </div>
