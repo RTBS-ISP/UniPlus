@@ -193,6 +193,7 @@ class EventDetailSchema(Schema):
     schedule: Optional[List[Dict[str, Any]]] = []
     
     # Organizer info
+    organizer_role: Optional[str] = None
     organizer_profile: Optional[PublicProfileSchema] = None
 
 
@@ -257,13 +258,13 @@ class TicketDetailSchema(Schema):
     event_description: str
     start_date: datetime
     location: str
-    event_date: str  # Formatted date string
+    event_date: str  
     meeting_link: Optional[str] = None
     is_online: bool
     organizer: str
     user_name: str
     user_email: str
-    event_dates: List[EventDateSchema] = []  # Multi-day support
+    event_dates: List[EventDateSchema] = []  
     approval_status: str
     checked_in_at: Optional[datetime] = None
 
@@ -295,12 +296,15 @@ class AttendeeSchema(Schema):
     status: str  # 'present', 'pending', 'absent'
     approvalStatus: str  # 'approved', 'pending', 'rejected'
     registered: str  # ISO datetime string
+    approvedAt: Optional[str] = None   
+    rejectedAt: Optional[str] = None 
     checkedIn: str  # ISO datetime string or empty
     eventDate: str  # Which day they're registered for (multi-day support)
     # User profile info
     phone: Optional[str] = None
     role: Optional[str] = None
     about_me: Optional[Dict[str, Any]] = None
+    checkedInDates: Dict[str, str] = {}
 
 
 class ApprovalRequestSchema(Schema):
@@ -501,3 +505,50 @@ class AdminEventSchema(Schema):
     organizer_id: int
     status_registration: str
     verification_status: str
+      
+      
+class NotificationSchema(Schema):
+    id: int
+    notification_type: str
+    title: str
+    message: str
+    event_id: Optional[int] = None
+    event_title: Optional[str] = None
+    is_read: bool
+    created_at: datetime
+    read_at: Optional[datetime] = None
+
+
+class NotificationListResponse(Schema):
+    """List of notifications with counts"""
+    notifications: List[NotificationSchema]
+    total_count: int
+    unread_count: int
+
+
+class MarkAsReadRequest(Schema):
+    """Request to mark notifications as read"""
+    notification_ids: List[int]
+
+
+class MarkAsReadResponse(Schema):
+    """Response after marking as read"""
+    success: bool
+    message: str
+    marked_count: int
+
+class NotificationOut(Schema):
+    id: int
+    message: str
+    notification_type: str
+    is_read: bool
+    created_at: datetime
+    related_ticket_id: Optional[int] = None
+    related_event_id: Optional[int] = None
+    event_title: Optional[str] = None
+
+class NotificationMarkReadIn(Schema):
+    notification_id: int
+
+class NotificationBulkMarkReadIn(Schema):
+    notification_ids: list[int]

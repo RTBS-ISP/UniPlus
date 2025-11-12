@@ -16,7 +16,8 @@ from api.model.event import Event
 from api.model.ticket import Ticket
 from api.model.event_schedule import EventSchedule
 from api.model.comment import Comment
-from api.model.rating import Rating 
+from api.model.rating import Rating
+from api.model.notification import Notification, create_notification, send_registration_notification, send_approval_notification, send_rejection_notification, send_reminder_notification
 from api import schemas
 from typing import List, Optional, Union
 import json
@@ -25,6 +26,8 @@ import uuid
 import traceback
 from django.http import HttpResponse
 import csv
+from api.schemas import NotificationOut, NotificationMarkReadIn, NotificationBulkMarkReadIn
+
 
 
 
@@ -680,7 +683,7 @@ def register_for_event(request, event_id: int):
                 'meeting_link': event.event_meeting_link
             }]
 
-        # Create ticket with approval_status='pending' (new default)
+        # Create ticket
         ticket = Ticket.objects.create(
             event=event,
             attendee=user,
@@ -692,9 +695,11 @@ def register_for_event(request, event_id: int):
             location=event.event_address or 'TBA',
             is_online=event.is_online,
             meeting_link=event.event_meeting_link,
-            event_dates=schedule,  # Store as list directly (JSONField)
-            # approval_status='pending' is now the default in the model
+            event_dates=schedule,
         )
+
+        # 🔔 SEND REGISTRATION NOTIFICATION
+        send_registration_notification(ticket)
 
         attendees = event.attendee if isinstance(event.attendee, list) else []
         if user.id not in attendees:
@@ -729,6 +734,28 @@ def get_event_detail(request, event_id: int):
         except:
             tags_list = [event.tags] if event.tags else []
     
+    # Helper function to parse ISO time and convert to local time format HH:MM
+    def iso_to_local_hhmm(iso_str):
+        if not iso_str:
+            return "00:00"
+        try:
+            # normalize trailing Z into +00:00 so fromisoformat can parse it
+            if iso_str.endswith("Z"):
+                iso_str = iso_str[:-1] + "+00:00"
+            dt = datetime.fromisoformat(iso_str)
+            # If no tzinfo, assume UTC (safe default for stored ISO times)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            # Convert to Django/current timezone 
+            local_tz = timezone.get_current_timezone()
+            local_dt = dt.astimezone(local_tz)
+            return local_dt.strftime("%H:%M")
+        except Exception as e:
+            try:
+                return iso_str.split("T")[1].split(":")[0] + ":" + iso_str.split("T")[1].split(":")[1]
+            except:
+                return "00:00"
+            
     schedule = []
     if hasattr(event, 'schedule') and event.schedule:
         try:
@@ -738,26 +765,17 @@ def get_event_detail(request, event_id: int):
                 date_str = day.get('date', '')
                 start_iso = day.get('start_iso', '')
                 end_iso = day.get('end_iso', '')
-                start_time = '00:00'
-                end_time = '00:00'
-                
-                if start_iso:
-                    try:
-                        start_time = start_iso.split('T')[1].split(':')[0] + ':' + start_iso.split('T')[1].split(':')[1]
-                    except:
-                        pass
-                
-                if end_iso:
-                    try:
-                        end_time = end_iso.split('T')[1].split(':')[0] + ':' + end_iso.split('T')[1].split(':')[1]
-                    except:
-                        pass
+                location = day.get('address', '') or day.get('location', '')
+                start_time = iso_to_local_hhmm(start_iso)
+                end_time = iso_to_local_hhmm(end_iso)
                 
                 schedule.append({
                     "date": date_str,
                     "startTime": start_time,
                     "endTime": end_time,
                     "location": location,
+                    "is_online": day.get('is_online', event.is_online),
+                    "meeting_link": day.get('meeting_link', event.event_meeting_link),
                 })
         except Exception as e:
             print(f"Error parsing schedule: {e}")
@@ -806,6 +824,10 @@ def get_event_detail(request, event_id: int):
 @api.get("/tickets/{ticket_id}", auth=django_auth, response=schemas.TicketDetailSchema)
 def get_ticket_detail(request, ticket_id: int):
     ticket = get_object_or_404(Ticket, id=ticket_id, attendee=request.user)
+    
+    # Add this line to define event_dates:
+    event_dates = ticket.event_dates if ticket.event_dates else []
+    
     return {
         "qr_code": ticket.qr_code,
         "event_title": ticket.event.event_title,
@@ -1051,7 +1073,7 @@ def get_user_event_history(request):
                 "event_id": event_obj.id if event_obj else None,
                 "event_title": ticket.event_title,
                 "event_description": event_obj.event_description if event_obj else None,
-                "event_date": event_date_str,  # Now returns YYYY-MM-DD format
+                "event_date": event_date_str,
                 "location": ticket.location,
                 "is_online": ticket.is_online,
                 "meeting_link": ticket.meeting_link,
@@ -1108,7 +1130,11 @@ def get_user_statistics(request):
         return 400, {"error": str(e)}
 
 
-@api.get("/events/{event_id}/dashboard", auth=django_auth, response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+@api.get(
+    "/events/{event_id}/dashboard",
+    auth=django_auth,
+    response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema},
+)
 def get_event_dashboard(request, event_id: int):
     """Get dashboard data for event organizer - UPDATED VERSION"""
     try:
@@ -1119,10 +1145,10 @@ def get_event_dashboard(request, event_id: int):
             return 403, {"error": "You are not authorized to view this dashboard"}
         
         # Get all tickets for this event
-        tickets = Ticket.objects.filter(event=event).select_related('attendee')
+        tickets = Ticket.objects.filter(event=event).select_related("attendee")
         
         # Get event schedule days
-        schedules = EventSchedule.objects.filter(event=event).order_by('event_date', 'start_time_event')
+        schedules = EventSchedule.objects.filter(event=event).order_by("event_date", "start_time_event")
         
         schedule_days = []
         for idx, schedule in enumerate(schedules, 1):
@@ -1141,24 +1167,40 @@ def get_event_dashboard(request, event_id: int):
         for ticket in tickets:
             user = ticket.attendee
             
-            # Determine status based on check-in and approval
+            # Determine status based on check-in and approval (event-wide)
             if ticket.checked_in_at:
-                status = 'present'
-            elif ticket.approval_status == 'pending':
-                status = 'pending'
+                status = "present"
+            elif ticket.approval_status == "pending":
+                status = "pending"
             else:
-                status = 'absent'
+                status = "absent"
             
             # Get event date (first date if multi-day)
             event_date_str = ""
             if ticket.event_dates and isinstance(ticket.event_dates, list) and len(ticket.event_dates) > 0:
-                event_date_str = ticket.event_dates[0].get('date', '')
+                first = ticket.event_dates[0]
+                if isinstance(first, dict):
+                    event_date_str = str(first.get("date") or "")
+                else:
+                    event_date_str = str(first)
+                # normalise to just YYYY-MM-DD
+                if len(event_date_str) >= 10:
+                    event_date_str = event_date_str[:10]
             
             if not event_date_str and event.event_start_date:
                 event_date_str = event.event_start_date.date().isoformat()
             
             # Get user's about_me (now JSONField)
             about_me = user.about_me if isinstance(user.about_me, dict) else {}
+            
+            checked_in_dates_dict = {}
+            if isinstance(ticket.checked_in_dates, dict):
+                checked_in_dates_dict = ticket.checked_in_dates
+            elif isinstance(ticket.checked_in_dates, list):
+                # Convert old list format to dict format
+                for date_str in ticket.checked_in_dates:
+                    if isinstance(date_str, str) and len(date_str) >= 10:
+                        checked_in_dates_dict[date_str[:10]] = ticket.checked_in_at.isoformat() if ticket.checked_in_at else timezone.now().isoformat()
             
             attendees.append({
                 "ticketId": ticket.ticket_number or ticket.qr_code,
@@ -1167,19 +1209,22 @@ def get_event_dashboard(request, event_id: int):
                 "status": status,
                 "approvalStatus": ticket.approval_status,
                 "registered": ticket.purchase_date.isoformat(),
+                "approvedAt": ticket.approved_at.isoformat() if ticket.approved_at else "",
+                "rejectedAt": ticket.rejected_at.isoformat() if ticket.rejected_at else "",
                 "checkedIn": ticket.checked_in_at.isoformat() if ticket.checked_in_at else "",
                 "eventDate": event_date_str,
                 "phone": user.phone_number,
                 "role": user.role,
                 "about_me": about_me,
+                "checkedInDates": checked_in_dates_dict,
             })
         
         # Calculate statistics
         total_registered = tickets.count()
         checked_in = tickets.filter(checked_in_at__isnull=False).count()
-        approved = tickets.filter(approval_status='approved').count()
-        pending = tickets.filter(approval_status='pending').count()
-        rejected = tickets.filter(approval_status='rejected').count()
+        approved = tickets.filter(approval_status="approved").count()
+        pending = tickets.filter(approval_status="pending").count()
+        rejected = tickets.filter(approval_status="rejected").count()
         
         # Attendance rate (checked in / approved)
         attendance_rate = (checked_in / approved * 100) if approved > 0 else 0
@@ -1203,13 +1248,14 @@ def get_event_dashboard(request, event_id: int):
                 "pending_approval": pending,
                 "rejected": rejected,
                 "attendance_rate": round(attendance_rate, 1),
-            }
+            },
         }
     except Exception as e:
         print(f"Error fetching dashboard: {e}")
         import traceback
         traceback.print_exc()
         return 400, {"error": str(e)}
+
 
 
 # ============================================================================
@@ -1237,22 +1283,38 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
         tickets = Ticket.objects.filter(
             event=event,
             ticket_number__in=payload.ticket_ids
-        )
+        ).select_related('attendee', 'event')  
         
         # Also try QR codes if no tickets found
         if tickets.count() == 0:
             tickets = Ticket.objects.filter(
                 event=event,
                 qr_code__in=payload.ticket_ids
-            )
+            ).select_related('attendee', 'event')  
         
         if tickets.count() == 0:
             return 400, {"error": "No tickets found"}
         
-        # Update all tickets
+        # Update status and send notifications for each ticket
         new_status = 'approved' if payload.action == 'approve' else 'rejected'
-        updated_count = tickets.update(approval_status=new_status)
         
+        if new_status == 'approved':
+            updated_count = tickets.update(approval_status='approved', approved_at=timezone.now())
+        else:
+            updated_count = tickets.update(approval_status='rejected', rejected_at=timezone.now())
+        
+        for ticket in tickets:
+            ticket.approval_status = new_status
+            ticket.save()
+            
+            # 🔔 Send notification
+            if new_status == 'approved':
+                send_approval_notification(ticket)
+            else:
+                send_rejection_notification(ticket)
+            
+            updated_count += 1
+
         # Return response
         return 200, {
             "success": True,
@@ -1283,12 +1345,15 @@ def approve_registration(request, event_id: int, ticket_id: str):
         # Find ticket
         ticket = None
         try:
-            ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(ticket_number=ticket_id, event=event)
         except Ticket.DoesNotExist:
-            ticket = Ticket.objects.get(qr_code=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
         ticket.approval_status = 'approved'
         ticket.save()
+        
+        # 🔔 Send notification
+        send_approval_notification(ticket)
         
         return 200, {
             "success": True,
@@ -1318,12 +1383,15 @@ def reject_registration(request, event_id: int, ticket_id: str):
         # Find ticket
         ticket = None
         try:
-            ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(ticket_number=ticket_id, event=event)
         except Ticket.DoesNotExist:
-            ticket = Ticket.objects.get(qr_code=ticket_id, event=event)
+            ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
         ticket.approval_status = 'rejected'
         ticket.save()
+        
+        # 🔔 Send notification
+        send_rejection_notification(ticket)
         
         return 200, {
             "success": True,
@@ -1336,11 +1404,6 @@ def reject_registration(request, event_id: int, ticket_id: str):
     except Exception as e:
         print(f"Error rejecting ticket: {e}")
         return 400, {"error": str(e)}
-
-
-# ============================================================================
-# NEW: CHECK-IN ENDPOINT
-# ============================================================================
 
 @api.post("/checkin", auth=django_auth, response={200: schemas.CheckInResponseSchema, 400: schemas.ErrorSchema, 403: schemas.ErrorSchema})
 def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
@@ -1404,11 +1467,6 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
         traceback.print_exc()
         return 400, {"error": str(e)}
 
-
-# ============================================================================
-# LEGACY ENDPOINTS (Keep for backwards compatibility, but deprecated)
-# ============================================================================
-
 @api.post("/events/{event_id}/approve-ticket", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def approve_ticket(request, event_id: int, ticket_id: str, approval_status: str):
     """
@@ -1440,37 +1498,96 @@ def approve_ticket(request, event_id: int, ticket_id: str, approval_status: str)
         return 400, {"error": str(e)}
 
 
-@api.post("/events/{event_id}/check-in", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
-def check_in_attendee_legacy(request, event_id: int, ticket_id: str):
+@api.post(
+    "/events/{event_id}/check-in",
+    auth=django_auth,
+    response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema},
+)
+def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_date: str):
     """
-    DEPRECATED: Use /checkin endpoint instead
+    Check in an attendee for a specific schedule date (YYYY-MM-DD).
+
+    DEPRECATED: Use /checkin endpoint instead, but kept for backwards compatibility.
     """
     try:
         event = get_object_or_404(Event, id=event_id)
-        
+
         if event.organizer != request.user:
             return 403, {"error": "You are not authorized to perform this action"}
-        
+
+        # Resolve ticket by ticket_number first, then fallback to numeric ID
         try:
             ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
         except Ticket.DoesNotExist:
-            ticket_id_num = int(ticket_id.replace('T', '')) if ticket_id.startswith('T') else int(ticket_id)
+            ticket_id_num = int(ticket_id.replace("T", "")) if ticket_id.startswith("T") else int(ticket_id)
             ticket = get_object_or_404(Ticket, id=ticket_id_num, event=event)
+
+        # Parse date string from query param
+        try:
+            parsed_date = datetime.strptime(checkin_date, "%Y-%m-%d").date()
+        except ValueError:
+            return 400, {"error": "Invalid date format. Use YYYY-MM-DD."}
+
+        # Normalised date string (YYYY-MM-DD)
+        date_str = parsed_date.isoformat()
         
-        ticket.status = 'present'
-        from django.utils import timezone
+        # Normalise ticket.event_dates into 'YYYY-MM-DD' strings
+        valid_dates: list[str] = []
+        for d in ticket.event_dates or []:
+            if isinstance(d, str):
+                try:
+                    dt = datetime.fromisoformat(d)
+                    valid_dates.append(dt.date().isoformat())
+                except ValueError:
+                    if len(d) >= 10:
+                        valid_dates.append(d[:10])
+            else:
+                try:
+                    if hasattr(d, "date"):  # datetime
+                        valid_dates.append(d.date().isoformat())
+                    elif hasattr(d, "isoformat"):  # date
+                        valid_dates.append(d.isoformat())
+                except Exception:
+                    pass
+
+        # Validate that this date is in the ticket's event_dates (if event_dates is set)
+        if valid_dates and date_str not in valid_dates:
+            return 400, {"error": "This ticket is not valid for the selected date."}
+
+        # Initialize checked_in_dates as dict if it's a list or None
+        if not isinstance(ticket.checked_in_dates, dict):
+            ticket.checked_in_dates = {}
+
+        if date_str in ticket.checked_in_dates:
+            return 200, {
+                "success": True,
+                "message": "Attendee already checked in for this date",
+                "ticket_id": ticket_id,
+                "status": "present",
+                "checked_in_dates": ticket.checked_in_dates,
+            }
+
+        # Store check-in timestamp for this date
+        ticket.checked_in_dates[date_str] = timezone.now().isoformat()
+        
+        # keep last check-in timestamp + overall status
         ticket.checked_in_at = timezone.now()
+        ticket.status = "present"
         ticket.save()
-        
+
         return 200, {
             "success": True,
-            "message": f"Attendee checked in",
+            "message": "Attendee checked in",
             "ticket_id": ticket_id,
-            "status": "present"
+            "status": "present",
+            "checked_in_dates": ticket.checked_in_dates,
         }
+
     except Exception as e:
         print(f"Error checking in: {e}")
         return 400, {"error": str(e)}
+
+
     
 
 @api.get("/user/tickets", auth=django_auth, response={200: schemas.UserTicketsResponse, 401: schemas.ErrorSchema})
@@ -1815,3 +1932,83 @@ def get_admin_events(request):
     except Exception as e:
         print(f"Error fetching admin events: {e}")
         return 400, {"error": str(e)}
+      
+      
+@api.get("/notifications", response=List[NotificationOut], auth=django_auth)
+def get_notifications(request):
+    """Get all notifications for the logged-in user"""
+    user = request.user  # Change from request.auth to request.user
+    
+    try:
+        notifications = Notification.objects.filter(user=user).select_related(
+            'related_ticket', 
+            'related_event'
+        )[:50]
+        
+        result = []
+        for notif in notifications:
+            event_title = None
+            
+            if notif.related_event:
+                event_title = notif.related_event.event_title
+            
+            result.append(NotificationOut(
+                id=notif.id,
+                message=notif.message,
+                notification_type=notif.notification_type,
+                is_read=notif.is_read,
+                created_at=notif.created_at,
+                related_ticket_id=notif.related_ticket_id,
+                related_event_id=notif.related_event_id,
+                event_title=event_title
+            ))
+        
+        return result
+    except Exception as e:
+        return []
+
+@api.get("/notifications/unread-count", auth=django_auth)
+def get_unread_count(request):
+    """Get count of unread notifications"""
+    user = request.user  # Change from request.auth to request.user
+    count = Notification.objects.filter(user=user, is_read=False).count()
+    return {"count": count}
+
+@api.post("/notifications/mark-read", auth=django_auth)
+def mark_notification_read(request, data: NotificationMarkReadIn):
+    """Mark a single notification as read"""
+    user = request.user  # Change from request.auth to request.user
+    
+    try:
+        notification = Notification.objects.get(id=data.notification_id, user=user)
+        notification.mark_as_read()
+        return {"success": True, "message": "Notification marked as read"}
+    except Notification.DoesNotExist:
+        return {"success": False, "error": "Notification not found"}
+
+@api.post("/notifications/mark-all-read", auth=django_auth)
+def mark_all_notifications_read(request):
+    """Mark all notifications as read for the user"""
+    user = request.user  # Change from request.auth to request.user
+    Notification.objects.filter(user=user, is_read=False).update(is_read=True)
+    return {"success": True, "message": "All notifications marked as read"}
+
+@api.delete("/notifications/{notification_id}", auth=django_auth)
+def delete_notification(request, notification_id: int):
+    """Delete a specific notification"""
+    user = request.user  # Change from request.auth to request.user
+    
+    try:
+        notification = Notification.objects.get(id=notification_id, user=user)
+        notification.delete()
+        return {"success": True, "message": "Notification deleted"}
+    except Notification.DoesNotExist:
+        return {"success": False, "error": "Notification not found"}
+
+@api.delete("/notifications/clear-all", auth=django_auth)
+def clear_all_notifications(request):
+    """Delete all notifications for the user"""
+    user = request.user  # Change from request.auth to request.user
+    count = Notification.objects.filter(user=user).count()
+    Notification.objects.filter(user=user).delete()
+    return {"success": True, "message": f"{count} notifications cleared"}

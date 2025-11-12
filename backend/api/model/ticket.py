@@ -24,9 +24,8 @@ class Ticket(models.Model):
     is_online = models.BooleanField(default=False)
     meeting_link = models.URLField(blank=True, null=True)
     ticket_number = models.CharField(max_length=50, blank=True, null=True)
-    
     event_dates = models.JSONField(default=list, blank=True)
-    
+
     approval_status = models.CharField(
         max_length=20,
         choices=[
@@ -36,13 +35,15 @@ class Ticket(models.Model):
         ],
         default='pending'
     )
+    approved_at = models.DateTimeField(null=True, blank=True) 
+    rejected_at = models.DateTimeField(null=True, blank=True)
     checked_in_at = models.DateTimeField(null=True, blank=True)
+    checked_in_dates = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return f"Ticket: {self.event_title} ({self.event.event_title})"
     
     def save(self, *args, **kwargs):
-        # Auto-generate ticket number if not set
         if not self.ticket_number:
             import random
             self.ticket_number = f"T{random.randint(100000, 999999)}"

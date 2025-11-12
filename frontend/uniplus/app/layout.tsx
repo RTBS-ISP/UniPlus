@@ -29,7 +29,6 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/*  Wrap everything in both providers */}
         <UserProvider>
           <AlertProvider>
             {children}

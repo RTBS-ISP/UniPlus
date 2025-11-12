@@ -7,4 +7,5 @@ from .model import (
     Comment,
     EventSchedule,
     Social,
+    Notification,
 )
