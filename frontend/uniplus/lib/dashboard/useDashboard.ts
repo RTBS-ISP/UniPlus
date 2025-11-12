@@ -100,14 +100,15 @@ export function useDashboard(eventId: string | undefined) {
         return a;
       }
 
-      const checkedInDates = a.checkedInDates ?? [];
-      const isPresentForSelectedDay = checkedInDates.includes(state.selectedDate);
+      const checkedInDates = a.checkedInDates ?? {};
+      const isPresentForSelectedDay = state.selectedDate in checkedInDates;
 
       return {
         ...a,
+        eventDate: state.selectedDate, // Override with selected date
         status: isPresentForSelectedDay ? "present" : "pending",
-        // we only show the global checkedIn timestamp if present for that day
-        checkedIn: isPresentForSelectedDay ? a.checkedIn : "",
+        // Use the per-date check-in time if available, otherwise empty
+        checkedIn: isPresentForSelectedDay ? (checkedInDates[state.selectedDate] || a.checkedIn) : "",
       };
     });
 
@@ -261,7 +262,7 @@ export function useDashboard(eventId: string | undefined) {
       return;
     }
 
-    // Optimistically update the state BEFORE the API call
+    // Optimistically update with object format
     const now = new Date().toISOString();
     setState((s) => ({
       ...s,
@@ -270,10 +271,10 @@ export function useDashboard(eventId: string | undefined) {
           ? {
               ...attendee,
               checkedIn: now,
-              checkedInDates: [
-                ...(attendee.checkedInDates || []),
-                s.selectedDate
-              ].filter((v, i, arr) => arr.indexOf(v) === i), // remove duplicates
+              checkedInDates: {
+                ...(attendee.checkedInDates || {}),
+                [s.selectedDate]: now, 
+              },
             }
           : attendee
       ),

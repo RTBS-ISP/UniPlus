@@ -3,7 +3,7 @@
 import React from "react";
 import { CheckCircle, XCircle } from "lucide-react";
 import type { Attendee, TableView } from "@/lib/dashboard/types";
-import { formatDate } from "@/lib/utils/formatDate";
+import { formatDate, formatDateTime, getCheckinTimeForDate } from "@/lib/utils/formatDate";
 
 export function AttendeeTable({
   view,
@@ -97,21 +97,27 @@ export function AttendeeTable({
                 </td>
 
                 <td className="px-6 py-4 text-gray-800">
-                  {a.registered ? formatDate(a.registered) : "—"}
+                  {a.registered ? formatDateTime(a.registered) : "—"}
                 </td>
 
                 {isAttendance ? (
                   <td className="px-6 py-4 text-gray-800">
-                    {!a.checkedIn || a.checkedIn === "—" ? (
-                      <button
-                        onClick={() => onCheckIn(a.ticketId)}
-                        className="px-3 py-1 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 text-sm"
-                      >
-                        Check In
-                      </button>
-                    ) : (
-                      formatDate(a.checkedIn)
-                    )}
+                    {(() => {
+                      const checkinTime = getCheckinTimeForDate(a.checkedInDates, a.eventDate);
+                      
+                      if (!checkinTime) {
+                        return (
+                          <button
+                            onClick={() => onCheckIn(a.ticketId)}
+                            className="px-3 py-1 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 text-sm"
+                          >
+                            Check In
+                          </button>
+                        );
+                      }
+                      
+                      return formatDateTime(checkinTime);
+                    })()}
                   </td>
                 ) : (
                   <td className="px-6 py-4 text-gray-800">
@@ -134,7 +140,11 @@ export function AttendeeTable({
                       </div>
                     ) : (
                       <span className="text-gray-800">
-                        {a.checkedIn ? formatDate(a.checkedIn) : formatDate(a.registered)}
+                         {a.approvalStatus === "approved" && a.approvedAt
+                            ? formatDateTime(a.approvedAt)
+                            : a.approvalStatus === "rejected" && a.rejectedAt
+                            ? formatDateTime(a.rejectedAt)
+                            : formatDateTime(a.registered)}
                       </span>
                     )}
                   </td>

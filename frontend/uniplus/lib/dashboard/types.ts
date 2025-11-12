@@ -5,12 +5,14 @@ email: string;
 status: "present" | "pending" | "absent";
 approvalStatus: "approved" | "pending" | "rejected";
 registered: string;
+approvedAt?: string;
+rejectedAt?: string;
 checkedIn: string;
 eventDate: string;
 phone?: string;
 role?: string;
 about_me?: any;
-checkedInDates?: string[];
+checkedInDates?: Record<string, string>;
 }
 
 
