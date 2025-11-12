@@ -1226,6 +1226,15 @@ def get_event_dashboard(request, event_id: int):
             # Get user's about_me (now JSONField)
             about_me = user.about_me if isinstance(user.about_me, dict) else {}
             
+            checked_in_dates_dict = {}
+            if isinstance(ticket.checked_in_dates, dict):
+                checked_in_dates_dict = ticket.checked_in_dates
+            elif isinstance(ticket.checked_in_dates, list):
+                # Convert old list format to dict format
+                for date_str in ticket.checked_in_dates:
+                    if isinstance(date_str, str) and len(date_str) >= 10:
+                        checked_in_dates_dict[date_str[:10]] = ticket.checked_in_at.isoformat() if ticket.checked_in_at else timezone.now().isoformat()
+            
             attendees.append({
                 "ticketId": ticket.ticket_number or ticket.qr_code,
                 "name": f"{user.first_name} {user.last_name}",
@@ -1233,12 +1242,14 @@ def get_event_dashboard(request, event_id: int):
                 "status": status,
                 "approvalStatus": ticket.approval_status,
                 "registered": ticket.purchase_date.isoformat(),
+                "approvedAt": ticket.approved_at.isoformat() if ticket.approved_at else "",
+                "rejectedAt": ticket.rejected_at.isoformat() if ticket.rejected_at else "",
                 "checkedIn": ticket.checked_in_at.isoformat() if ticket.checked_in_at else "",
                 "eventDate": event_date_str,
                 "phone": user.phone_number,
                 "role": user.role,
                 "about_me": about_me,
-                "checkedInDates": ticket.checked_in_dates or [],
+                "checkedInDates": checked_in_dates_dict,
             })
         
         # Calculate statistics
@@ -1319,7 +1330,11 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
         
         # Update all tickets
         new_status = 'approved' if payload.action == 'approve' else 'rejected'
-        updated_count = tickets.update(approval_status=new_status)
+        
+        if new_status == 'approved':
+            updated_count = tickets.update(approval_status='approved', approved_at=timezone.now())
+        else:
+            updated_count = tickets.update(approval_status='rejected', rejected_at=timezone.now())
         
         # Return response
         return 200, {
@@ -1564,9 +1579,9 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
         if valid_dates and date_str not in valid_dates:
             return 400, {"error": "This ticket is not valid for the selected date."}
 
-        # Ensure checked_in_dates exists
-        if ticket.checked_in_dates is None:
-            ticket.checked_in_dates = []
+        # Initialize checked_in_dates as dict if it's a list or None
+        if not isinstance(ticket.checked_in_dates, dict):
+            ticket.checked_in_dates = {}
 
         if date_str in ticket.checked_in_dates:
             return 200, {
@@ -1577,9 +1592,9 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
                 "checked_in_dates": ticket.checked_in_dates,
             }
 
-        # Add date if not already present (using normalised YYYY-MM-DD string)
-        ticket.checked_in_dates.append(date_str)
-
+        # Store check-in timestamp for this date
+        ticket.checked_in_dates[date_str] = timezone.now().isoformat()
+        
         # keep last check-in timestamp + overall status
         ticket.checked_in_at = timezone.now()
         ticket.status = "present"
