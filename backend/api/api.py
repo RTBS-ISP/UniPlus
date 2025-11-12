@@ -24,6 +24,8 @@ import json
 from datetime import datetime
 import uuid 
 import traceback
+from django.http import HttpResponse
+import csv
 from api.schemas import NotificationOut, NotificationMarkReadIn, NotificationBulkMarkReadIn
 
 
@@ -372,14 +374,16 @@ def get_organizer_dashboard(request):
         "pending_approvals": pending_approvals,
         "events_with_pending": events_with_pending,
     }
+    
 @api.get("/events")
 def get_events_list(request):
     """
     Get all events with organizer information
+    Returns only verified events to regular users
     Returns events sorted by creation date (newest first)
     """
     try:
-        events = Event.objects.select_related('organizer').all().order_by('-event_create_date')
+        events = Event.objects.select_related('organizer').filter(verification_status="approved").order_by('-event_create_date')
         
         events_data = []
         for event in events:
@@ -427,6 +431,7 @@ def get_events_list(request):
                 "organizer_id": event.organizer.id,
                 "attendee": event.attendee,
                 "attendee_count": attendee_count,
+                "verification_status": event.verification_status or "pending",
             })
         
         return events_data
@@ -436,68 +441,6 @@ def get_events_list(request):
         return {"error": str(e)}
 
 
-@api.get("/events")
-def get_events_list(request):
-    """
-    Get all events with organizer information
-    Returns events sorted by creation date (newest first)
-    """
-    try:
-        events = Event.objects.select_related('organizer').all().order_by('-event_create_date')
-        
-        events_data = []
-        for event in events:
-            organizer_name = f"{event.organizer.first_name} {event.organizer.last_name}".strip()
-            if not organizer_name:
-                organizer_name = event.organizer.username or event.organizer.email
-            tags_list = []
-            if event.tags:
-                try:
-                    tags_list = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
-                except:
-                    tags_list = [event.tags] if event.tags else []
-            
-            attendee_count = len(event.attendee) if event.attendee else 0
-            
-            schedule = []
-            if hasattr(event, 'schedule') and event.schedule:
-                try:
-                    schedule = json.loads(event.schedule)
-                except:
-                    pass
-            
-            events_data.append({
-                "id": event.id,
-                "event_title": event.event_title,
-                "event_description": event.event_description,
-                "event_create_date": event.event_create_date.isoformat(),
-                "start_date_register": event.start_date_register.isoformat(),
-                "end_date_register": event.end_date_register.isoformat(),
-                "event_start_date": event.event_start_date.isoformat() if event.event_start_date else None,
-                "event_end_date": event.event_end_date.isoformat() if event.event_end_date else None,
-                "schedule": schedule,
-                "max_attendee": event.max_attendee,
-                "event_address": event.event_address,
-                "event_image": event.event_image.url if event.event_image else None,
-                "is_online": event.is_online,
-                "event_meeting_link": event.event_meeting_link,
-                "tags": tags_list,
-                "status_registration": event.status_registration,
-                "event_email": event.event_email,
-                "event_phone_number": event.event_phone_number,
-                "event_website_url": event.event_website_url,
-                "organizer_name": organizer_name,
-                "organizer_role": event.organizer.role or "Organizer",
-                "organizer_id": event.organizer.id,
-                "attendee": event.attendee,
-                "attendee_count": attendee_count,
-            })
-        
-        return events_data
-        
-    except Exception as e:
-        print(f"Error fetching events: {str(e)}")
-        return {"error": str(e)}
 
 @api.post("/events/create", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
 def create_event(
@@ -605,6 +548,7 @@ def create_event(
             event_website_url=event_website_clean,
             terms_and_conditions=terms_clean,
             event_image=event_image if event_image else None,
+            verification_status=None,
         )
         
         # Store schedule as JSON for backwards compatibility (optional)
@@ -648,7 +592,8 @@ def create_event(
             "success": True,
             "message": f"Event created successfully with {len(created_schedules)} schedule entries",
             "event_id": event.id,
-            "schedule_count": len(created_schedules)
+            "schedule_count": len(created_schedules),
+            "verification_status": "pending"
         }
         
     except json.JSONDecodeError as e:
@@ -1793,6 +1738,202 @@ def get_user_created_events(request):
         return 400, {"error": str(e)}
 
 
+# exported into csv
+
+
+@api.post("/events/{event_id}/export", auth=django_auth)
+def export_event_registrations(request, event_id: int):
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Proper authorization check
+        if event.organizer != request.user:
+            return HttpResponse("Unauthorized", status=403)
+        
+        # Get tickets with related data
+        tickets = Ticket.objects.filter(event=event).select_related('attendee')
+        
+        if not tickets.exists():
+            return HttpResponse("No registrations found", status=404)
+
+        # Create CSV with better filename
+        response = HttpResponse(content_type='text/csv')
+        filename = f"{event.event_title}_registrations_{timezone.now().date()}.csv"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        writer = csv.writer(response)
+        
+        # Enhanced headers
+        writer.writerow([
+            'Ticket ID', 'Attendee Name', 'Attendee Email', 
+            'Phone', 'Registration Date', 'Status', 'QR Code'
+        ])
+        
+        for ticket in tickets:
+            attendee = ticket.attendee
+            attendee_name = f"{attendee.first_name} {attendee.last_name}".strip()
+            if not attendee_name:
+                attendee_name = attendee.username
+                
+            writer.writerow([
+                ticket.id,
+                attendee_name,
+                attendee.email,
+                attendee.phone_number or 'N/A',
+                ticket.purchase_date.strftime('%Y-%m-%d %H:%M:%S') if ticket.purchase_date else 'N/A',
+                ticket.approval_status,  # Include approval status
+                ticket.qr_code
+            ])
+        
+        return response
+        
+    except Event.DoesNotExist:
+        return HttpResponse("Event not found", status=404)
+    except Exception as e:
+        print(f"Export error: {str(e)}")
+        return HttpResponse("Export failed", status=500)
+    
+
+
+# ============================================================================
+# EVENT VERIFICATION ENDPOINTS
+# ============================================================================
+
+@api.post("/events/{event_id}/verify", auth=django_auth, response={200: schemas.SuccessSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def verify_event(request, event_id: int):
+    """
+    Verify an event 
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        if request.user.role != "admin":
+            return 403, {"error": "You are not authorized to verify events"}
+        
+        event.verification_status = "approved"
+        event.save()
+        
+        return 200, {
+            "success": True,
+            "message": "Event approved successfully",
+            "event_id": event_id,
+            "verification_status": "approved"
+        }
+    except Exception as e:
+        print(f"Error verifying event: {e}")
+        return 400, {"error": str(e)}
+
+@api.post("/events/{event_id}/reject", auth=django_auth, response={200: schemas.SuccessSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def reject_event(request, event_id: int):
+    """
+    Reject an event (admin only)
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Security check: Only admin users can reject events
+        if request.user.role != "admin":
+            return 403, {"error": "You are not authorized to reject events"}
+        
+        event.verification_status = "rejected"
+        event.save()
+        
+        return 200, {
+            "success": True,
+            "message": "Event rejected successfully",
+            "event_id": event_id,
+            "verification_status": "rejected"
+        }
+    except Exception as e:
+        print(f"Error rejecting event: {e}")
+        return 400, {"error": str(e)}
+    
+
+@api.get("/admin/statistics", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema})
+def get_admin_statistics(request):
+    """
+    Get admin dashboard statistics 
+    Returns counts of total, approved, pending, and rejected events
+    """
+    try:
+        # Security check: Only admin users can access this endpoint
+        if request.user.role != "admin":
+            return 403, {"error": "Admin privileges required"}
+        
+        # Get counts directly from database
+        total_events = Event.objects.count()
+        
+        approved_events = Event.objects.filter(
+            verification_status="approved"
+        ).count()
+        
+        rejected_events = Event.objects.filter(
+            verification_status="rejected"
+        ).count()
+        
+        # Pending events: everything that's not approved or rejected
+        pending_events = Event.objects.exclude(
+            verification_status__in=["approved", "rejected"]
+        ).count()
+        
+        # Alternative way to calculate pending (handles null/empty values)
+        # pending_events = total_events - approved_events - rejected_events
+
+        return 200, {
+            "total_events": total_events,
+            "approved_events": approved_events,
+            "pending_events": pending_events,
+            "rejected_events": rejected_events
+        }
+        
+    except Exception as e:
+        print(f"Error fetching admin statistics: {e}")
+        return 400, {"error": str(e)}
+    
+
+
+@api.get("/admin/events", auth=django_auth, response={200: List[schemas.AdminEventSchema], 403: schemas.ErrorSchema})
+def get_admin_events(request):
+    """
+    Get all events for admin dashboard with verification status
+    """
+    try:
+        # Security check: Only admin users can access this endpoint
+        if request.user.role != "admin":
+            return 403, {"error": "Admin privileges required"}
+        
+        events = Event.objects.select_related('organizer').all().order_by('-event_create_date')
+        
+        events_data = []
+        for event in events:
+            organizer_name = f"{event.organizer.first_name} {event.organizer.last_name}".strip()
+            if not organizer_name:
+                organizer_name = event.organizer.username or event.organizer.email
+            
+            # Get verification status - handle both string and None
+            verification_status = getattr(event, 'verification_status', None)
+            if verification_status is None:
+                verification_status = "pending"
+            
+            events_data.append({
+                "id": event.id,
+                "title": event.event_title,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_create_date": event.event_create_date.isoformat(),
+                "organizer_name": organizer_name,
+                "organizer_id": event.organizer.id,
+                "status_registration": event.status_registration,
+                "verification_status": verification_status,
+            })
+        
+        return events_data
+        
+    except Exception as e:
+        print(f"Error fetching admin events: {e}")
+        return 400, {"error": str(e)}
+      
+      
 @api.get("/notifications", response=List[NotificationOut], auth=django_auth)
 def get_notifications(request):
     """Get all notifications for the logged-in user"""

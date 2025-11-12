@@ -494,6 +494,19 @@ class ExportSuccessSchema(Schema):
     google_sheet: str
     total_count: int
 
+
+class AdminEventSchema(Schema):
+    id: int
+    title: str
+    event_title: str
+    event_description: str
+    event_create_date: str
+    organizer_name: str
+    organizer_id: int
+    status_registration: str
+    verification_status: str
+      
+      
 class NotificationSchema(Schema):
     id: int
     notification_type: str
