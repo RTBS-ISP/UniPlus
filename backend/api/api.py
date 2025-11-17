@@ -1070,18 +1070,68 @@ def get_my_event_feedback(request, event_id: int):
         if not fb:
             return 404, {"error": "No feedback found"}
 
+        # Build user_name just like in get_event_feedback_list
+        user_obj = fb.user
+        full_name = f"{user_obj.first_name} {user_obj.last_name}".strip()
+        if not full_name:
+            full_name = user_obj.username or user_obj.email
+
         return 200, {
             "id": fb.id,
             "rating": fb.rating,
-            "comment": fb.comment,
+            "comment": fb.comment or "",
             "created_at": fb.created_at,
             "updated_at": fb.updated_at,
+            "user_name": full_name,
+            "user_email": user_obj.email,
         }
+
     except Exception as e:
         print(f"Error loading feedback: {e}")
         return 404, {"error": "No feedback found"}
 
 
+@api.get(
+    "/events/{event_id}/feedback/all",
+    auth=django_auth,
+    response={200: List[schemas.EventFeedbackOutSchema], 403: schemas.ErrorSchema, 404: schemas.ErrorSchema},
+)
+def get_event_feedback_list(request, event_id: int):
+    """
+    Get all feedback entries for an event (organizer/admin only)
+    """
+    event = get_object_or_404(Event, id=event_id)
+
+    # Only organizer or admin may see feedback list
+    if event.organizer != request.user and getattr(request.user, "role", None) != "admin":
+        return 403, {"error": "You are not authorized to view feedback for this event"}
+
+    feedback_qs = (
+        EventFeedback.objects.filter(event=event)
+        .select_related("user")
+        .order_by("-created_at")
+    )
+
+    result = []
+    for fb in feedback_qs:
+        user = fb.user
+        full_name = f"{user.first_name} {user.last_name}".strip()
+        if not full_name:
+            full_name = user.username or user.email
+
+        result.append(
+            {
+                "id": fb.id,
+                "rating": fb.rating,
+                "comment": fb.comment or "",
+                "created_at": fb.created_at,
+                "updated_at": fb.updated_at,
+                "user_name": full_name,
+                "user_email": user.email,
+            }
+        )
+
+    return 200, result
       
 @api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_event_history(request):
