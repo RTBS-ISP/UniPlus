@@ -17,6 +17,7 @@ from api.model.ticket import Ticket
 from api.model.event_schedule import EventSchedule
 from api.model.comment import Comment
 from api.model.rating import Rating
+from api.model.event_feedback import EventFeedback
 from api.model.notification import (
     Notification, 
     create_notification, 
@@ -60,7 +61,7 @@ def convert_to_bangkok_time(dt):
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
-api = NinjaAPI(csrf=True)
+api = NinjaAPI()
 
 @api.get("/", response=schemas.MessageSchema)
 def home(request):
@@ -998,6 +999,89 @@ def get_event_comments(request, event_id: int):
         import traceback
         print(f"Traceback: {traceback.format_exc()}")
         return {"error": str(e)}
+    
+# Feedback comment and rating
+@api.post(
+    "/events/{event_id}/feedback",
+    auth=django_auth,
+    response={200: schemas.EventFeedbackOutSchema, 400: schemas.ErrorSchema},
+)
+def submit_event_feedback(request, event_id: int, payload: schemas.EventFeedbackCreateSchema):
+    """
+    One feedback per user per event.
+    Only after the event has ended and user has a ticket.
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        user = request.user
+
+        # Must have a ticket for this event
+        has_ticket = Ticket.objects.filter(event=event, attendee=user).exists()
+        if not has_ticket:
+            return 400, {"error": "You must have attended this event to leave feedback"}
+
+        # Event must be ended
+        if not event.event_end_date or event.event_end_date > timezone.now():
+            return 400, {"error": "You can only leave feedback after the event has ended"}
+
+        # Only 1 feedback per user per event
+        existing = EventFeedback.objects.filter(event=event, user=user).first()
+        if existing:
+            return 400, {"error": "You have already submitted feedback for this event"}
+
+        # Validate rating range
+        if payload.rating < 1 or payload.rating > 5:
+            return 400, {"error": "Rating must be between 1 and 5"}
+
+        fb = EventFeedback.objects.create(
+            event=event,
+            user=user,
+            rating=payload.rating,
+            comment=(payload.comment or "").strip(),
+        )
+
+        return 200, {
+            "id": fb.id,
+            "rating": fb.rating,
+            "comment": fb.comment,
+            "created_at": fb.created_at,
+            "updated_at": fb.updated_at,
+        }
+
+    except Exception as e:
+        print(f"Error submitting feedback: {e}")
+        return 400, {"error": str(e)}
+
+@api.get(
+    "/events/{event_id}/feedback/me",
+    auth=django_auth,
+    response={200: schemas.EventFeedbackOutSchema, 404: schemas.ErrorSchema},
+)
+def get_my_event_feedback(request, event_id: int):
+    """
+    Get current user's feedback for this event, if it exists.
+    Used so frontend knows to lock the form.
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        user = request.user
+
+        fb = EventFeedback.objects.filter(event=event, user=user).first()
+        if not fb:
+            return 404, {"error": "No feedback found"}
+
+        return 200, {
+            "id": fb.id,
+            "rating": fb.rating,
+            "comment": fb.comment,
+            "created_at": fb.created_at,
+            "updated_at": fb.updated_at,
+        }
+    except Exception as e:
+        print(f"Error loading feedback: {e}")
+        return 404, {"error": "No feedback found"}
+
+
       
 @api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_event_history(request):
