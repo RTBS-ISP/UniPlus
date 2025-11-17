@@ -118,25 +118,26 @@ export default function Navbar() {
               ) : (
                 <>
                   {/* Admin Button - Only visible for admin users */}
-                  {user.role === "admin" && (
+                  {user.role === "admin" ? (
                     <Link
                       href="/admin"
                       className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition"
                       title="Admin Dashboard"
                     >
                       <Shield className="w-4 h-4" />
-                      Admin
+                      Admin Dashboard
                     </Link>
-                  )}
-
-                  {/* Create Event Button */}
-                  <Link
-                    href="/events/create"
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create Event
-                  </Link>
+                  ) : (
+                    // Create Event Button - Only visible for normal users
+                    <Link
+                      href="/events/create"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create Event
+                    </Link>
+                    )
+                  }
 
                   {/* Profile Menu */}
                   <div ref={profileRef} className="relative flex items-center space-x-2">
