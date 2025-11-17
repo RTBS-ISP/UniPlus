@@ -46,6 +46,15 @@ rejected: number;
 attendance_rate?: number;
 }
 
+export interface EventFeedback {
+  id: number;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+  user_name: string;
+  user_email: string;
+}
 
-export type TableView = "approval" | "attendance";
+export type TableView = "approval" | "attendance" | "feedback";
 export type ApprovalAction = "approve" | "reject";
