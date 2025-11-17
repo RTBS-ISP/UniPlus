@@ -463,6 +463,17 @@ class CommentCreateSchema(Schema):
 
 class RatingCreateSchema(Schema):
     rates: int
+    
+class EventFeedbackCreateSchema(Schema):
+    rating: int
+    comment: Optional[str] = None
+    
+class EventFeedbackOutSchema(Schema):
+    id: int
+    rating: int
+    comment: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
 class CommentResponseSchema(Schema):
     id: int
