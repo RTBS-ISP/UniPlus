@@ -474,6 +474,8 @@ class EventFeedbackOutSchema(Schema):
     comment: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    user_name: str
+    user_email: str
 
 class CommentResponseSchema(Schema):
     id: int
