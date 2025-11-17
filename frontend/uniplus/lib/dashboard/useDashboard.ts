@@ -8,8 +8,15 @@ import type {
   ScheduleDay,
   Statistics,
   TableView,
+  EventFeedback,
 } from "@/lib/dashboard/types";
-import { approveRejectOne, bulkApproval, checkInOne, fetchDashboard } from "@/lib/dashboard/api";
+import {
+  approveRejectOne,
+  bulkApproval,
+  checkInOne,
+  fetchDashboard,
+  fetchEventFeedback,
+} from "@/lib/dashboard/api";
 import { useAlert } from "@/app/components/ui/AlertProvider";
 
 type State = {
@@ -25,6 +32,7 @@ type State = {
   activeFilter: string;
   selectedTickets: string[];
   bulkBusy: boolean;
+  feedbacks: EventFeedback[];
 };
 
 export function useDashboard(eventId: string | undefined) {
@@ -43,24 +51,24 @@ export function useDashboard(eventId: string | undefined) {
     activeFilter: "all",
     selectedTickets: [],
     bulkBusy: false,
+    feedbacks: [],
   });
 
   const load = useCallback(async () => {
     if (!eventId) return;
     setState((s) => ({ ...s, loading: true, error: "" }));
     try {
-      const data = await fetchDashboard(eventId);
+      const [data, feedbacks] = await Promise.all([
+        fetchDashboard(eventId),
+        fetchEventFeedback(eventId),
+      ]);
       const schedule = data.schedule_days || [];
 
       setState((s) => {
-        // keep user's selected date if it still exists
         let nextSelected = s.selectedDate;
-
         if (!nextSelected) {
-          // first load: default to first day
           nextSelected = schedule[0]?.date ?? "";
         } else if (!schedule.some((d) => d.date === nextSelected)) {
-          // if that date vanished, fall back to first
           nextSelected = schedule[0]?.date ?? nextSelected;
         }
 
@@ -72,6 +80,7 @@ export function useDashboard(eventId: string | undefined) {
           attendees: data.attendees || [],
           statistics: data.statistics || null,
           selectedDate: nextSelected,
+          feedbacks: feedbacks || [],
         };
       });
     } catch (e: any) {
@@ -312,5 +321,6 @@ export function useDashboard(eventId: string | undefined) {
     approveReject,
     bulkAct,
     checkIn,
+    feedbacks: state.feedbacks,
   };
 }
