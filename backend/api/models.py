@@ -5,6 +5,7 @@ from .model import (
     Ticket,
     Rating,
     Comment,
+    EventFeedback,
     EventSchedule,
     Social,
     Notification,
