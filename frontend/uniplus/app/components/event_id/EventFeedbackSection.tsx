@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Star } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAlert } from "../ui/AlertProvider";
@@ -14,18 +14,46 @@ type FeedbackProps = {
 type StarPickerProps = {
   rating: number;
   onChange: (value: number) => void;
+  disabled?: boolean;
 };
 
-function StarPicker({ rating, onChange }: StarPickerProps) {
+type ExistingFeedback = {
+  id: number;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api").replace(/\/$/, "");
+
+function StarPicker({ rating, onChange, disabled }: StarPickerProps) {
+  const [shake, setShake] = useState(false);
+
+  const handleClick = (val: number) => {
+    if (disabled) {
+      // shake animation when user tries to change a locked rating
+      setShake(true);
+      setTimeout(() => setShake(false), 200);
+      return;
+    }
+    onChange(val);
+  };
+
   return (
-    <div className="flex gap-1">
+    <motion.div
+      className={`flex gap-1 ${disabled ? "opacity-60" : ""}`}
+      animate={shake ? { x: [-3, 3, -2, 2, 0] } : { x: 0 }}
+      transition={{ duration: 0.25 }}
+    >
       {[1, 2, 3, 4, 5].map((val) => (
         <motion.button
           key={val}
           type="button"
-          onClick={() => onChange(val)}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
+          onClick={() => handleClick(val)}
+          whileHover={!disabled ? { scale: 1.1 } : {}}
+          whileTap={!disabled ? { scale: 0.9 } : {}}
           className={`${
             val <= rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"
           } cursor-pointer transition-colors`}
@@ -33,9 +61,10 @@ function StarPicker({ rating, onChange }: StarPickerProps) {
           <Star className="h-5 w-5" />
         </motion.button>
       ))}
-    </div>
+    </motion.div>
   );
 }
+export default StarPicker;
 
 export function EventFeedbackSection({
   eventId,
@@ -48,11 +77,16 @@ export function EventFeedbackSection({
   const [submitting, setSubmitting] = useState(false);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
 
-  // Load existing feedback (keeps UI locked after refresh)
-  useEffect(() => {
-    if (!isRegistered || !hasEventEnded) return;
+  // if user not eligible → no block at all
+  if (!isRegistered || !hasEventEnded) {
+    return null;
+  }
 
-    (async () => {
+  // Load existing feedback when page opens / refreshes
+  useEffect(() => {
+    if (!eventId) return;
+
+    const loadExisting = async () => {
       try {
         const res = await fetch(
           `http://localhost:8000/api/events/${eventId}/feedback/me`,
@@ -61,18 +95,22 @@ export function EventFeedbackSection({
 
         if (res.ok) {
           const data = await res.json();
-          setRating(data.rating || 0);
+          setRating(data.rating);
           setFeedback(data.comment || "");
           setAlreadySubmitted(true);
+        } else {
+          // 404 = no feedback yet → ignore
+          setAlreadySubmitted(false);
         }
       } catch (err) {
-        console.error("Error loading existing feedback:", err);
+        console.error("Error loading feedback:", err);
+        setAlreadySubmitted(false);
       }
-    })();
-  }, [eventId, isRegistered, hasEventEnded]);
+    };
 
-  // No section if not eligible
-  if (!isRegistered || !hasEventEnded) return null;
+    loadExisting();
+  }, [eventId]);
+
 
   const handleSubmit = async () => {
     if (!rating) {
@@ -85,27 +123,23 @@ export function EventFeedbackSection({
 
     setSubmitting(true);
     try {
-      // get CSRF token
-      const csrfRes = await fetch("http://localhost:8000/api/set-csrf-token", {
+      const csrfRes = await fetch(`${API_BASE}/set-csrf-token`, {
         credentials: "include",
       });
       const { csrftoken } = await csrfRes.json();
 
-      const res = await fetch(
-        `http://localhost:8000/api/events/${eventId}/feedback`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            "X-CSRFToken": csrftoken,
-          },
-          body: JSON.stringify({
-            rating,
-            comment: feedback.trim(),
-          }),
-        }
-      );
+      const res = await fetch(`${API_BASE}/events/${eventId}/feedback`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken,
+        },
+        body: JSON.stringify({
+          rating,
+          comment: feedback.trim(),
+        }),
+      });
 
       const data = await res.json();
 
@@ -113,8 +147,11 @@ export function EventFeedbackSection({
         toast({ text: "Thank you for your feedback!", variant: "success" });
         setAlreadySubmitted(true);
       } else {
-        // If backend says "already submitted", also lock UI
-        if (data.error?.includes("already submitted")) {
+        // if backend says already submitted, also lock the form
+        if (
+          typeof data.error === "string" &&
+          data.error.toLowerCase().includes("already submitted")
+        ) {
           setAlreadySubmitted(true);
         }
 
@@ -174,7 +211,11 @@ export function EventFeedbackSection({
           <p className="text-sm font-semibold text-[#0B1220] mb-2">
             Your rating
           </p>
-          <StarPicker rating={rating} onChange={setRating} />
+          <StarPicker
+            rating={rating}
+            onChange={setRating}
+            disabled={alreadySubmitted || submitting}
+          />
         </div>
 
         {/* Comment */}
