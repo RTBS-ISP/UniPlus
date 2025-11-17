@@ -9,11 +9,15 @@ import { useDashboard } from "@/lib/dashboard/useDashboard";
 import { Header } from "@/app/components/dashboard/Header";
 import { ViewToggle } from "@/app/components/dashboard/ViewToggle";
 import { DateSelector } from "@/app/components/dashboard/DateSelector";
-import { AttendanceStatCards, ApprovalStatCards } from "@/app/components/dashboard/StatCards";
+import {
+  AttendanceStatCards,
+  ApprovalStatCards,
+} from "@/app/components/dashboard/StatCards";
 import { QRCheckIn } from "@/app/components/dashboard/QRCheckIn";
 import { Filters } from "@/app/components/dashboard/Filters";
 import { BulkActions } from "@/app/components/dashboard/BulkActions";
 import { AttendeeTable } from "@/app/components/dashboard/AttendeeTable";
+import { FeedbackPanel } from "@/app/components/dashboard/FeedbackPanel";
 
 export default function DashBoardPage() {
   const params = useParams();
@@ -34,6 +38,7 @@ export default function DashBoardPage() {
     approveReject,
     bulkAct,
     checkIn,
+    feedbacks,
   } = useDashboard(eventId);
 
   if (state.loading) {
@@ -75,12 +80,14 @@ export default function DashBoardPage() {
           present: attendanceStats.present,
           pending: attendanceStats.pending,
         }
-      : {
+      : state.tableView === "approval"
+      ? {
           all: state.attendees.length,
           approved: state.statistics?.approved || 0,
           pending_approval: state.statistics?.pending_approval || 0,
           rejected: state.statistics?.rejected || 0,
-        };
+        }
+      : null;
 
   const anySelected =
     state.selectedTickets.length > 0 &&
@@ -105,77 +112,87 @@ export default function DashBoardPage() {
           <ViewToggle view={state.tableView} onChange={setTableView} />
         </div>
 
-
         <div className="max-w-7xl mx-auto px-8 py-8">
-          <div className="rounded-lg shadow-sm p-8 mb-8 bg-white">
-            {state.tableView === "attendance" && (
-              <DateSelector
-                days={state.schedule}
-                selected={state.selectedDate}
-                onChange={setSelectedDate}
-              />
-            )}
+          {/* Top stats card – only for attendance & approval */}
+          {state.tableView !== "feedback" && (
+            <div className="rounded-lg shadow-sm p-8 mb-8 bg-white">
+              {state.tableView === "attendance" && (
+                <DateSelector
+                  days={state.schedule}
+                  selected={state.selectedDate}
+                  onChange={setSelectedDate}
+                />
+              )}
 
-            {state.tableView === "attendance" ? (
-              <AttendanceStatCards
-                total={attendanceStats.total}
-                present={attendanceStats.present}
-                pending={attendanceStats.pending}
-                rate={attendanceStats.rate}
-              />
-            ) : (
-              <ApprovalStatCards stats={state.statistics} />
-            )}
-          </div>
+              {state.tableView === "attendance" ? (
+                <AttendanceStatCards
+                  total={attendanceStats.total}
+                  present={attendanceStats.present}
+                  pending={attendanceStats.pending}
+                  rate={attendanceStats.rate}
+                />
+              ) : (
+                <ApprovalStatCards stats={state.statistics} />
+              )}
+            </div>
+          )}
 
+          {/* QR check-in only for attendance */}
           {state.tableView === "attendance" && (
             <QRCheckIn onSubmit={(id) => checkIn(id)} />
           )}
 
-          <div className="rounded-lg shadow-sm p-8 bg-white">
-            <div className="flex justify-between items-center mb-4">
-              <div className="text-gray-800 text-2xl font-bold">
-                {state.tableView === "attendance" ? "Attendee Table" : "Approval Table"}
+          {/* Main content */}
+          {state.tableView === "feedback" ? (
+            <FeedbackPanel feedbacks={feedbacks} />
+          ) : (
+            <div className="rounded-lg shadow-sm p-8 bg-white">
+              <div className="flex justify-between items-center mb-4">
+                <div className="text-gray-800 text-2xl font-bold">
+                  {state.tableView === "attendance"
+                    ? "Attendee Table"
+                    : "Approval Table"}
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={state.search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search by name, email, or ticket ID....."
+                    className="px-4 py-2 w-80 rounded-xl bg-white border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-gray-800 placeholder-gray-400"
+                  />
+                </div>
               </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={state.search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by name, email, or ticket ID....."
-                  className="px-4 py-2 w-80 rounded-xl bg-white border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition text-gray-800 placeholder-gray-400"
+
+              {state.tableView === "approval" && (
+                <BulkActions
+                  anySelected={anySelected}
+                  totalSelected={state.selectedTickets.length}
+                  onSelectAll={selectAll}
+                  onApprove={() => bulkAct("approve")}
+                  onReject={() => bulkAct("reject")}
+                  busy={state.bulkBusy}
                 />
-              </div>
-            </div>
+              )}
 
-            {state.tableView === "approval" && (
-              <BulkActions
-                anySelected={anySelected}
-                totalSelected={state.selectedTickets.length}
-                onSelectAll={selectAll}
-                onApprove={() => bulkAct("approve")}
-                onReject={() => bulkAct("reject")}
-                busy={state.bulkBusy}
+              <Filters
+                view={state.tableView}
+                counts={countsForFilters as any}
+                active={state.activeFilter}
+                onChange={setActiveFilter}
               />
-            )}
 
-            <Filters
-              view={state.tableView}
-              counts={countsForFilters as any}
-              active={state.activeFilter}
-              onChange={setActiveFilter}
-            />
-
-            <AttendeeTable
-              view={state.tableView}
-              data={visibleAttendees}
-              selected={state.selectedTickets}
-              toggle={toggleTicket}
-              onApprove={(id) => approveReject(id, "approve")}
-              onReject={(id) => approveReject(id, "reject")}
-              onCheckIn={(id) => checkIn(id)}
-            />
-          </div>
+              <AttendeeTable
+                view={state.tableView}
+                data={visibleAttendees}
+                selected={state.selectedTickets}
+                toggle={toggleTicket}
+                onApprove={(id) => approveReject(id, "approve")}
+                onReject={(id) => approveReject(id, "reject")}
+                onCheckIn={(id) => checkIn(id)}
+              />
+            </div>
+          )}
         </div>
       </div>
     </main>
