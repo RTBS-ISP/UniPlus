@@ -110,7 +110,7 @@ export default function Navbar() {
                   </Link>
                   <Link
                     href="/login"
-                    className="inline-flex items-center justify-center px-4 py-1 text-base font-bold text-white bg-indigo-400 rounded-full hover:bg-indigo-300"
+                    className="inline-flex items-center justify-center px-4 py-1 text-base font-bold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600"
                   >
                     Sign In
                   </Link>
