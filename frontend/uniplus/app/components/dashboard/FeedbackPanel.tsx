@@ -8,7 +8,7 @@ export type EventFeedback = {
   comment?: string | null;
   created_at: string;
   user_name: string;
-  user_email: string;
+  user_email: string | null;
 };
 
 export function FeedbackPanel({ feedbacks }: { feedbacks: EventFeedback[] }) {
@@ -61,13 +61,19 @@ export function FeedbackPanel({ feedbacks }: { feedbacks: EventFeedback[] }) {
               <li key={fb.id} className="py-4 flex flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <div>
+                    {/* show name exactly how backend sends it */}
                     <div className="text-sm font-semibold text-gray-900">
                       {fb.user_name}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {fb.user_email}
-                    </div>
+
+                    {/* only show email if not anonymous */}
+                    {fb.user_email && (
+                      <div className="text-xs text-gray-500">
+                        {fb.user_email}
+                      </div>
+                    )}
                   </div>
+
                   <div className="flex items-center gap-1 text-yellow-500">
                     <Star className="w-4 h-4 fill-yellow-400" />
                     <span className="text-sm font-semibold text-gray-800">
