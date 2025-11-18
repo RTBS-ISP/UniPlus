@@ -64,6 +64,60 @@ function StarPicker({ rating, onChange, disabled }: StarPickerProps) {
     </motion.div>
   );
 }
+
+// small pill toggle for Public / Anonymous
+function AnonToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: boolean;
+  onChange: (val: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className={`relative inline-flex w-[180px] rounded-xl bg-neutral-200 px-1 py-1 text-xs font-semibold ${
+        disabled ? "opacity-60 cursor-not-allowed" : "text-neutral-700"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => !disabled && onChange(false)}
+        className={`relative z-10 w-1/2 px-3 py-1.5 ${
+          value ? "text-neutral-700" : "text-white"
+        }`}
+      >
+        Public
+        {!value && (
+          <motion.div
+            layoutId="anon-toggle-pill"
+            className="absolute inset-0 -z-10 rounded-lg bg-[#6366F1]"
+            transition={{ type: "spring", stiffness: 260, damping: 26 }}
+          />
+        )}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => !disabled && onChange(true)}
+        className={`relative z-10 w-1/2 px-3 py-1.5 ${
+          value ? "text-white" : "text-neutral-700"
+        }`}
+      >
+        Anonymous
+        {value && (
+          <motion.div
+            layoutId="anon-toggle-pill"
+            className="absolute inset-0 -z-10 rounded-lg bg-[#6366F1]"
+            transition={{ type: "spring", stiffness: 260, damping: 26 }}
+          />
+        )}
+      </button>
+    </div>
+  );
+}
+
 export default StarPicker;
 
 export function EventFeedbackSection({
@@ -76,6 +130,7 @@ export function EventFeedbackSection({
   const [feedback, setFeedback] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(false);
 
   // if user not eligible → no block at all
   if (!isRegistered || !hasEventEnded) {
@@ -97,6 +152,8 @@ export function EventFeedbackSection({
           const data = await res.json();
           setRating(data.rating);
           setFeedback(data.comment || "");
+          // if backend returns anonymous flag, you can uncomment this:
+          // setIsAnonymous(!!data.anonymous);
           setAlreadySubmitted(true);
         } else {
           // 404 = no feedback yet → ignore
@@ -110,7 +167,6 @@ export function EventFeedbackSection({
 
     loadExisting();
   }, [eventId]);
-
 
   const handleSubmit = async () => {
     if (!rating) {
@@ -138,6 +194,7 @@ export function EventFeedbackSection({
         body: JSON.stringify({
           rating,
           comment: feedback.trim(),
+          anonymous: isAnonymous,
         }),
       });
 
@@ -232,6 +289,18 @@ export function EventFeedbackSection({
           />
         </div>
 
+        {/* Anonymous toggle */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-[#0B1220]/70">
+            How should your feedback appear?
+          </span>
+          <AnonToggle
+            value={isAnonymous}
+            onChange={setIsAnonymous}
+            disabled={submitting || alreadySubmitted}
+          />
+        </div>
+
         {/* Actions */}
         <div className="flex justify-end gap-2">
           <button
@@ -242,6 +311,7 @@ export function EventFeedbackSection({
               if (submitting || alreadySubmitted) return;
               setRating(0);
               setFeedback("");
+              setIsAnonymous(false);
             }}
           >
             Clear
