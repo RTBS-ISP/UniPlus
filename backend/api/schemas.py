@@ -479,6 +479,17 @@ class EventFeedbackOutSchema(Schema):
     user_email: Optional[str] = None
     anonymous: bool 
     
+class EventFeedbackAggregateSchema(Schema):
+    total: int
+    average_rating: float
+    rating_counts: Dict[int, int]
+    anonymous_count: int
+
+class EventFeedbackReportSchema(Schema):
+    aggregates: EventFeedbackAggregateSchema
+    ai_summary: str
+    feedback: List[EventFeedbackOutSchema]
+    
 class CommentResponseSchema(Schema):
     id: int
     event_id: int          
