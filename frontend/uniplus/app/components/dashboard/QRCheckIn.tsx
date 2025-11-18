@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState } from "react";
-import { QrCode, UserCheck } from "lucide-react";
+import { QrCode, UserCheck, Camera, X } from "lucide-react";
+import { QRScanner } from "./QRScanner";
 
 export function QRCheckIn({ onSubmit }: { onSubmit: (val: string) => void }) {
   const [val, setVal] = useState("");
+  const [cameraOn, setCameraOn] = useState(false);
 
   const handle = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -14,7 +16,7 @@ export function QRCheckIn({ onSubmit }: { onSubmit: (val: string) => void }) {
   };
 
   return (
-    <div className="rounded-lg shadow-sm p-8 mb-8 bg-white">
+    <div className="rounded-lg shadow-sm p-8 mb-8 bg-white w-full">
       <div className="flex flex-row items-center w-full mb-2 gap-3">
         <div className="p-3 bg-indigo-100 rounded-lg">
           <QrCode size={42} className="text-indigo-500" />
@@ -27,6 +29,29 @@ export function QRCheckIn({ onSubmit }: { onSubmit: (val: string) => void }) {
         </div>
       </div>
 
+      {/* Camera Toggle Button */}
+      <button
+        type="button"
+        onClick={() => setCameraOn(!cameraOn)}
+        className="flex items-center gap-2 px-4 py-2 mb-4 text-indigo-600 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition"
+      >
+        {cameraOn ? <X size={18} /> : <Camera size={18} />}
+        {cameraOn ? "Close Camera" : "Use Camera Scan"}
+      </button>
+
+      {/* Camera Scanner */}
+      {cameraOn && (
+        <div className="mb-6">
+          <QRScanner
+            onScan={(ticketId) => {
+              onSubmit(ticketId);
+              setCameraOn(false);
+            }}
+          />
+        </div>
+      )}
+
+      {/* Manual Input */}
       <form className="flex gap-3" onSubmit={handle}>
         <input
           name="ticket"
