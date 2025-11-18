@@ -467,6 +467,7 @@ class RatingCreateSchema(Schema):
 class EventFeedbackCreateSchema(Schema):
     rating: int
     comment: Optional[str] = None
+    anonymous: Optional[bool] = False 
     
 class EventFeedbackOutSchema(Schema):
     id: int
@@ -475,8 +476,9 @@ class EventFeedbackOutSchema(Schema):
     created_at: datetime
     updated_at: datetime
     user_name: str
-    user_email: str
-
+    user_email: Optional[str] = None
+    anonymous: bool 
+    
 class CommentResponseSchema(Schema):
     id: int
     event_id: int          
