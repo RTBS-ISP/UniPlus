@@ -1,5 +1,5 @@
 "use client";
-
+import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/navbar";
@@ -18,6 +18,94 @@ import { Filters } from "@/app/components/dashboard/Filters";
 import { BulkActions } from "@/app/components/dashboard/BulkActions";
 import { AttendeeTable } from "@/app/components/dashboard/AttendeeTable";
 import { FeedbackPanel } from "@/app/components/dashboard/FeedbackPanel";
+import { FeedbackSummarySidebar } from "@/app/components/dashboard/FeedbackSummarySidebar";
+
+// --- helpers for export ---
+
+const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api").replace(
+    /\/$/,
+    ""
+  );
+
+function buildFeedbackReportMarkdown(
+  event: { title?: string | null; id: number },
+  data: {
+    aggregates: {
+      total: number;
+      average_rating: number;
+      rating_counts: Record<string, number>;
+      anonymous_count: number;
+    };
+    ai_summary: string;
+    feedback: {
+      id: number;
+      rating: number;
+      comment: string;
+      created_at: string;
+      user_name: string;
+      user_email: string | null;
+    }[];
+  }
+) {
+  const { aggregates, ai_summary, feedback } = data;
+
+  const lines: string[] = [];
+
+  lines.push(`# Feedback Report – ${event.title ?? "Untitled Event"}`);
+  lines.push("");
+  lines.push(`Event ID: ${event.id}`);
+  lines.push("");
+
+  lines.push("## 1. Overview");
+  lines.push(`- Total feedback: **${aggregates.total}**`);
+  lines.push(`- Average rating: **${aggregates.average_rating.toFixed(2)}/5**`);
+  const anonPct =
+    aggregates.total > 0
+      ? Math.round((aggregates.anonymous_count / aggregates.total) * 100)
+      : 0;
+  lines.push(
+    `- Anonymous responses: **${aggregates.anonymous_count}** (${anonPct}%)`
+  );
+  lines.push("");
+
+  lines.push("### Rating distribution");
+  for (let r = 5; r >= 1; r--) {
+    const key = String(r);
+    const count = aggregates.rating_counts[key] ?? 0;
+    const bar = "█".repeat(Math.min(count, 20)); // simple text "graph"
+    lines.push(`- ${r}★: ${bar} (${count})`);
+  }
+  lines.push("");
+
+  lines.push("## 2. AI summary (qualitative)");
+  lines.push(ai_summary || "_No AI summary generated yet._");
+  lines.push("");
+
+  lines.push("## 3. Individual feedback");
+  if (feedback.length === 0) {
+    lines.push("_No feedback yet._");
+  } else {
+    feedback.forEach((fb) => {
+      lines.push(
+        `### Rating ${fb.rating}/5 – ${fb.user_name}${
+          fb.user_email ? ` (${fb.user_email})` : ""
+        }`
+      );
+      lines.push(`- Submitted at: ${new Date(fb.created_at).toLocaleString()}`);
+      if (fb.comment && fb.comment.trim()) {
+        lines.push("");
+        lines.push(fb.comment.trim());
+      } else {
+        lines.push("");
+        lines.push("_No written comment._");
+      }
+      lines.push("");
+    });
+  }
+
+  return lines.join("\n");
+}
 
 export default function DashBoardPage() {
   const params = useParams();
@@ -40,6 +128,8 @@ export default function DashBoardPage() {
     checkIn,
     feedbacks,
   } = useDashboard(eventId);
+
+  const [exporting, setExporting] = useState(false);
 
   if (state.loading) {
     return (
@@ -93,6 +183,45 @@ export default function DashBoardPage() {
     state.selectedTickets.length > 0 &&
     state.selectedTickets.length <= visibleAttendees.length;
 
+  const handleExportFeedbackReport = async () => {
+    if (!eventId || !state.event) return;
+    if (exporting) return;
+
+    setExporting(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/events/${eventId}/feedback/report`,
+        { credentials: "include" }
+      );
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Export error", data);
+        alert(data.error || "Failed to export feedback report");
+        return;
+      }
+
+      const markdown = buildFeedbackReportMarkdown(state.event, data);
+
+      const blob = new Blob([markdown], {
+        type: "text/markdown;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `event-${eventId}-feedback-report.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Unexpected error while exporting report");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <main>
       <Navbar />
@@ -144,7 +273,16 @@ export default function DashBoardPage() {
 
           {/* Main content */}
           {state.tableView === "feedback" ? (
-            <FeedbackPanel feedbacks={feedbacks} />
+            <div className="grid lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] gap-6">
+              <div>
+                <FeedbackPanel feedbacks={feedbacks} />
+              </div>
+
+              <FeedbackSummarySidebar
+                feedbacks={feedbacks}
+                onExport={handleExportFeedbackReport}
+              />
+            </div>
           ) : (
             <div className="rounded-lg shadow-sm p-8 bg-white">
               <div className="flex justify-between items-center mb-4">
