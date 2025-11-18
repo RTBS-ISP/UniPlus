@@ -1038,6 +1038,7 @@ def submit_event_feedback(request, event_id: int, payload: schemas.EventFeedback
             user=user,
             rating=payload.rating,
             comment=(payload.comment or "").strip(),
+            anonymous=bool(payload.anonymous or False),  # 👈 NEW
         )
 
         return 200, {
@@ -1046,11 +1047,13 @@ def submit_event_feedback(request, event_id: int, payload: schemas.EventFeedback
             "comment": fb.comment,
             "created_at": fb.created_at,
             "updated_at": fb.updated_at,
+            "anonymous": fb.anonymous,  # 👈 NEW
         }
 
     except Exception as e:
         print(f"Error submitting feedback: {e}")
         return 400, {"error": str(e)}
+
 
 @api.get(
     "/events/{event_id}/feedback/me",
@@ -1084,6 +1087,7 @@ def get_my_event_feedback(request, event_id: int):
             "updated_at": fb.updated_at,
             "user_name": full_name,
             "user_email": user_obj.email,
+            "anonymous": fb.anonymous,  # 👈 NEW (so frontend could pre-fill toggle later)
         }
 
     except Exception as e:
@@ -1115,9 +1119,15 @@ def get_event_feedback_list(request, event_id: int):
     result = []
     for fb in feedback_qs:
         user = fb.user
-        full_name = f"{user.first_name} {user.last_name}".strip()
-        if not full_name:
-            full_name = user.username or user.email
+
+        if fb.anonymous:
+            full_name = "Anonymous"
+            email = None
+        else:
+            full_name = f"{user.first_name} {user.last_name}".strip()
+            if not full_name:
+                full_name = user.username or user.email
+            email = user.email
 
         result.append(
             {
@@ -1127,7 +1137,8 @@ def get_event_feedback_list(request, event_id: int):
                 "created_at": fb.created_at,
                 "updated_at": fb.updated_at,
                 "user_name": full_name,
-                "user_email": user.email,
+                "user_email": email,
+                "anonymous": fb.anonymous,  # 👈 NEW
             }
         )
 
