@@ -54,6 +54,7 @@ export interface EventFeedback {
   updated_at: string;
   user_name: string;
   user_email: string;
+  anonymous: boolean;
 }
 
 export type TableView = "approval" | "attendance" | "feedback";
