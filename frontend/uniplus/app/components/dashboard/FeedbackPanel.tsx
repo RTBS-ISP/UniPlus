@@ -9,6 +9,7 @@ export type EventFeedback = {
   created_at: string;
   user_name: string;
   user_email: string | null;
+  anonymous: boolean;
 };
 
 export function FeedbackPanel({ feedbacks }: { feedbacks: EventFeedback[] }) {
