@@ -11,6 +11,7 @@ from django.db import IntegrityError
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from django.db.models import Avg, Count
+from django.conf import settings
 from api.model.user import AttendeeUser
 from api.model.event import Event
 from api.model.ticket import Ticket
@@ -1143,6 +1144,105 @@ def get_event_feedback_list(request, event_id: int):
         )
 
     return 200, result
+
+@api.get(
+    "/events/{event_id}/feedback/report",
+    auth=django_auth,
+    response={200: schemas.EventFeedbackReportSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema},
+)
+def get_event_feedback_report(request, event_id: int):
+    """
+    Full feedback report for an event (organizer/admin only).
+    Includes aggregates + all feedback + optional AI summary.
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+
+        # only organizer or admin
+        if event.organizer != request.user and getattr(request.user, "role", None) != "admin":
+            return 403, {"error": "You are not authorized to view feedback for this event"}
+
+        qs = (
+            EventFeedback.objects.filter(event=event)
+            .select_related("user")
+            .order_by("-created_at")
+        )
+
+        total = qs.count()
+        rating_counts = {i: qs.filter(rating=i).count() for i in range(1, 6)}
+        avg_row = qs.aggregate(avg=Avg("rating"))
+        avg_rating = float(avg_row["avg"] or 0.0)
+        anonymous_count = qs.filter(anonymous=True).count()
+
+        feedback_list = []
+        for fb in qs:
+            user = fb.user
+            full_name = f"{user.first_name} {user.last_name}".strip()
+            if not full_name:
+                full_name = user.username or user.email
+
+            feedback_list.append(
+                {
+                    "id": fb.id,
+                    "rating": fb.rating,
+                    "comment": fb.comment or "",
+                    "created_at": fb.created_at,
+                    "updated_at": fb.updated_at,
+                    "user_name": "Anonymous" if fb.anonymous else full_name,
+                    "user_email": None if fb.anonymous else user.email,
+                    "anonymous": fb.anonymous,
+                }
+            )
+
+        # --- AI summary (optional, safe no-op for now) ---
+        ai_summary = ""
+        try:
+            api_key = getattr(settings, "OPENAI_API_KEY", None)
+            if api_key and total > 0:
+                # from openai import OpenAI
+                # client = OpenAI(api_key=api_key)
+
+                # keep prompt small-ish, only use text we already have
+                comment_snippets = [
+                    f"Rating {fb.rating}/5: {fb.comment or ''}"
+                    for fb in qs
+                    if fb.comment
+                ]
+                joined = "\n\n".join(comment_snippets)[:4000]
+
+                # 🔹 PSEUDO–CODE: plug your own OpenAI call here
+                # completion = client.chat.completions.create(
+                #     model="gpt-4o-mini",
+                #     messages=[
+                #         {"role": "system", "content": "Summarise feedback for an event ..."},
+                #         {"role": "user", "content": joined or "No written comments."},
+                #     ],
+                # )
+                # ai_summary = completion.choices[0].message.content.strip()
+
+                ai_summary = ""  # keep empty for now so it doesn't crash
+        except Exception as e:
+            print("AI summary failed:", e)
+            ai_summary = ""
+
+        return 200, {
+            "aggregates": {
+                "total": total,
+                "average_rating": avg_rating,
+                "rating_counts": rating_counts,
+                "anonymous_count": anonymous_count,
+            },
+            "ai_summary": ai_summary,
+            "feedback": feedback_list,
+        }
+
+    except Exception as e:
+        import traceback
+        print("Error building feedback report:", e)
+        print(traceback.format_exc())
+        # Make sure frontend still gets JSON, not HTML
+        return 400, {"error": "Failed to build feedback report"}
+
       
 @api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_event_history(request):
