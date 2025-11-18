@@ -23,6 +23,7 @@ type ExistingFeedback = {
   comment: string | null;
   created_at: string;
   updated_at: string;
+  anonymous: boolean;
 };
 
 const API_BASE =
