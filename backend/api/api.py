@@ -1139,7 +1139,7 @@ def get_event_feedback_list(request, event_id: int):
                 "updated_at": fb.updated_at,
                 "user_name": full_name,
                 "user_email": email,
-                "anonymous": fb.anonymous,  # 👈 NEW
+                "anonymous": fb.anonymous,
             }
         )
 
@@ -1194,37 +1194,41 @@ def get_event_feedback_report(request, event_id: int):
                 }
             )
 
-        # --- AI summary (optional, safe no-op for now) ---
+        # --- AI summary via n8n ---
         ai_summary = ""
         try:
-            api_key = getattr(settings, "OPENAI_API_KEY", None)
-            if api_key and total > 0:
-                # from openai import OpenAI
-                # client = OpenAI(api_key=api_key)
+            from django.conf import settings
+            import requests
 
-                # keep prompt small-ish, only use text we already have
-                comment_snippets = [
-                    f"Rating {fb.rating}/5: {fb.comment or ''}"
-                    for fb in qs
-                    if fb.comment
-                ]
-                joined = "\n\n".join(comment_snippets)[:4000]
+            n8n_url = getattr(settings, "N8N_FEEDBACK_SUMMARY_URL", None)
+            if n8n_url and total > 0:
+                payload = {
+                    "event_title": event.event_title,
+                    "feedback": [
+                        {
+                            "rating": fb.rating,
+                            "comment": fb.comment or ""
+                        }
+                        for fb in qs
+                    ],
+                }
 
-                # 🔹 PSEUDO–CODE: plug your own OpenAI call here
-                # completion = client.chat.completions.create(
-                #     model="gpt-4o-mini",
-                #     messages=[
-                #         {"role": "system", "content": "Summarise feedback for an event ..."},
-                #         {"role": "user", "content": joined or "No written comments."},
-                #     ],
-                # )
-                # ai_summary = completion.choices[0].message.content.strip()
+                resp = requests.post(n8n_url, json=payload, timeout=20)
 
-                ai_summary = ""  # keep empty for now so it doesn't crash
+                resp.raise_for_status()
+                data = resp.json()
+                if isinstance(data, dict):
+                    ai_summary = (data.get("output") or "").strip()
+                elif isinstance(data, list) and data and isinstance(data[0], dict):
+                    ai_summary = (data[0].get("output") or "").strip()
+                else:
+                    print("DEBUG N8N: unexpected JSON shape")
+                    ai_summary = ""
         except Exception as e:
-            print("AI summary failed:", e)
+            print("AI summary via n8n failed:", repr(e))
             ai_summary = ""
 
+            
         return 200, {
             "aggregates": {
                 "total": total,
