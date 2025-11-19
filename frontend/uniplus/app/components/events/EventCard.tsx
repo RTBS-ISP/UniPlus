@@ -78,7 +78,7 @@ function getEventStatus(dateStr?: string) {
     };
   }
 
-  if (diff <= 3) {
+  if (diff <= 7) {
     return {
       status: "soon",
       border: "border-[#6366F1]",
