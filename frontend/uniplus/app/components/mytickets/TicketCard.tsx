@@ -53,6 +53,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   const [loading, setLoading] = useState(true);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [showTitlePopover, setShowTitlePopover] = useState(false);
+  const isMoble = typeof window !== 'undefined' && window.innerWidth <= 768;
 
   const fetchEventDetail = async (eventId: number) => {
     try {
@@ -252,6 +253,12 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     );
   };
 
+  const togglePopover = () => {
+    if (isMoble && ticket.event_title.length > 80) {
+      setShowTitlePopover(!showTitlePopover);
+    }
+  };
+
   if (loading) {
     return (
       <div className="rounded-lg bg-white p-6 shadow-sm text-gray-500 text-sm text-center">
@@ -263,10 +270,10 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   return (
     <Link
       href={`/my-ticket/${ticket.ticket_number}`}
-      className={`rounded-lg shadow-sm bg-white flex flex-col transition-all duration-300 hover:scale-[1.02] hover:shadow-md ${styles.cardClass}`}
+      className={`relative rounded-lg shadow-sm bg-white flex flex-col transition-all duration-300 hover:shadow-lg ${styles.cardClass}`}
     >
       {/* Header */}
-      <div className={`flex items-start justify-between rounded-t-lg w-full h-36 ${styles.headerBg} relative p-6 gap-4 overflow-hidden`}>
+      <div className={`flex items-start justify-between rounded-t-lg w-full h-36 ${styles.headerBg} relative p-6 gap-4 overflow-visible z-10`}>
         {/* Status Badge - Top Left */}
         {styles.badge && (
           <div className={`absolute top-3 left-3 ${styles.badge.bg} text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg`}>
@@ -276,7 +283,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
         )}
 
         <div className="flex flex-col gap-y-3 flex-1 pr-2 relative" style={{ marginTop: styles.badge ? '28px' : '0' }}>
-          <div className="relative group/title">
+          <div className="relative group/title z-20">
             <h2 
               className="text-white text-xl font-bold line-clamp-2 cursor-pointer"
               onClick={(e) => {
@@ -291,10 +298,12 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
             </h2>
             
             {/* Popover - Shows on hover (desktop) or click (mobile) */}
-            {ticket.event_title && ticket.event_title.length > 80 && (
-              <div className={`absolute left-0 top-full mt-2 w-[min(400px,90vw)] bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 transition-all duration-200
+            {ticket.event_title && ticket.event_title.length > 30 && (
+              <div className={`absolute left-0 top-full mt-2 w-[min(400px,90vw)]
+                bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50
+                transition-all duration-200 pointer-events-auto
                 ${showTitlePopover ? 'opacity-100 visible' : 'opacity-0 invisible'}
-                md:group-hover/title:opacity-100 md:group-hover/title:visible md:pointer-events-none
+                md:group-hover/title:opacity-100 md:group-hover/title:visible
               `}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-gray-900 text-sm font-semibold leading-relaxed flex-1">
@@ -384,7 +393,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
               ))}
 
               {hiddenTags.length > 0 && (
-                <span className="relative group inline-block">
+                <span className="relative z-[9999] group inline-block">
                   <button
                     type="button"
                     className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
@@ -394,7 +403,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
 
                   {/* hover dropdown */}
                   <div
-                    className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(420px,90vw)]
+                    className="pointer-events-none absolute left-1/2 z-[99999] mt-2 w-[min(420px,90vw)]
                               -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
                               shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
                               group-hover:opacity-100 group-hover:scale-100"
