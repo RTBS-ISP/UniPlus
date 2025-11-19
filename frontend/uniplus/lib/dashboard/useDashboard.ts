@@ -300,28 +300,21 @@ export function useDashboard(eventId: string | undefined) {
         await load();
       }
     } catch (err: any) {
-      console.error('Check-in error:', err);
+      const errorMessage = err?.message || err?.detail || "Check-in failed.";
 
-      let errorMessage = "Check-in failed.";
-      if (err?.message) {
-        errorMessage = err.message;
-      } else if (err?.detail) {
-        errorMessage = err.detail;
-      }
-
-      if (errorMessage.includes("not found")) {
+      if (errorMessage.toLowerCase().includes("not found")) {
         alert({ 
           text: `Ticket ${trimmed} not found for this event.`, 
           variant: "error" 
         });
-      } else if (errorMessage.includes("not authorized")) {
+      } else if (errorMessage.toLowerCase().includes("not authorized") || errorMessage.toLowerCase().includes("permission")) {
         alert({ 
           text: "You don't have permission to check in attendees for this event.", 
           variant: "error" 
         });
-      } else if (errorMessage.includes("not valid for the selected date")) {
+      } else if (errorMessage.toLowerCase().includes("not valid for") || errorMessage.toLowerCase().includes("valid dates")) {
         alert({ 
-          text: `This ticket is not valid for ${state.selectedDate}.`, 
+          text: errorMessage, 
           variant: "error" 
         });
       } else {
