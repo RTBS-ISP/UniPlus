@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/navbar";
@@ -17,7 +17,7 @@ import { QRCheckIn } from "@/app/components/dashboard/QRCheckIn";
 import { Filters } from "@/app/components/dashboard/Filters";
 import { BulkActions } from "@/app/components/dashboard/BulkActions";
 import { AttendeeTable } from "@/app/components/dashboard/AttendeeTable";
-import { FeedbackPanel } from "@/app/components/dashboard/FeedbackPanel";
+import { FeedbackPanel, type EventFeedback } from "@/app/components/dashboard/FeedbackPanel";
 import { FeedbackSummarySidebar } from "@/app/components/dashboard/FeedbackSummarySidebar";
 
 // --- helpers for export ---
@@ -27,6 +27,17 @@ const API_BASE =
     /\/$/,
     ""
   );
+
+type FeedbackReportResponse = {
+  aggregates: {
+    total: number;
+    average_rating: number;
+    rating_counts: Record<string, number>;
+    anonymous_count: number;
+  };
+  ai_summary: string;
+  feedback: EventFeedback[];
+};
 
 function buildFeedbackReportMarkdown(
   event: { title?: string | null; id: number },
@@ -131,6 +142,41 @@ export default function DashBoardPage() {
 
   const [exporting, setExporting] = useState(false);
 
+  // NEW: state for feedback report / AI summary
+  const [report, setReport] = useState<FeedbackReportResponse | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  const fetchFeedbackReport = async () => {
+    if (!eventId) return;
+    setReportLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/events/${eventId}/feedback/report`,
+        { credentials: "include" }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Failed to load feedback report", data);
+        setReport(null);
+        return;
+      }
+
+      setReport(data);
+    } catch (err) {
+      console.error("Error loading feedback report", err);
+      setReport(null);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  // load AI summary once when event changes
+  useEffect(() => {
+    fetchFeedbackReport();
+  }, [eventId]);
+
   if (state.loading) {
     return (
       <main>
@@ -231,7 +277,10 @@ export default function DashBoardPage() {
         <div className="max-w-7xl mx-auto px-8 -mt-4 mb-2 flex flex-col items-start gap-4">
           <button
             type="button"
-            onClick={load}
+            onClick={() => {
+              load();
+              fetchFeedbackReport();
+            }}
             className="inline-flex items-center justify-center gap-2 px-4 py-1 text-base font-bold leading-6 text-white bg-indigo-500 border border-transparent rounded-lg hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400"
           >
             <RefreshCw className="w-4 h-4" />
@@ -280,6 +329,8 @@ export default function DashBoardPage() {
 
               <FeedbackSummarySidebar
                 feedbacks={feedbacks}
+                aiSummary={report?.ai_summary || ""}
+                aiSummaryLoading={reportLoading}
                 onExport={handleExportFeedbackReport}
               />
             </div>
