@@ -1158,7 +1158,7 @@ def get_event_feedback_report(request, event_id: int):
     try:
         event = get_object_or_404(Event, id=event_id)
 
-        # only organizer or admin
+        # Only organizer or admin
         if event.organizer != request.user and getattr(request.user, "role", None) != "admin":
             return 403, {"error": "You are not authorized to view feedback for this event"}
 
@@ -1170,22 +1170,29 @@ def get_event_feedback_report(request, event_id: int):
 
         total = qs.count()
         rating_counts = {i: qs.filter(rating=i).count() for i in range(1, 6)}
-        avg_row = qs.aggregate(avg=Avg("rating"))
-        avg_rating = float(avg_row["avg"] or 0.0)
+        avg_rating = float(qs.aggregate(avg=Avg("rating"))["avg"] or 0.0)
         anonymous_count = qs.filter(anonymous=True).count()
 
+        # Build detailed list where we respect anonymity
         feedback_list = []
+        comments_exist = False
+
         for fb in qs:
             user = fb.user
+
             full_name = f"{user.first_name} {user.last_name}".strip()
             if not full_name:
                 full_name = user.username or user.email
+
+            comment = fb.comment or ""
+            if comment.strip():
+                comments_exist = True  # Detect any meaningful comment
 
             feedback_list.append(
                 {
                     "id": fb.id,
                     "rating": fb.rating,
-                    "comment": fb.comment or "",
+                    "comment": comment,
                     "created_at": fb.created_at,
                     "updated_at": fb.updated_at,
                     "user_name": "Anonymous" if fb.anonymous else full_name,
@@ -1194,41 +1201,42 @@ def get_event_feedback_report(request, event_id: int):
                 }
             )
 
-        # --- AI summary via n8n ---
+        # --- AI Summary via n8n (skip if no comments) ---
         ai_summary = ""
         try:
             from django.conf import settings
             import requests
 
             n8n_url = getattr(settings, "N8N_FEEDBACK_SUMMARY_URL", None)
-            if n8n_url and total > 0:
+
+            # Skip AI calls if no comments → save tokens!
+            if n8n_url and comments_exist:
                 payload = {
                     "event_title": event.event_title,
                     "feedback": [
                         {
                             "rating": fb.rating,
-                            "comment": fb.comment or ""
+                            "comment": fb.comment or "",
                         }
                         for fb in qs
                     ],
                 }
 
                 resp = requests.post(n8n_url, json=payload, timeout=20)
-
                 resp.raise_for_status()
+
                 data = resp.json()
+
+                # n8n usually returns dict or array with dict
                 if isinstance(data, dict):
                     ai_summary = (data.get("output") or "").strip()
                 elif isinstance(data, list) and data and isinstance(data[0], dict):
                     ai_summary = (data[0].get("output") or "").strip()
-                else:
-                    print("DEBUG N8N: unexpected JSON shape")
-                    ai_summary = ""
-        except Exception as e:
-            print("AI summary via n8n failed:", repr(e))
-            ai_summary = ""
 
-            
+        except Exception:
+            ai_summary = ""  # Fail silently but safely
+
+        # Final JSON response
         return 200, {
             "aggregates": {
                 "total": total,
@@ -1240,11 +1248,7 @@ def get_event_feedback_report(request, event_id: int):
             "feedback": feedback_list,
         }
 
-    except Exception as e:
-        import traceback
-        print("Error building feedback report:", e)
-        print(traceback.format_exc())
-        # Make sure frontend still gets JSON, not HTML
+    except Exception:
         return 400, {"error": "Failed to build feedback report"}
 
       
