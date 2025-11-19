@@ -502,6 +502,7 @@ class AdminEventSchema(Schema):
     event_description: str
     event_create_date: str
     organizer_name: str
+    organizer_username: str
     organizer_id: int
     status_registration: str
     verification_status: str

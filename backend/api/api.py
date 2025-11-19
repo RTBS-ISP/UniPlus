@@ -1936,6 +1936,7 @@ def get_admin_events(request):
                 "event_description": event.event_description,
                 "event_create_date": event.event_create_date.isoformat(),
                 "organizer_name": organizer_name,
+                "organizer_username": event.organizer.username,  
                 "organizer_id": event.organizer.id,
                 "status_registration": event.status_registration,
                 "verification_status": verification_status,

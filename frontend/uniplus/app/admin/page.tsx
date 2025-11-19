@@ -20,9 +20,10 @@ interface Event {
   event_description: string;
   event_create_date: string;
   organizer_name: string;
+  organizer_username: string; 
   organizer_id: number;
   status_registration: string;
-  verification_status: string; // This should be "approved", "rejected", or "pending"
+  verification_status: string; 
 }
 
 interface Statistics {
@@ -97,7 +98,7 @@ export default function AdminPage() {
         fetch("http://localhost:8000/api/admin/statistics", {
           credentials: "include",
         }),
-        fetch("http://localhost:8000/api/admin/events", { // Use the new admin events endpoint
+        fetch("http://localhost:8000/api/admin/events", {
           credentials: "include",
         })
       ]);
@@ -159,6 +160,7 @@ export default function AdminPage() {
         event.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         event.event_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         event.organizer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        event.organizer_username?.toLowerCase().includes(searchQuery.toLowerCase()) || 
         event.event_description?.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -315,17 +317,21 @@ export default function AdminPage() {
     }
   };
 
-  // Handle click on event name or organizer to navigate to profile
-  const handleNameClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent any parent click events
-    router.push("/profile/mock_url");
+  // Handle click on organizer to navigate to their profile
+  const handleOrganizerClick = (organizerUsername: string) => {
+    router.push(`/profile/${organizerUsername}`);
+  };
+
+  // Handle click on event name to navigate to event details (optional)
+  const handleEventNameClick = (eventId: number) => {
+    router.push(`/events/${eventId}`);
   };
 
   // Show access denied for non-admin users
   if (userRole && userRole !== "admin") {
     return (
       <div className="min-h-screen bg-indigo-100 flex items-center justify-center">
-        <Navbar /> {/* Add Navbar here too */}
+        <Navbar />
         <div className="text-center">
           <div className="text-2xl text-red-600 mb-4">Access Denied</div>
           <div className="text-gray-600 mb-4">{error}</div>
@@ -343,7 +349,7 @@ export default function AdminPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-indigo-100">
-        <Navbar /> {/* Add Navbar here too */}
+        <Navbar />
         <div className="flex items-center justify-center h-screen">
           <div className="text-2xl text-gray-600">Loading admin dashboard...</div>
         </div>
@@ -354,7 +360,7 @@ export default function AdminPage() {
   if (error && !allEvents.length) {
     return (
       <div className="min-h-screen bg-indigo-100">
-        <Navbar /> {/* Add Navbar here too */}
+        <Navbar />
         <div className="flex items-center justify-center h-screen">
           <div className="text-center">
             <div className="text-2xl text-red-600 mb-4">{error}</div>
@@ -372,7 +378,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-indigo-100">
-      <Navbar /> {/* Add Navbar at the top */}
+      <Navbar />
       
       <div className="max-w-7xl mx-auto px-8 py-8">
         <div className="flex flex-col items-start gap-y-4">
@@ -483,7 +489,7 @@ export default function AdminPage() {
                           <td className="px-6 py-4">
                             <div 
                               className="text-gray-800 font-medium hover:text-indigo-600 hover:underline cursor-pointer transition-colors"
-                              onClick={handleNameClick}
+                              onClick={() => handleEventNameClick(event.id)}
                             >
                               {event.title || event.event_title}
                             </div>
@@ -493,7 +499,7 @@ export default function AdminPage() {
                           <td className="px-6 py-4 text-gray-800 font-medium">
                             <div 
                               className="flex items-center gap-2 hover:text-indigo-600 hover:underline cursor-pointer transition-colors"
-                              onClick={handleNameClick}
+                              onClick={() => handleOrganizerClick(event.organizer_username)}
                             >
                               <User className="w-4 h-4 text-gray-400" />
                               {event.organizer_name}
@@ -546,7 +552,6 @@ export default function AdminPage() {
                                 </button>
                               </div>
                             ) : (
-                              // CHANGED: Show "—" instead of status badge for approved/rejected events
                               <div className="text-gray-400 text-lg font-medium">
                                 —
                               </div>
