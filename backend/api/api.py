@@ -1006,99 +1006,71 @@ def get_user_event_history(request):
         return 401, {"error": "Not authenticated"}
     
     try:
-        # Add filter for approval_status='approved'
         tickets = Ticket.objects.filter(
             attendee=request.user,
-            approval_status='approved'  
-        ).select_related('event').order_by('-purchase_date')
+            approval_status='approved'
+        ).select_related('event', 'event__organizer').order_by('-purchase_date')
         
         events_data = []
         for ticket in tickets:
-            event = ticket.event
+            event_obj = ticket.event
             
-            # Get first date from event_dates
-            event_date_str = event.event_start_date.isoformat() if event.event_start_date else None
+            if not event_obj:
+                continue
+            
+            # Parse event tags
+            event_tags = []
+            if event_obj.tags:
+                try:
+                    event_tags = json.loads(event_obj.tags) if isinstance(event_obj.tags, str) else event_obj.tags
+                except:
+                    event_tags = [event_obj.tags] if event_obj.tags else []
+            
+            # Get event date
+            event_date_str = None
             if ticket.event_dates and isinstance(ticket.event_dates, list) and len(ticket.event_dates) > 0:
-                event_date_str = ticket.event_dates[0].get('date', event_date_str)
+                event_date_str = ticket.event_dates[0].get('date')
+            elif event_obj.event_start_date:
+                event_date_str = event_obj.event_start_date.date().isoformat() if hasattr(event_obj.event_start_date, 'date') else event_obj.event_start_date.isoformat()
+            
+            # Determine status
+            status = "upcoming"
+            if event_obj.event_start_date:
+                status = "upcoming" if event_obj.event_start_date > timezone.now() else "past"
             
             events_data.append({
-                "event_id": event.id,
-                "event_title": event.event_title,
-                "event_description": event.event_description,
+                "ticket_id": ticket.id,
+                "event_id": event_obj.id,
+                "event_title": event_obj.event_title,
+                "event_description": event_obj.event_description,
                 "event_date": event_date_str,
-                "location": ticket.location,
-                "organizer": event.organizer.username,
-                "status": ticket.status,
+                "event_start_date": event_obj.event_start_date.isoformat() if event_obj.event_start_date else None,
+                "event_end_date": event_obj.event_end_date.isoformat() if event_obj.event_end_date else None,
+                "location": ticket.location or event_obj.event_address or ("Online" if event_obj.is_online else "TBA"),
+                "is_online": ticket.is_online if hasattr(ticket, 'is_online') else event_obj.is_online,
+                "meeting_link": ticket.meeting_link if hasattr(ticket, 'meeting_link') else event_obj.event_meeting_link,
+                "status": status,
                 "approval_status": ticket.approval_status,
-                "purchase_date": ticket.purchase_date.isoformat(),
-                "event_tags": event_tags, 
-                "organizer_role": request.user.role,
-                "is_online": event.is_online,
-                "location": event.event_address or ("Online" if event.is_online else "TBA"),
+                "organizer": event_obj.organizer.username if event_obj.organizer else "Unknown",
+                "organizer_role": event_obj.organizer.role if event_obj.organizer else "organizer",
+                "event_tags": event_tags,
+                "event_create_date": event_obj.event_create_date.isoformat() if event_obj.event_create_date else None,
+                "event_image": event_obj.event_image.url if event_obj.event_image else None,
+                "user_name": ticket.user_name,
+                "user_email": ticket.user_email,
+                "purchase_date": ticket.purchase_date.isoformat() if ticket.purchase_date else None,
                 "qr_code": ticket.qr_code,
-                "is_online": ticket.is_online,
-                "meeting_link": ticket.meeting_link,
             })
         
         return 200, {
             "events": events_data,
             "total_count": len(events_data)
         }
-    except Exception as e:
-        print(f"Error fetching event history: {e}")
-        tickets = (
-            Ticket.objects.filter(attendee=request.user)
-            .select_related("event", "event__organizer")
-            .order_by("-purchase_date")
-        )
-        events_data = []
-        for ticket in tickets:
-            event_obj = ticket.event
-            status = "upcoming" if (
-                (ticket.event_date or ticket.start_date or (event_obj and getattr(event_obj, "event_start_date", None)))
-                and (ticket.event_date or ticket.start_date or event_obj.event_start_date) > timezone.now()
-            ) else "past"
-
-            # Parse event tags
-            event_tags = []
-            if event_obj and event_obj.tags:
-                try:
-                    event_tags = json.loads(event_obj.tags) if isinstance(event_obj.tags, str) else event_obj.tags
-                except:
-                    event_tags = [event_obj.tags] if event_obj.tags else []
-
-            event_date_str = None
-            if ticket.event_date:
-                event_date_str = ticket.event_date.strftime("%Y-%m-%d")
-            elif ticket.start_date:
-                event_date_str = ticket.start_date.date().strftime("%Y-%m-%d") if hasattr(ticket.start_date, 'date') else ticket.start_date.strftime("%Y-%m-%d")
-            elif event_obj and event_obj.event_start_date:
-                event_date_str = event_obj.event_start_date.date().strftime("%Y-%m-%d") if hasattr(event_obj.event_start_date, 'date') else event_obj.event_start_date.strftime("%Y-%m-%d")
-
-            events_data.append({
-                "ticket_id": ticket.id,
-                "event_id": event_obj.id if event_obj else None,
-                "event_title": ticket.event_title,
-                "event_description": event_obj.event_description if event_obj else None,
-                "event_date": event_date_str,
-                "location": ticket.location,
-                "is_online": ticket.is_online,
-                "meeting_link": ticket.meeting_link,
-                "status": ticket.status,
-                "organizer": event_obj.organizer.username if event_obj and event_obj.organizer else None,
-                "organizer_role": event_obj.organizer.role if event_obj and event_obj.organizer else "organizer",
-                "event_tags": event_tags,
-                "user_name": ticket.user_name,
-                "user_email": ticket.user_email,
-                "purchase_date": ticket.purchase_date.isoformat() if ticket.purchase_date else None,
-                "qr_code": ticket.qr_code,
-            })
-        return 200, {
-            "events": events_data,
-            "total_count": len(events_data),
-        }
+        
     except Exception as e:
         print("Error fetching event history:")
+        print(str(e))
+        import traceback
         traceback.print_exc()
         return 400, {"error": str(e)}
 
