@@ -62,7 +62,18 @@ export function AttendeeTable({
                   </td>
                 )}
 
-                <td className="px-6 py-4 text-gray-800 font-medium">{a.ticketId}</td>
+                {/* ✅ Display the friendly ticket ID, but use real ticketId for functionality */}
+                <td className="px-6 py-4 text-gray-800 font-medium group relative">
+                  <span>{a.displayTicketId || a.ticketId}</span>
+                  
+                  {/* Tooltip showing full QR code on hover */}
+                  {a.displayTicketId && (
+                    <div className="hidden group-hover:block absolute z-10 bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap shadow-lg">
+                      Full QR: {a.ticketId}
+                      <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                  )}
+                </td>
                 <td className="px-6 py-4 text-gray-800 font-medium">{a.name}</td>
                 <td className="px-6 py-4 text-gray-800">{a.email}</td>
 
