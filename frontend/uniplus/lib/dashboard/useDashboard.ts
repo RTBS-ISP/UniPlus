@@ -11,6 +11,7 @@ import type {
 } from "@/lib/dashboard/types";
 import { approveRejectOne, bulkApproval, checkInOne, fetchDashboard } from "@/lib/dashboard/api";
 import { useAlert } from "@/app/components/ui/AlertProvider";
+import { s } from "framer-motion/client";
 
 type State = {
   loading: boolean;
@@ -252,49 +253,85 @@ export function useDashboard(eventId: string | undefined) {
       return;
     }
 
-    const a = state.attendees.find((x) => x.ticketId === trimmed);
-    if (!a) {
-      alert({ text: `Ticket ${trimmed} not found for this event.`, variant: "warning" });
+    const a = state.attendees.find((x) => x.ticketId === trimmed || x.ticketId?.toLowerCase() === trimmed.toLowerCase());
+    if (a && a.approvalStatus !== "approved") {
+      alert({ text: `Ticket ${trimmed} is ${a.approvalStatus} — only approved ticktes can be checked in.`, variant: "warning" });
       return;
     }
-    if (a.approvalStatus !== "approved") {
-      alert({ text: `Ticket ${trimmed} isn’t approved — cannot check in.`, variant: "warning" });
-      return;
+    
+    setState((s) => ({ ...s, loading: true })); 
+    if (a) {
+      // Optimistically update with object format
+      const now = new Date().toISOString();
+      setState((s) => ({
+        ...s,
+        attendees: s.attendees.map((attendee) =>
+          attendee.ticketId === trimmed
+            ? {
+                ...attendee,
+                checkedIn: now,
+                checkedInDates: {
+                  ...(attendee.checkedInDates || {}),
+                  [s.selectedDate]: now, 
+                },
+              }
+            : attendee
+        ),
+      }));
     }
-
-    // Optimistically update with object format
-    const now = new Date().toISOString();
-    setState((s) => ({
-      ...s,
-      attendees: s.attendees.map((attendee) =>
-        attendee.ticketId === trimmed
-          ? {
-              ...attendee,
-              checkedIn: now,
-              checkedInDates: {
-                ...(attendee.checkedInDates || {}),
-                [s.selectedDate]: now, 
-              },
-            }
-          : attendee
-      ),
-    }));
-
+    
     try {
       const res = await checkInOne(String(state.event.id), trimmed, state.selectedDate);
-      const msg = (res as any)?.message || `Checked in ${trimmed} for ${state.selectedDate}.`;
+      const message = res.message || `Checked in for ${state.selectedDate}.`;
+      const success = res.success;
+      const alreadyCheckedIn = (res as any).already_checked_in || message.toLowerCase().includes("already");
+      const attendeeName = (res as any).attendee_name || a?.name || "Attendee";
 
-      // if backend says "already checked in", treat as info instead of success
-      if (msg.toLowerCase().includes("already")) {
-        alert({ text: msg, variant: "info" });
+      if (success) {
+        if (alreadyCheckedIn) {
+          alert({ text: `${attendeeName} was already checked in for ${state.selectedDate}.`, variant: "info" });
+        } else {
+          alert({ text: `${attendeeName} checked in successfully for ${state.selectedDate}.`, variant: "success" });
+        }
+        
+        // Reload to get data from backend
+        await load();
       } else {
-        alert({ text: msg, variant: "success" });
+        alert({ text: message, variant: "warning" });
+        await load();
+      }
+    } catch (err: any) {
+      console.error('Check-in error:', err);
+
+      let errorMessage = "Check-in failed.";
+      if (err?.message) {
+        errorMessage = err.message;
+      } else if (err?.detail) {
+        errorMessage = err.detail;
       }
 
-    } catch (err: any) {
-      alert({ text: err?.message || "Check-in failed.", variant: "error" });
-      // Reload on error to revert optimistic update
-      await load();
+      if (errorMessage.includes("not found")) {
+        alert({ 
+          text: `Ticket ${trimmed} not found for this event.`, 
+          variant: "error" 
+        });
+      } else if (errorMessage.includes("not authorized")) {
+        alert({ 
+          text: "You don't have permission to check in attendees for this event.", 
+          variant: "error" 
+        });
+      } else if (errorMessage.includes("not valid for the selected date")) {
+        alert({ 
+          text: `This ticket is not valid for ${state.selectedDate}.`, 
+          variant: "error" 
+        });
+      } else {
+        alert({ text: errorMessage, variant: "error" });
+      }
+
+      await load(); // rollback optimistic update
+    } finally {
+      setState((s) => ({ ...s, loading: false }));
     }
   };
 
