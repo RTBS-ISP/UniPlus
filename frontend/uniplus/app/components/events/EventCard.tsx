@@ -153,10 +153,12 @@ export default function EventCard({
   item,
   index = 0,
   stagger = 0.06,
+  showStatus = false,
 }: {
   item: EventItem;
   index?: number;
   stagger?: number;
+  showStatus?: boolean;
 }) {
   const shouldReduce = useReducedMotion();
   const hostBadge = item.host?.[0] ?? "Organizer";
@@ -207,12 +209,13 @@ export default function EventCard({
       whileHover={cardHover}
       transition={transition}
       className={`group rounded-2xl border bg-white p-5 shadow-sm hover:shadow-lg
-                  border-l-4 ${border}`}
+                  [backface-visibility:hidden] [transform-style:preserve-3d]
+                  ${showStatus ? `border-l-4 ${border}` : 'border border-[#6CA8FF]'}`}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3 mb-1">
-          {pill && (
+          {showStatus && pill && (
             <StatusPill
               text={pill.text}
               bg={pill.bg}
