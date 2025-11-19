@@ -2,7 +2,7 @@
 
 import { Star, User, FileDown, MessageCircle } from "lucide-react";
 import type { EventFeedback } from "./FeedbackPanel";
-import { useAlert } from "@/app/components/ui/AlertProvider"; // ⬅️ add this
+import { useAlert } from "@/app/components/ui/AlertProvider";
 
 type Props = {
   feedbacks: EventFeedback[];
@@ -17,7 +17,7 @@ export function FeedbackSummarySidebar({
   aiSummary,
   aiSummaryLoading,
 }: Props) {
-  const showAlert = useAlert(); // ⬅️ get alert function
+  const showAlert = useAlert();
 
   const total = feedbacks.length;
   const avg =
@@ -35,6 +35,8 @@ export function FeedbackSummarySidebar({
   const commentsWithText = feedbacks.filter(
     (f) => f.comment && f.comment.trim().length > 0
   );
+
+  const hasComments = commentsWithText.length > 0;
 
   const topComments = commentsWithText
     .slice()
@@ -131,14 +133,15 @@ export function FeedbackSummarySidebar({
           <MessageCircle className="w-3 h-3" />
           Summary note
         </p>
+
         <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
-          {total === 0
-            ? "No feedback yet. Once attendees respond, you can export a short report for your documentation."
+          {!hasComments
+            ? "No written feedback yet. Once attendees leave comments, an AI summary will appear here."
             : aiSummaryLoading
             ? "Generating AI summary from attendee feedback..."
             : hasAISummary
             ? aiSummary
-            : "Exceeded summary AI limit."}
+            : "AI summary unavailable."}
         </p>
       </div>
 
