@@ -291,6 +291,7 @@ class UserEventSchema(Schema):
 class AttendeeSchema(Schema):
     """Attendee information for organizer dashboard"""
     ticketId: str
+    displayTicketId: Optional[str] = None
     name: str
     email: str
     status: str  # 'present', 'pending', 'absent'

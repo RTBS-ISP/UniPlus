@@ -1208,7 +1208,8 @@ def get_event_dashboard(request, event_id: int):
                         checked_in_dates_dict[date_str[:10]] = ticket.checked_in_at.isoformat() if ticket.checked_in_at else timezone.now().isoformat()
             
             attendees.append({
-                "ticketId": ticket.ticket_number or ticket.qr_code,
+                "ticketId": ticket.qr_code,
+                "displayTicketId": ticket.ticket_number or f"T{ticket.id}",
                 "name": f"{user.first_name} {user.last_name}",
                 "email": user.email,
                 "status": status,
@@ -1605,7 +1606,11 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
         # Normalise ticket.event_dates into 'YYYY-MM-DD' strings
         valid_dates: list[str] = []
         for d in ticket.event_dates or []:
-            if isinstance(d, str):
+            if isinstance(d, dict):
+                date_val = d.get('date')
+                if date_val and len(str(date_val)) >= 10:
+                    valid_dates.append(str(date_val)[:10])
+            elif isinstance(d, str):
                 try:
                     dt = datetime.fromisoformat(d)
                     valid_dates.append(dt.date().isoformat())
