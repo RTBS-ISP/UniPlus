@@ -255,7 +255,7 @@ export function useDashboard(eventId: string | undefined) {
 
     const a = state.attendees.find((x) => x.ticketId === trimmed || x.ticketId?.toLowerCase() === trimmed.toLowerCase());
     if (a && a.approvalStatus !== "approved") {
-      alert({ text: `Ticket ${trimmed} is ${a.approvalStatus} — only approved ticktes can be checked in.`, variant: "warning" });
+      alert({ text: `Ticket ${trimmed} is ${a.approvalStatus} — only approved tickets can be checked in.`, variant: "warning" });
       return;
     }
     
@@ -304,7 +304,13 @@ export function useDashboard(eventId: string | undefined) {
 
       if (errorMessage.toLowerCase().includes("not found")) {
         alert({ 
-          text: `Ticket ${trimmed} not found for this event.`, 
+          text: `Ticket ${trimmed} not found in the system.`, 
+          variant: "error" 
+        });
+      } else if (errorMessage.toLowerCase().includes("not the current event") || errorMessage.toLowerCase().includes("is for '")) {
+        // Ticket belongs to a different event
+        alert({ 
+          text: errorMessage, 
           variant: "error" 
         });
       } else if (errorMessage.toLowerCase().includes("not authorized") || errorMessage.toLowerCase().includes("permission")) {
@@ -312,10 +318,17 @@ export function useDashboard(eventId: string | undefined) {
           text: "You don't have permission to check in attendees for this event.", 
           variant: "error" 
         });
-      } else if (errorMessage.toLowerCase().includes("not valid for") || errorMessage.toLowerCase().includes("valid dates")) {
+      } else if (errorMessage.toLowerCase().includes("not valid for") && errorMessage.toLowerCase().includes("valid dates")) {
+        // Ticket not valid for selected date
         alert({ 
           text: errorMessage, 
           variant: "error" 
+        });
+      } else if (errorMessage.toLowerCase().includes("pending") || errorMessage.toLowerCase().includes("rejected")) {
+        // Ticket not approved
+        alert({ 
+          text: errorMessage, 
+          variant: "warning" 
         });
       } else {
         alert({ text: errorMessage, variant: "error" });
