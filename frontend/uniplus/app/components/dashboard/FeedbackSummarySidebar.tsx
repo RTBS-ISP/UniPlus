@@ -138,7 +138,7 @@ export function FeedbackSummarySidebar({
             ? "Generating AI summary from attendee feedback..."
             : hasAISummary
             ? aiSummary
-            : "Attendees generally rated this event positively. Use this summary and the highlighted comments directly in your event report."}
+            : "Exceeded summary AI limit."}
         </p>
       </div>
 
