@@ -552,3 +552,37 @@ class NotificationMarkReadIn(Schema):
 
 class NotificationBulkMarkReadIn(Schema):
     notification_ids: list[int]
+
+
+class PublicProfileSchema(Schema):
+    username: str
+    first_name: str
+    last_name: str
+    role: str
+    phone_number: Optional[str] = None
+    about_me: Optional[dict] = None
+    profile_pic: str
+    events_organized: int
+    total_attendees: int
+    user_total_events: int
+    avg_rating: Optional[float] = None
+
+class PublicEventSchema(Schema):
+    id: int
+    event_title: str
+    event_description: str
+    event_start_date: str = None
+    event_image: str = None
+    is_online: bool
+    location: str
+    tags: list = []
+    max_attendee: int = None
+    current_attendees: int = 0
+
+class UserByEmailSchema(Schema):
+    """Schema for user information by email"""
+    username: str
+    email: str
+    first_name: str
+    last_name: str
+    role: str
