@@ -7,7 +7,7 @@ import EditPopup from "../components/profile/EditPopup";
 import Tabs from '../components/profile/Tabs';
 import EventCard from "../components/events/EventCard";
 import { useUser } from "../context/UserContext"; 
-import { Calendar, Zap } from 'lucide-react';
+import { Calendar, Copy } from 'lucide-react';
 
 interface EventData {
   event_id?: number;
@@ -50,7 +50,6 @@ function transformEventToItem(event: any, index: number) {
   
   let eventTags: string[] = [];
   
-  // Try event_tags first (from event-history API)
   if (event.event_tags) {
     if (Array.isArray(event.event_tags)) {
       eventTags = event.event_tags;
@@ -64,7 +63,6 @@ function transformEventToItem(event: any, index: number) {
     }
   }
   
-  // Also check for 'tags' field as fallback (used in EventsPage)
   if (eventTags.length === 0 && event.tags) {
     if (Array.isArray(event.tags)) {
       eventTags = event.tags;
@@ -78,19 +76,14 @@ function transformEventToItem(event: any, index: number) {
     }
   }
   
-  console.log('Event tags for', event.event_title, ':', eventTags); // Debug log
-  
-  // Extract category from tags (first tag is usually the category)
   const category = eventTags.length > 0 ? eventTags[0] : undefined;
   
-  // Create excerpt from event description
   const excerpt = event.event_description 
     ? (event.event_description.length > 150 
         ? event.event_description.substring(0, 150) + '...' 
         : event.event_description)
     : 'No description available';
 
-  // Handle location
   const location = event.is_online 
     ? 'Online Event' 
     : (event.location || event.event_address || 'TBA');
@@ -120,6 +113,7 @@ function ProfilePage() {
   const [loadingStats, setLoadingStats] = useState(false);
   const [createdEvents, setCreatedEvents] = useState<EventData[]>([]);
   const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
+  const [duplicating, setDuplicating] = useState<number | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -192,6 +186,44 @@ function ProfilePage() {
     }
   };
 
+  const handleDuplicate = async (eventId: number) => {
+    try {
+      setDuplicating(eventId);
+      
+      // Get CSRF token
+      const csrfResponse = await fetch("http://localhost:8000/api/set-csrf-token", {
+        credentials: "include",
+      });
+      const csrfData = await csrfResponse.json();
+      
+      // Duplicate the event
+      const response = await fetch(`http://localhost:8000/api/events/${eventId}/duplicate`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfData.csrftoken,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to duplicate event");
+      }
+
+      const result = await response.json();
+      
+      // Redirect to create page with duplicate parameter
+      router.push(`/events/create?duplicate=${result.event_id}`);
+      
+    } catch (err: any) {
+      console.error("Error duplicating event:", err);
+      alert(`❌ Failed to duplicate event: ${err.message}`);
+    } finally {
+      setDuplicating(null);
+    }
+  };
+
   function getCookie(name: string): string | undefined {
     if (typeof document === "undefined") return undefined;
     const value = `; ${document.cookie}`;
@@ -230,12 +262,10 @@ function ProfilePage() {
 
   if (!user) return <p>Loading.....</p>
 
-  // Transform event history to EventCard format
   const eventItems = eventHistory.map((event, idx) => 
     transformEventToItem(event, idx)
   );
 
-  // Sort events: upcoming first, then past
   const sortedEventItems = [...eventItems].sort((a, b) => {
     const aDate = a.date ? new Date(a.date).getTime() : 0;
     const bDate = b.date ? new Date(b.date).getTime() : 0;
@@ -268,8 +298,7 @@ function ProfilePage() {
     return bDate - aDate;
   });
 
-
-    const items = [
+  const items = [
     {
       title: "Event History",
       content: (
@@ -288,7 +317,6 @@ function ProfilePage() {
             </div>
           ) : (
             <div className="flex gap-6">
-              {/* Left Sidebar */}
               <div className="w-72 flex-shrink-0">
                 <div className="bg-white rounded-xl p-6 shadow-sm sticky top-6">
                   <h3 className="font-bold text-lg text-gray-800 mb-4">
@@ -363,7 +391,6 @@ function ProfilePage() {
                 </div>
               </div>
 
-              {/* Event Cards */}
               <div className="flex-1 space-y-4">
                 {filteredEvents.map((eventItem, idx) => (
                   <EventCard 
@@ -397,7 +424,6 @@ function ProfilePage() {
             </div>
           ) : (
             <div className="flex gap-6">
-              {/* Left Sidebar */}
               <div className="w-72 flex-shrink-0">
                 <div className="bg-white rounded-xl p-6 shadow-sm sticky top-6">
                   <h3 className="font-bold text-lg text-gray-800 mb-4">
@@ -436,16 +462,30 @@ function ProfilePage() {
                     <h4 className="font-semibold text-medium text-gray-700 mb-3">
                       Quick Actions
                     </h4>
-                    <div className="flex w-full space-y-2">
-                      <a href="/events/create" className="w-full text-left px-3 py-2 rounded-lg text-sm bg-indigo-500 hover:bg-indigo-600 text-white transition-colors font-medium">
+                    <div className="flex flex-col w-full space-y-2">
+                      <a 
+                        href="/events/create" 
+                        className="w-full text-center px-3 py-2 rounded-lg text-sm bg-indigo-500 hover:bg-indigo-600 text-white transition-colors font-medium"
+                      >
                         Create New Event
                       </a>
+                      
+                      {/* Duplicate from last event */}
+                      {sortedCreatedEventItems.length > 0 && (
+                        <button
+                          onClick={() => handleDuplicate(sortedCreatedEventItems[0].id)}
+                          disabled={duplicating !== null}
+                          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Copy size={16} />
+                          {duplicating !== null ? "Duplicating..." : "Duplicate Last Event"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Event Cards */}
               <div className="flex-1 space-y-4">
                 {sortedCreatedEventItems.map((eventItem, idx) => (
                   <EventCard
@@ -484,7 +524,6 @@ function ProfilePage() {
         <div className="flex flex-col w-full px-20 py-10 mb-3">
           <div className="flex justify-between p-6">
             <div className="flex flex-row gap-x-6 items-stretch">
-              {/* Profile Picture */}
               <div className="w-64 h-64 overflow-hidden rounded-xl">
                 <img
                   src={
@@ -497,7 +536,6 @@ function ProfilePage() {
                 />
               </div>
 
-              {/* Info */}
               <div className="flex flex-col justify-between h-64">
                 <div>
                   <div className="text-gray-800 font-extrabold text-5xl">
@@ -527,7 +565,6 @@ function ProfilePage() {
                     </div>
                   )}
 
-                  {/* Role-Specific Info */}
                   {user.role === "student" && user.aboutMe && (
                     <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
                       <div className="font-medium">Faculty: {user.aboutMe.faculty}</div>
@@ -564,7 +601,6 @@ function ProfilePage() {
           </div>
         </div>
 
-        {/* Event History & Stats */}
         <div className="flex flex-col w-full px-20">
           <Tabs items={items} />
         </div>

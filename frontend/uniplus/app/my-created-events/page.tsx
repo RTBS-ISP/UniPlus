@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../components/navbar";
-import { Calendar, Users, TrendingUp, Eye } from "lucide-react";
+import { Calendar, Users, TrendingUp, Eye, Copy } from "lucide-react";
 
 interface CreatedEvent {
   id: number;
@@ -24,6 +24,7 @@ export default function MyCreatedEventsPage() {
   const [events, setEvents] = useState<CreatedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [duplicating, setDuplicating] = useState<number | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -52,6 +53,47 @@ export default function MyCreatedEventsPage() {
       setError(err.message || "Failed to load events");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDuplicate = async (eventId: number) => {
+    try {
+      setDuplicating(eventId);
+      
+      // Get CSRF token
+      const csrfResponse = await fetch("http://localhost:8000/api/set-csrf-token", {
+        credentials: "include",
+      });
+      const csrfData = await csrfResponse.json();
+      
+      // Duplicate the event
+      const response = await fetch(`http://localhost:8000/api/events/${eventId}/duplicate`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfData.csrftoken,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to duplicate event");
+      }
+
+      const result = await response.json();
+      
+      // Show success message
+      alert(`✅ ${result.message}\n\nThe duplicated event is pending admin approval.`);
+      
+      // Refresh the events list
+      fetchCreatedEvents();
+      
+    } catch (err: any) {
+      console.error("Error duplicating event:", err);
+      alert(`❌ Failed to duplicate event: ${err.message}`);
+    } finally {
+      setDuplicating(null);
     }
   };
 
@@ -166,7 +208,7 @@ export default function MyCreatedEventsPage() {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mb-2">
                       <button
                         onClick={() => router.push(`/events/${event.id}`)}
                         className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition"
@@ -182,6 +224,16 @@ export default function MyCreatedEventsPage() {
                         Dashboard
                       </button>
                     </div>
+
+                    {/* Duplicate Button */}
+                    <button
+                      onClick={() => handleDuplicate(event.id)}
+                      disabled={duplicating === event.id}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 font-medium rounded-lg hover:bg-purple-200 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Copy size={16} />
+                      {duplicating === event.id ? "Duplicating..." : "Duplicate Event"}
+                    </button>
                   </div>
 
                   {/* Footer with creation date */}

@@ -11,8 +11,12 @@ class Notification(models.Model):
         ('rejection', 'Ticket Rejected'),
         ('reminder_24h', '24 Hour Reminder'),
         ('reminder_1h', '1 Hour Reminder'),
+        ('event_reminder', 'Event Reminder'),  
         ('event_update', 'Event Update'),
         ('check_in', 'Check-in Confirmation'),
+        ('event_pending_approval', 'Event Pending Approval'),  
+        ('event_approved', 'Event Approved'),  
+        ('event_rejected', 'Event Rejected'),  
     ]
 
     user = models.ForeignKey(
@@ -108,24 +112,36 @@ def send_rejection_notification(ticket: Ticket, reason: str = ""):
         related_event=ticket.event
     )
 
-def send_reminder_notification(ticket: Ticket, hours_until: int):
+def send_reminder_notification(ticket: Ticket, hours_until: float):
     """Send reminder notification before event starts"""
-    if hours_until == 24:
-        message = f"Reminder: '{ticket.event.event_title}' starts in 24 hours!"
-        notif_type = 'reminder_24h'
-    elif hours_until == 1:
-        message = f"Reminder: '{ticket.event.event_title}' starts in 1 hour!"
+    event = ticket.event
+    
+    # Format the time message based on hours
+    if hours_until < 1:
+        time_msg = f"{int(hours_until * 60)} minutes"
         notif_type = 'reminder_1h'
-    else:
-        message = f"Reminder: '{ticket.event.event_title}' is coming up soon!"
+    elif hours_until < 2:
+        time_msg = "1 hour"
+        notif_type = 'reminder_1h'
+    elif hours_until < 24:
+        time_msg = f"{int(hours_until)} hours"
         notif_type = 'reminder_24h'
+    elif hours_until < 48:
+        time_msg = "tomorrow"
+        notif_type = 'reminder_24h'
+    else:
+        days = int(hours_until / 24)
+        time_msg = f"{days} days"
+        notif_type = 'reminder_24h'
+    
+    message = f"Reminder: '{event.event_title}' starts in {time_msg}!"
     
     create_notification(
         user=ticket.attendee,
         message=message,
         notification_type=notif_type,
         related_ticket=ticket,
-        related_event=ticket.event
+        related_event=event
     )
 
 def send_checkin_notification(ticket: Ticket):

@@ -60,9 +60,9 @@ def convert_to_bangkok_time(dt):
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
-api = NinjaAPI(csrf=True)
+api = NinjaAPI()
 
-@api.get("/", response=schemas.MessageSchema)
+@api.get("/")
 def home(request):
     return {"message": "Welcome to UniPlus API"}
 
@@ -999,15 +999,17 @@ def get_event_comments(request, event_id: int):
         print(f"Traceback: {traceback.format_exc()}")
         return {"error": str(e)}
       
-@api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+@api.get("/user/event-history", auth=django_auth)
 def get_user_event_history(request):
-    """Get user's registered events and attendance history"""
+    """Get user's registered events - APPROVED ONLY"""
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     
     try:
+        # Add filter for approval_status='approved'
         tickets = Ticket.objects.filter(
-            attendee=request.user
+            attendee=request.user,
+            approval_status='approved'  
         ).select_related('event').order_by('-purchase_date')
         
         events_data = []
@@ -1300,16 +1302,22 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
         if tickets.count() == 0:
             return 400, {"error": "No tickets found"}
         
-        # Update status and send notifications for each ticket
+        # Process each ticket individually
         new_status = 'approved' if payload.action == 'approve' else 'rejected'
-        
-        if new_status == 'approved':
-            updated_count = tickets.update(approval_status='approved', approved_at=timezone.now())
-        else:
-            updated_count = tickets.update(approval_status='rejected', rejected_at=timezone.now())
+        updated_count = 0
         
         for ticket in tickets:
+            # ✅ Handle rejection: ALWAYS remove from attendee list
+            if new_status == 'rejected':
+                if ticket.attendee.id in event.attendee:
+                    event.attendee.remove(ticket.attendee.id)
+            
+            # Update ticket status
             ticket.approval_status = new_status
+            if new_status == 'approved':
+                ticket.approved_at = timezone.now()
+            else:
+                ticket.rejected_at = timezone.now()
             ticket.save()
             
             # 🔔 Send notification
@@ -1319,6 +1327,9 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
                 send_rejection_notification(ticket)
             
             updated_count += 1
+        
+        # ✅ Save event once after all modifications
+        event.save()
 
         # Return response
         return 200, {
@@ -1392,12 +1403,19 @@ def reject_registration(request, event_id: int, ticket_id: str):
         except Ticket.DoesNotExist:
             ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
+        # ✅ ALWAYS remove from attendee list when rejecting (regardless of previous status)
+        if ticket.attendee.id in event.attendee:
+            event.attendee.remove(ticket.attendee.id)
+            event.save()
+        
+        # Update ticket status
         ticket.approval_status = 'rejected'
+        ticket.rejected_at = timezone.now()
         ticket.save()
         
-        # 🔔 Send notification
+        # Send notification
         send_rejection_notification(ticket)
-        
+            
         return 200, {
             "success": True,
             "message": "Registration rejected",
@@ -2058,3 +2076,172 @@ def clear_all_notifications(request):
     count = Notification.objects.filter(user=user).count()
     Notification.objects.filter(user=user).delete()
     return {"success": True, "message": f"{count} notifications cleared"}
+
+@api.post("/admin/send-reminders", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema})
+def send_event_reminders_endpoint(request, hours: int = 24):
+    """
+    Send reminder notifications for upcoming events
+    Can be called manually or via a simple cron job
+    
+    Usage: POST /api/admin/send-reminders?hours=24
+    """
+    try:
+        # Security: Only admins or organizers can trigger reminders
+        if request.user.role not in ['admin', 'organizer']:
+            return 403, {"error": "Admin or organizer privileges required"}
+        
+        now = timezone.now()
+        reminder_window = now + timezone.timedelta(hours=hours)
+        
+        # Find events starting soon
+        upcoming_events = Event.objects.filter(
+            event_start_date__gte=now,
+            event_start_date__lte=reminder_window,
+            verification_status='approved'
+        ).select_related('organizer')
+        
+        if not upcoming_events.exists():
+            return 200, {
+                "success": True,
+                "message": f"No events found starting within {hours} hours",
+                "events_checked": 0,
+                "notifications_sent": 0,
+                "reminders": []
+            }
+        
+        total_notifications = 0
+        reminders_sent = []
+        
+        for event in upcoming_events:
+            hours_until = (event.event_start_date - now).total_seconds() / 3600
+            
+            # Get approved tickets for this event
+            approved_tickets = Ticket.objects.filter(
+                event=event,
+                approval_status='approved'
+            ).select_related('attendee')
+            
+            if not approved_tickets.exists():
+                continue
+            
+            # Check if we already sent reminders recently
+            event_reminders_sent = 0
+            
+            for ticket in approved_tickets:
+                # Check if reminder was already sent in last 12 hours
+                already_sent = Notification.objects.filter(
+                    user=ticket.attendee,
+                    related_event=event,
+                    notification_type__in=['event_reminder', 'reminder_24h', 'reminder_1h'],
+                    created_at__gte=now - timezone.timedelta(hours=12)
+                ).exists()
+                
+                if not already_sent:
+                    try:
+                        send_reminder_notification(ticket, hours_until)
+                        event_reminders_sent += 1
+                        total_notifications += 1
+                    except Exception as e:
+                        print(f"Failed to send reminder to {ticket.attendee.email}: {e}")
+            
+            if event_reminders_sent > 0:
+                reminders_sent.append({
+                    "event_id": event.id,
+                    "event_title": event.event_title,
+                    "starts_in_hours": round(hours_until, 1),
+                    "reminders_sent": event_reminders_sent
+                })
+        
+        return 200, {
+            "success": True,
+            "message": f"Sent {total_notifications} reminder(s) for {len(reminders_sent)} event(s)",
+            "events_checked": upcoming_events.count(),
+            "notifications_sent": total_notifications,
+            "reminders": reminders_sent
+        }
+        
+    except Exception as e:
+        print(f"Error sending reminders: {e}")
+        import traceback
+        traceback.print_exc()
+        return 400, {"error": str(e)}
+
+
+@api.get("/admin/send-reminders", auth=django_auth, response={200: dict, 403: schemas.ErrorSchema})
+def send_event_reminders_get(request, hours: int = 24):
+    """
+    GET version for easy browser/curl testing
+    Just visit: http://localhost:8000/api/admin/send-reminders?hours=24
+    """
+    # Call the POST version
+    return send_event_reminders_endpoint(request, hours)
+
+@api.post("/events/{event_id}/duplicate", auth=django_auth, response={200: schemas.SuccessSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def duplicate_event(request, event_id: int):
+    """
+    Duplicate an existing event
+    Creates a copy of the event with all settings but without attendees
+    """
+    try:
+        # Get the original event
+        original_event = get_object_or_404(Event, id=event_id)
+        
+        # Security check: Only the organizer can duplicate their own events
+        if original_event.organizer != request.user:
+            return 403, {"error": "You can only duplicate your own events"}
+        
+        # Get original schedule
+        original_schedules = EventSchedule.objects.filter(event=original_event).order_by('event_date', 'start_time_event')
+        
+        # Create the duplicate event
+        duplicate = Event.objects.create(
+            organizer=request.user,
+            event_title=f"{original_event.event_title} (Copy)",
+            event_description=original_event.event_description,
+            start_date_register=timezone.now(),  # Reset to now
+            end_date_register=original_event.end_date_register,
+            event_start_date=original_event.event_start_date,
+            event_end_date=original_event.event_end_date,
+            max_attendee=original_event.max_attendee,
+            event_address=original_event.event_address,
+            is_online=original_event.is_online,
+            event_meeting_link=original_event.event_meeting_link,
+            tags=original_event.tags,
+            event_email=original_event.event_email,
+            event_phone_number=original_event.event_phone_number,
+            event_website_url=original_event.event_website_url,
+            terms_and_conditions=original_event.terms_and_conditions,
+            event_image=original_event.event_image,  # Reference same image
+            verification_status=None,  # Reset verification (needs re-approval)
+            attendee=[],  # Empty attendee list
+            schedule=original_event.schedule,  # Copy schedule JSON
+        )
+        
+        # Duplicate EventSchedule entries
+        schedule_count = 0
+        for original_schedule in original_schedules:
+            EventSchedule.objects.create(
+                event=duplicate,
+                event_date=original_schedule.event_date,
+                start_time_event=original_schedule.start_time_event,
+                end_time_event=original_schedule.end_time_event
+            )
+            schedule_count += 1
+        
+        # Notify admins about new event
+        send_event_creation_notification_to_admins(duplicate)
+        
+        return 200, {
+            "success": True,
+            "message": f"Event duplicated successfully as '{duplicate.event_title}'",
+            "event_id": duplicate.id,
+            "original_id": original_event.id,
+            "schedule_count": schedule_count,
+            "verification_status": "pending"
+        }
+        
+    except Exception as e:
+        print(f"Error duplicating event: {e}")
+        import traceback
+        traceback.print_exc()
+        return 400, {"error": str(e)}
