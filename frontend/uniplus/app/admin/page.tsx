@@ -315,9 +315,10 @@ export default function AdminPage() {
     }
   };
 
-  // Handle row click to redirect to event details
-  const handleRowClick = (eventId: number) => {
-    router.push(`/events/${eventId}`);
+  // Handle click on event name or organizer to navigate to profile
+  const handleNameClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent any parent click events
+    router.push("/profile/mock_url");
   };
 
   // Show access denied for non-admin users
@@ -469,8 +470,7 @@ export default function AdminPage() {
                       return (
                         <tr 
                           key={event.id} 
-                          className="border-b border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
-                          onClick={() => handleRowClick(event.id)}
+                          className="border-b border-gray-200 hover:bg-gray-50 transition-colors"
                         >
                           {/* EVENT ID */}
                           <td className="px-6 py-4">
@@ -479,16 +479,22 @@ export default function AdminPage() {
                             </div>
                           </td>
                           
-                          {/* EVENT NAME */}
+                          {/* EVENT NAME - Clickable */}
                           <td className="px-6 py-4">
-                            <div className="text-gray-800 font-medium">
+                            <div 
+                              className="text-gray-800 font-medium hover:text-indigo-600 hover:underline cursor-pointer transition-colors"
+                              onClick={handleNameClick}
+                            >
                               {event.title || event.event_title}
                             </div>
                           </td>
                           
-                          {/* ORGANIZER */}
+                          {/* ORGANIZER - Clickable */}
                           <td className="px-6 py-4 text-gray-800 font-medium">
-                            <div className="flex items-center gap-2">
+                            <div 
+                              className="flex items-center gap-2 hover:text-indigo-600 hover:underline cursor-pointer transition-colors"
+                              onClick={handleNameClick}
+                            >
                               <User className="w-4 h-4 text-gray-400" />
                               {event.organizer_name}
                             </div>
@@ -519,10 +525,7 @@ export default function AdminPage() {
                           </td>
                           
                           {/* APPROVAL */}
-                          <td 
-                            className="px-6 py-4 text-center"
-                            onClick={(e) => e.stopPropagation()} // Prevent row click when clicking buttons
-                          >
+                          <td className="px-6 py-4 text-center">
                             {(event.verification_status !== "approved" && event.verification_status !== "rejected") ? (
                               <div className="flex justify-center gap-2">
                                 <button

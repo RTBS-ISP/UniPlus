@@ -1755,8 +1755,7 @@ def get_user_created_events(request):
 
 # exported into csv
 
-
-@api.post("/events/{event_id}/export", auth=django_auth)
+@api.get("/events/{event_id}/export", auth=django_auth)  # Changed to .get
 def export_event_registrations(request, event_id: int):
     try:
         event = get_object_or_404(Event, id=event_id)
@@ -1778,7 +1777,6 @@ def export_event_registrations(request, event_id: int):
         
         writer = csv.writer(response)
         
-        # Enhanced headers
         writer.writerow([
             'Ticket ID', 'Attendee Name', 'Attendee Email', 
             'Phone', 'Registration Date', 'Status', 'QR Code'
@@ -1796,7 +1794,7 @@ def export_event_registrations(request, event_id: int):
                 attendee.email,
                 attendee.phone_number or 'N/A',
                 ticket.purchase_date.strftime('%Y-%m-%d %H:%M:%S') if ticket.purchase_date else 'N/A',
-                ticket.approval_status,  # Include approval status
+                ticket.approval_status,
                 ticket.qr_code
             ])
         
@@ -1808,8 +1806,6 @@ def export_event_registrations(request, event_id: int):
         print(f"Export error: {str(e)}")
         return HttpResponse("Export failed", status=500)
     
-
-
 # ============================================================================
 # EVENT VERIFICATION ENDPOINTS
 # ============================================================================
