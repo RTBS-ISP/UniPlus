@@ -1,9 +1,10 @@
 "use client";
 
 import React from "react";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, Copy } from "lucide-react";
 import type { Attendee, TableView } from "@/lib/dashboard/types";
 import { formatDate, formatDateTime, getCheckinTimeForDate } from "@/lib/utils/formatDate";
+import { useAlert } from "@/app/components/ui/AlertProvider";
 
 export function AttendeeTable({
   view,
@@ -24,6 +25,7 @@ export function AttendeeTable({
 }) {
   const isApproval = view === "approval";
   const isAttendance = view === "attendance";
+  const alert = useAlert();
 
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -62,17 +64,26 @@ export function AttendeeTable({
                   </td>
                 )}
 
-                {/* ✅ Display the friendly ticket ID, but use real ticketId for functionality */}
-                <td className="px-6 py-4 text-gray-800 font-medium group relative">
-                  <span>{a.displayTicketId || a.ticketId}</span>
-                  
-                  {/* Tooltip showing full QR code on hover */}
-                  {a.displayTicketId && (
-                    <div className="hidden group-hover:block absolute z-10 bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap shadow-lg">
-                      Full QR: {a.ticketId}
-                      <div className="absolute top-full left-4 -mt-1 border-4 border-transparent border-t-gray-900"></div>
-                    </div>
-                  )}
+                <td className="px-6 py-4 text-gray-800 font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{a.displayTicketId || a.ticketId}</span>
+                    
+                    {/* Copy button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(a.displayTicketId || a.ticketId);
+                        alert({
+                          text: `${a.displayTicketId || a.ticketId} copied to clipboard.`,
+                          variant: "success",
+                        });
+                      }}
+                      className="p-1 hover:bg-gray-100 rounded transition-colors"
+                      title="Copy Ticket ID"
+                    >
+                      <Copy className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" />
+                    </button>
+                  </div>
                 </td>
                 <td className="px-6 py-4 text-gray-800 font-medium">{a.name}</td>
                 <td className="px-6 py-4 text-gray-800">{a.email}</td>
