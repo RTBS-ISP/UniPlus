@@ -166,3 +166,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+
+N8N_FEEDBACK_SUMMARY_URL = os.getenv("N8N_FEEDBACK_SUMMARY_URL")
