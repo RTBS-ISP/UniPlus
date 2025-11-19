@@ -96,6 +96,7 @@ export async function checkInOne(eventId: string, ticketId: string, date: string
     body: JSON.stringify({
       qr_code: ticketId,
       event_date: date,
+      event_id: eventId,
     }),
   });
 }

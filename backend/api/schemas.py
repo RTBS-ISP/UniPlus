@@ -382,7 +382,7 @@ class CheckInRequestSchema(Schema):
     """Request to check in an attendee"""
     qr_code: str
     event_date: Optional[str] = None  # Which day for multi-day events
-
+    event_id: Optional[int] = None 
 
 class CheckInResponseSchema(Schema):
     """Response after check-in attempt"""
