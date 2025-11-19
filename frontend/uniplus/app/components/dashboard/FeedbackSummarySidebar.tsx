@@ -2,11 +2,12 @@
 
 import { Star, User, FileDown, MessageCircle } from "lucide-react";
 import type { EventFeedback } from "./FeedbackPanel";
+import { useAlert } from "@/app/components/ui/AlertProvider"; // ⬅️ add this
 
 type Props = {
   feedbacks: EventFeedback[];
   onExport?: () => void;
-  aiSummary?: string;          
+  aiSummary?: string;
   aiSummaryLoading?: boolean;
 };
 
@@ -16,6 +17,8 @@ export function FeedbackSummarySidebar({
   aiSummary,
   aiSummaryLoading,
 }: Props) {
+  const showAlert = useAlert(); // ⬅️ get alert function
+
   const total = feedbacks.length;
   const avg =
     total > 0 ? feedbacks.reduce((sum, f) => sum + f.rating, 0) / total : 0;
@@ -161,7 +164,13 @@ export function FeedbackSummarySidebar({
       {/* Export button */}
       <button
         type="button"
-        onClick={onExport}
+        onClick={() => {
+          onExport?.();
+          showAlert({
+            text: "Feedback report saved successfully.",
+            variant: "success",
+          });
+        }}
         className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors disabled:opacity-60"
       >
         <FileDown className="w-4 h-4" />
