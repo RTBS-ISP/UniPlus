@@ -1449,6 +1449,14 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
         if not ticket:
             return 400, {"error": f"Ticket '{ticket_identifier}' not found"}
         
+        # Check if ticket belong to the SPECIFIC event dashboard being viewed 
+        expected_event_id = getattr(payload, 'event_id', None)
+        
+        if expected_event_id:
+            # If there is an event_id provided, ensure ticket belongs to that event
+            if ticket.event.id != expected_event_id:
+                return 400, {"error": f"This ticket belongs to '{ticket.event.event_title}', not the current event. Please scan the ticket from the correct event"}
+        
         # Security check: Only event organizer can check in
         if ticket.event.organizer != request.user:
             return 403, {"error": "You are not authorized to check in attendees for this event"}
