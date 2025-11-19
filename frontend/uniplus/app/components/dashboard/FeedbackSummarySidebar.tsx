@@ -6,9 +6,16 @@ import type { EventFeedback } from "./FeedbackPanel";
 type Props = {
   feedbacks: EventFeedback[];
   onExport?: () => void;
+  aiSummary?: string;          
+  aiSummaryLoading?: boolean;
 };
 
-export function FeedbackSummarySidebar({ feedbacks, onExport }: Props) {
+export function FeedbackSummarySidebar({
+  feedbacks,
+  onExport,
+  aiSummary,
+  aiSummaryLoading,
+}: Props) {
   const total = feedbacks.length;
   const avg =
     total > 0 ? feedbacks.reduce((sum, f) => sum + f.rating, 0) / total : 0;
@@ -30,6 +37,8 @@ export function FeedbackSummarySidebar({ feedbacks, onExport }: Props) {
     .slice()
     .sort((a, b) => (b.comment!.length || 0) - (a.comment!.length || 0))
     .slice(0, 3);
+
+  const hasAISummary = !!aiSummary && aiSummary.trim().length > 0;
 
   return (
     <aside className="lg:sticky lg:top-24 h-fit rounded-lg bg-white shadow-sm p-6 border border-gray-100 space-y-5">
@@ -113,15 +122,19 @@ export function FeedbackSummarySidebar({ feedbacks, onExport }: Props) {
         </div>
       </div>
 
-      {/* Short summary text */}
+      {/* Short summary text (AI-powered) */}
       <div className="space-y-1">
         <p className="text-xs font-semibold text-gray-700 flex items-center gap-1">
           <MessageCircle className="w-3 h-3" />
           Summary note
         </p>
-        <p className="text-xs text-gray-600 leading-relaxed">
+        <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
           {total === 0
             ? "No feedback yet. Once attendees respond, you can export a short report for your documentation."
+            : aiSummaryLoading
+            ? "Generating AI summary from attendee feedback..."
+            : hasAISummary
+            ? aiSummary
             : "Attendees generally rated this event positively. Use this summary and the highlighted comments directly in your event report."}
         </p>
       </div>
