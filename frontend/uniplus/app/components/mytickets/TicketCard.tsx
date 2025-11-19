@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
 
 interface EventDay {
   date: string;
@@ -81,6 +81,73 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     }
   }, [ticket.event_id]);
 
+  // Helper functions defined first
+  const getCurrentDayInfo = () => {
+    if (ticket.event_dates && ticket.event_dates.length > 0) {
+      return ticket.event_dates[selectedDayIndex];
+    }
+    return {
+      date: ticket.date,
+      time: ticket.time,
+      location: ticket.location,
+      is_online: ticket.is_online,
+    };
+  };
+
+  // Determine if event is past, today, or upcoming
+  const getEventStatus = () => {
+    const currentDay = getCurrentDayInfo();
+    const eventDate = new Date(currentDay.date.split('T')[0] + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const diffTime = eventDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return 'past';
+    if (diffDays === 0) return 'today';
+    if (diffDays <= 7) return 'soon'; // Within a week
+    return 'upcoming';
+  };
+
+  const status = getEventStatus();
+
+  // Get styling based on status
+    const getStatusStyles = () => {
+    switch (status) {
+      case 'past':
+        return {
+          cardClass: 'opacity-60',
+          headerBg: 'bg-slate-400',
+          iconColor: 'text-slate-400',
+          badge: { text: 'Past', bg: 'bg-slate-500/90' }
+        };
+      case 'today':
+        return {
+          cardClass: '',
+          headerBg: 'bg-[#8B9CFF]',
+          iconColor: 'text-[#8B9CFF]',
+          badge: { text: 'Today', bg: 'bg-[#6B7CFF]/90' }
+        };
+      case 'soon':
+        return {
+          cardClass: '',
+          headerBg: 'bg-[#6366F1]',
+          iconColor: 'text-[#6366F1]',
+          badge: { text: 'Soon', bg: 'bg-[#4F46E5]/90' }
+        };
+      default: // upcoming
+        return {
+          cardClass: '',
+          headerBg: 'bg-indigo-700', // Darker shade (Indigo-600)
+          iconColor: 'text-indigo-700',
+          badge: { text: 'Upcoming', bg: 'bg-indigo-800/90' }
+        };
+    }
+  };
+
+  const styles = getStatusStyles();
+
   const formatDate = (dateString: string) => {
     if (!dateString) return "TBA";
     const date = new Date(dateString.split('T')[0]); 
@@ -102,42 +169,6 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       month: "short",
       day: "numeric",
     });
-  };
-  
-  const formatDateRangeSummary = (eventDates: EventDay[], fallbackDate: string) => {
-    if (!eventDates || eventDates.length === 0) {
-      return formatDate(fallbackDate);
-    }
-
-    const sortedDates = eventDates
-      .map((d) => new Date(d.date.split('T')[0])) 
-      .filter(d => !isNaN(d.getTime()))
-      .sort((a, b) => a.getTime() - b.getTime());
-
-    if (sortedDates.length === 0) {
-        return formatDate(fallbackDate);
-    }
-
-    const startDate = sortedDates[0];
-    const endDate = sortedDates[sortedDates.length - 1];
-
-    if (sortedDates.length === 1 || startDate.getTime() === endDate.getTime()) {
-      return formatDate(eventDates[0].date);
-    }
-
-    const oneDay = 24 * 60 * 60 * 1000;
-    const diffDays = Math.round(
-      Math.abs((endDate.getTime() - startDate.getTime()) / oneDay)
-    );
-    
-    if (diffDays === sortedDates.length - 1) {
-      const formattedStart = formatDate(startDate.toISOString().split('T')[0]);
-      const formattedEnd = formatDate(endDate.toISOString().split('T')[0]);
-      return `${formattedStart} - ${formattedEnd}`;
-    } else {
-      const formattedStart = formatDate(startDate.toISOString().split('T')[0]);
-      return `${formattedStart} (${eventDates.length} Dates)`;
-    }
   };
 
   const formatTimeRange = (time?: string, endTime?: string) => {
@@ -166,51 +197,11 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     }
   };
 
-  const getEventLocation = () => {
-    const hasPhysicalLocation =
-      schedule && schedule.some(s => s.location && s.location.trim() !== "");
-
-    if (isOnline && hasPhysicalLocation) {
-      return "Hybrid (Online & Onsite)";
-    }
-
-    if (isOnline) {
-      return "Online Event";
-    }
-
-    if (hasPhysicalLocation) {
-      const locations = schedule.map(s => s.location).filter(Boolean);
-      const uniqueLocations = [...new Set(locations)];
-      if (uniqueLocations.length === 1) {
-        return uniqueLocations[0];
-      }
-      return `${uniqueLocations[0]} (+${uniqueLocations.length - 1} more)`;
-    }
-
-    const firstDate = ticket.event_dates?.[0];
-    return firstDate?.location || ticket.location || "TBA";
-  };
-
-  // Get current day info based on selected index
-  const getCurrentDayInfo = () => {
-    if (ticket.event_dates && ticket.event_dates.length > 0) {
-      return ticket.event_dates[selectedDayIndex];
-    }
-    return {
-      date: ticket.date,
-      time: ticket.time,
-      location: ticket.location,
-      is_online: ticket.is_online,
-    };
-  };
-
-  // Get location for the current selected day by matching with schedule
   const getCurrentDayLocation = () => {
     const currentDay = getCurrentDayInfo();
     
-    // Try to find matching schedule entry for this day
     if (schedule && schedule.length > 0) {
-      const currentDateStr = currentDay.date.split('T')[0]; // Get YYYY-MM-DD format
+      const currentDateStr = currentDay.date.split('T')[0];
       const matchingSchedule = schedule.find(s => s.date === currentDateStr);
       
       if (matchingSchedule && matchingSchedule.location && matchingSchedule.location.trim() !== "") {
@@ -272,11 +263,19 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   return (
     <Link
       href={`/my-ticket/${ticket.ticket_number}`}
-      className="rounded-lg shadow-sm bg-white flex flex-col transition-transform hover:scale-[1.02] hover:shadow-md"
+      className={`rounded-lg shadow-sm bg-white flex flex-col transition-all duration-300 hover:scale-[1.02] hover:shadow-md ${styles.cardClass}`}
     >
       {/* Header */}
-      <div className="flex items-start justify-between rounded-t-lg w-full h-36 bg-indigo-500 relative p-6 gap-4 overflow-hidden">
-        <div className="flex flex-col gap-y-3 flex-1 pr-2 relative">
+      <div className={`flex items-start justify-between rounded-t-lg w-full h-36 ${styles.headerBg} relative p-6 gap-4 overflow-hidden`}>
+        {/* Status Badge - Top Left */}
+        {styles.badge && (
+          <div className={`absolute top-3 left-3 ${styles.badge.bg} text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg`}>
+            {styles.badge.icon && <styles.badge.icon size={12} />}
+            {styles.badge.text}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-y-3 flex-1 pr-2 relative" style={{ marginTop: styles.badge ? '28px' : '0' }}>
           <div className="relative group/title">
             <h2 
               className="text-white text-xl font-bold line-clamp-2 cursor-pointer"
@@ -356,15 +355,15 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       {/* Detail Section */}
       <div className="p-6 flex-1 flex flex-col">
         <div className="flex gap-x-2 mb-2">
-          <Calendar size={20} className="text-indigo-500" />
+          <Calendar size={20} className={styles.iconColor} />
           <p className="text-gray-800 text-sm font-semibold">{formattedDate}</p>
         </div>
         <div className="flex gap-x-2 mb-2">
-          <Clock size={20} className="text-indigo-500" />
+          <Clock size={20} className={styles.iconColor} />
           <p className="text-gray-800 text-sm font-semibold">{formattedTime}</p>
         </div>
         <div className="flex gap-x-2 mb-4">
-          <MapPin size={20} className="text-indigo-500" />
+          <MapPin size={20} className={styles.iconColor} />
           <p className="text-gray-800 text-sm font-semibold line-clamp-1">
             {eventLocation}
           </p>
