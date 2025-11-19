@@ -259,7 +259,6 @@ export function useDashboard(eventId: string | undefined) {
       return;
     }
     
-    setState((s) => ({ ...s, loading: true })); 
     if (a) {
       // Optimistically update with object format
       const now = new Date().toISOString();
@@ -330,8 +329,6 @@ export function useDashboard(eventId: string | undefined) {
       }
 
       await load(); // rollback optimistic update
-    } finally {
-      setState((s) => ({ ...s, loading: false }));
     }
   };
 
