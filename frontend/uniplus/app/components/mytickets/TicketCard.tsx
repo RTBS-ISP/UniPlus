@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, Ticket } from "lucide-react";
 
 interface EventDay {
   date: string;
@@ -141,7 +141,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       default: // upcoming
         return {
           cardClass: '',
-          headerBg: 'bg-indigo-700', // Darker shade (Indigo-600)
+          headerBg: 'bg-indigo-700',
           iconColor: 'text-indigo-700',
           badge: { text: 'Upcoming', bg: 'bg-indigo-800/90' }
         };
@@ -273,18 +273,48 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       href={`/my-ticket/${ticket.qr_code}`}
       className={`relative rounded-lg shadow-sm bg-white flex flex-col transition-all duration-300 hover:shadow-lg ${styles.cardClass}`}
     >
-      {/* Header */}
-      <div className={`flex items-start justify-between rounded-t-lg w-full h-36 ${styles.headerBg} relative p-6 gap-4 overflow-visible z-10`}>
-        {/* Status Badge - Top Left */}
+      {/* Header - Updated Layout with Fixed Height */}
+      <div className={`flex flex-col justify-between rounded-t-lg w-full h-[180px] ${styles.headerBg} relative p-6 gap-2 overflow-visible z-10`}>
+        <div className="flex flex-col gap-3 flex-1">
+        {/* Top Row: Status Badge + Day Selector */}
+          <div className="flex items-center justify-between">
+          {/* Status Badge */}
         {styles.badge && (
-          <div className={`absolute top-3 left-3 ${styles.badge.bg} text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg`}>
-            {styles.badge.icon && <styles.badge.icon size={12} />}
+            <div className={`${styles.badge.bg} text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg`}>
             {styles.badge.text}
           </div>
         )}
 
-        <div className="flex flex-col gap-y-3 flex-1 pr-2 relative" style={{ marginTop: styles.badge ? '28px' : '0' }}>
-          <div className="relative group/title z-20">
+          {/* Day Selector - Top Right */}
+          <div className="flex-shrink-0">
+            {hasMultipleDays && (
+                <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-full px-2 py-1.5 border border-white/30">
+                <button
+                  onClick={handlePrevDay}
+                  className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
+                  aria-label="Previous day"
+                >
+                  <ChevronLeft size={14} className="text-white" />
+                </button>
+                
+                <span className="text-xs font-semibold text-white whitespace-nowrap px-1">
+                  Day {selectedDayIndex + 1} of {ticket.event_dates.length}
+                </span>
+
+                <button
+                  onClick={handleNextDay}
+                  className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
+                  aria-label="Next day"
+                >
+                  <ChevronRight size={14} className="text-white" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+          {/* Event Title - Fixed height area */}
+          <div className="relative group/title z-20 h-[56px]">
             <h2 
               className="text-white text-xl font-bold line-clamp-2 cursor-pointer"
               onClick={(e) => {
@@ -299,7 +329,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
             </h2>
             
             {/* Popover - Shows on hover (desktop) or click (mobile) */}
-            {ticket.event_title && ticket.event_title.length > 30 && (
+          {ticket.event_title && ticket.event_title.length > 30 && (
               <div className={`absolute left-0 top-full mt-2 w-[min(400px,90vw)]
                 bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50
                 transition-all duration-200 pointer-events-auto
@@ -330,36 +360,15 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
               </div>
             )}
           </div>
-          
-          <p className="text-white text-sm font-medium">
-            {ticket.ticket_number}
-          </p>
-        </div>
-
-        {/* Day Selector - Top Right in Header */}
-        {hasMultipleDays && (
-          <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-full px-2 py-1.5 border border-white/30 flex-shrink-0">
-            <button
-              onClick={handlePrevDay}
-              className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
-              aria-label="Previous day"
-            >
-              <ChevronLeft size={14} className="text-white" />
-            </button>
-            
-            <span className="text-xs font-semibold text-white whitespace-nowrap px-1">
-              Day {selectedDayIndex + 1} of {ticket.event_dates.length}
-            </span>
-
-            <button
-              onClick={handleNextDay}
-              className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
-              aria-label="Next day"
-            >
-              <ChevronRight size={14} className="text-white" />
-            </button>
           </div>
-        )}
+          
+        {/* Ticket ID Badge */}
+        <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/30 w-fit">
+          <Ticket size={14} className="text-white" />
+          <span className="text-white text-xs font-bold tracking-wide">
+            {ticket.ticket_number || "N/A"}
+          </span>
+        </div>
       </div>
 
       {/* Detail Section */}
