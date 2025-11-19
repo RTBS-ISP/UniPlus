@@ -32,6 +32,7 @@ interface TicketInfo {
   };
   event_title: string;
   event_description: string;
+  qr_code: string;
   ticket_number: string;
   event_id: number;
   is_online: boolean;
@@ -269,7 +270,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
 
   return (
     <Link
-      href={`/my-ticket/${ticket.ticket_number}`}
+      href={`/my-ticket/${ticket.qr_code}`}
       className={`relative rounded-lg shadow-sm bg-white flex flex-col transition-all duration-300 hover:shadow-lg ${styles.cardClass}`}
     >
       {/* Header */}
