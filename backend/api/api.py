@@ -1418,13 +1418,36 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
     Only organizers can check in attendees for their events
     """
     try:
-        # Find ticket by QR code
-        try:
-            ticket = Ticket.objects.select_related('event', 'attendee').get(
-                qr_code=payload.qr_code
-            )
-        except Ticket.DoesNotExist:
-            return 400, {"error": "Invalid QR code"}
+        ticket_indentifier = payload.qr_code.strip()
+        
+        ticket = None
+        if len(ticket_indentifier) > 20 and '-' in ticket_indentifier:
+            try:
+                ticket = Ticket.objects.select_related('event', 'attendee').get(
+                    qr_code=ticket_indentifier
+                )
+            except Ticket.DoesNotExist:
+                pass
+        
+        if not ticket:
+            try:
+                ticket = Ticket.objects.select_related('event', 'attendee').get(
+                    ticket_number=ticket_indentifier
+                )
+            except Ticket.DoesNotExist:
+                pass
+        
+        if not ticket:
+            try:
+                ticket_id_num = int(ticket_indentifier.replace('T', '')) if ticket_indentifier.startswith('T') else int(ticket_indentifier)
+                ticket = Ticket.objects.select_related('event', 'attendee').get(
+                    id=ticket_id_num
+                )
+            except (Ticket.DoesNotExist, ValueError):
+                pass
+            
+        if not ticket:
+            return 400, {"error": f"Ticket '{ticket_identifier}' not found"}
         
         # Security check: Only event organizer can check in
         if ticket.event.organizer != request.user:
@@ -1482,7 +1505,7 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
             
             return 200, {
                 "success": False,
-                "message": f"Already checked in for {event_date_str}",
+                "message": f"Already checked in for {event_date_str} at {formattted_time}",
                 "ticket_id": ticket.qr_code,
                 "attendee_name": ticket.user_name or ticket.attendee.username,
                 "event_title": ticket.event_title or ticket.event.event_title,
