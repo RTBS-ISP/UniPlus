@@ -387,13 +387,13 @@ class CheckInResponseSchema(Schema):
     """Response after check-in attempt"""
     success: bool
     message: str
-    ticket_id: Optional[int] = None
-    attendee_name: Optional[str] = None
-    event_title: Optional[str] = None
+    ticket_id: str
+    attendee_name: str
+    event_title: str
     event_date: Optional[str] = None
     already_checked_in: bool = False
-    checked_in_at: Optional[datetime] = None
-    approval_status: Optional[str] = None
+    checked_in_at: Optional[str] = None
+    approval_status: str
 
 
 # ============================================================================
