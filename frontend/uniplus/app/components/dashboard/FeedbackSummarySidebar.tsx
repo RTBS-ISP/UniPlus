@@ -28,6 +28,10 @@ export function FeedbackSummarySidebar({
     count: feedbacks.filter((f) => f.rating === r).length,
   }));
 
+  /* ------------------------------
+    Comment + Anonymous stats
+  ------------------------------ */
+
   const anonymousCount = feedbacks.filter((f) => f.anonymous).length;
   const anonymousPercent =
     total > 0 ? Math.round((anonymousCount / total) * 100) : 0;
@@ -35,13 +39,62 @@ export function FeedbackSummarySidebar({
   const commentsWithText = feedbacks.filter(
     (f) => f.comment && f.comment.trim().length > 0
   );
-
   const hasComments = commentsWithText.length > 0;
 
-  const topComments = commentsWithText
+  const commentsCount = commentsWithText.length;
+  const commentsPercent =
+    total > 0 ? Math.round((commentsCount / total) * 100) : 0;
+
+  const avgCommentLength =
+    commentsCount > 0
+      ? Math.round(
+          commentsWithText.reduce(
+            (sum, f) => sum + (f.comment?.length || 0),
+            0
+          ) / commentsCount
+        )
+      : 0;
+
+  let commentLengthLabel = "No written comments yet.";
+  if (commentsCount > 0) {
+    if (avgCommentLength < 40) commentLengthLabel = "Most comments are short.";
+    else if (avgCommentLength < 120)
+      commentLengthLabel = "Most comments are medium length.";
+    else commentLengthLabel = "Most comments are quite detailed.";
+  }
+
+  /* ------------------------------
+      Highlight comment logic
+  ------------------------------ */
+
+  const strongPositive = commentsWithText
+    .filter((f) => f.rating >= 4 && f.comment!.trim().length >= 30)
+    .sort((a, b) => {
+      const ratingDiff = b.rating - a.rating;
+      if (ratingDiff !== 0) return ratingDiff;
+      return b.comment!.length - a.comment!.length;
+    })[0];
+
+  const strongNegative = commentsWithText
+    .filter((f) => f.rating <= 2 && f.comment!.trim().length >= 30)
+    .sort((a, b) => {
+      const ratingDiff = a.rating - b.rating;
+      if (ratingDiff !== 0) return ratingDiff;
+      return b.comment!.length - a.comment!.length;
+    })[0];
+
+  const detailedHighlight = commentsWithText
+    .filter(
+      (f) => f.id !== strongPositive?.id && f.id !== strongNegative?.id
+    )
     .slice()
-    .sort((a, b) => (b.comment!.length || 0) - (a.comment!.length || 0))
-    .slice(0, 3);
+    .sort((a, b) => (b.comment!.length || 0) - (a.comment!.length || 0))[0];
+
+  const topComments = [
+    strongPositive,
+    strongNegative,
+    detailedHighlight,
+  ].filter(Boolean) as EventFeedback[];
 
   const hasAISummary = !!aiSummary && aiSummary.trim().length > 0;
 
@@ -57,7 +110,7 @@ export function FeedbackSummarySidebar({
         </p>
       </div>
 
-      {/* Key stats */}
+      {/* Rating + Total */}
       <div className="grid grid-cols-2 gap-3 text-sm">
         <div className="rounded-md bg-indigo-50 px-3 py-2 flex flex-col gap-1">
           <span className="text-[11px] uppercase tracking-wide text-indigo-600 font-semibold">
@@ -80,20 +133,38 @@ export function FeedbackSummarySidebar({
             <span className="text-base font-bold">{total}</span>
           </div>
         </div>
+      </div>
 
-        <div className="rounded-md bg-emerald-50 px-3 py-2 flex flex-col gap-1 col-span-2">
-          <span className="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">
-            Anonymous responses
+      {/* FULL-WIDTH Anonymous responses */}
+      <div className="rounded-md bg-emerald-50 px-3 py-2 flex flex-col gap-1">
+        <span className="text-[11px] uppercase tracking-wide text-emerald-700 font-semibold">
+          Anonymous responses
+        </span>
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm text-gray-900">
+            {anonymousCount} of {total || 0} feedbacks
           </span>
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm text-gray-900">
-              {anonymousCount} of {total || 0} feedbacks
-            </span>
-            <span className="text-base font-bold text-emerald-700">
-              {isNaN(anonymousPercent) ? 0 : anonymousPercent}%
-            </span>
-          </div>
+          <span className="text-base font-bold text-emerald-700">
+            {isNaN(anonymousPercent) ? 0 : anonymousPercent}%
+          </span>
         </div>
+      </div>
+
+      {/* FULL-WIDTH Comment coverage */}
+      <div className="rounded-md bg-slate-50 px-3 py-2 flex flex-col gap-1">
+        <span className="text-[11px] uppercase tracking-wide text-slate-700 font-semibold">
+          Comment coverage
+        </span>
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm text-gray-900">
+            {commentsCount} of {total || 0} feedbacks
+          </span>
+          <span className="text-base font-bold text-slate-700">
+            {commentsPercent}%
+          </span>
+        </div>
+
+        <p className="text-[11px] text-gray-500">{commentLengthLabel}</p>
       </div>
 
       {/* Rating distribution */}
@@ -101,6 +172,7 @@ export function FeedbackSummarySidebar({
         <p className="text-xs font-semibold text-gray-700">
           Rating distribution
         </p>
+
         <div className="space-y-1">
           {ratingCounts
             .slice()
@@ -118,16 +190,14 @@ export function FeedbackSummarySidebar({
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="w-8 text-right text-gray-500">
-                    {count}
-                  </span>
+                  <span className="w-8 text-right text-gray-500">{count}</span>
                 </div>
               );
             })}
         </div>
       </div>
 
-      {/* Short summary text (AI-powered) */}
+      {/* AI summary */}
       <div className="space-y-1">
         <p className="text-xs font-semibold text-gray-700 flex items-center gap-1">
           <MessageCircle className="w-3 h-3" />
@@ -151,11 +221,12 @@ export function FeedbackSummarySidebar({
           <p className="text-xs font-semibold text-gray-700">
             Highlighted comments
           </p>
+
           <ul className="space-y-2">
             {topComments.map((fb) => (
               <li
                 key={fb.id}
-                className="rounded-md bg-slate-50 px-3 py-2 text-xs text-gray-700 line-clamp-3 whitespace-pre-wrap"
+                className="rounded-md bg-slate-50 px-3 py-2 text-xs text-gray-700 whitespace-pre-wrap line-clamp-3"
               >
                 {fb.comment}
               </li>
@@ -164,7 +235,7 @@ export function FeedbackSummarySidebar({
         </div>
       )}
 
-      {/* Export button */}
+      {/* Export */}
       <button
         type="button"
         onClick={() => {
