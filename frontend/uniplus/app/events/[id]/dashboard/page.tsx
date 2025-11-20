@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -17,11 +18,13 @@ import { QRCheckIn } from "@/app/components/dashboard/QRCheckIn";
 import { Filters } from "@/app/components/dashboard/Filters";
 import { BulkActions } from "@/app/components/dashboard/BulkActions";
 import { AttendeeTable } from "@/app/components/dashboard/AttendeeTable";
-import { FeedbackPanel, type EventFeedback } from "@/app/components/dashboard/FeedbackPanel";
+import {
+  FeedbackPanel,
+  type EventFeedback,
+} from "@/app/components/dashboard/FeedbackPanel";
 import { FeedbackSummarySidebar } from "@/app/components/dashboard/FeedbackSummarySidebar";
 
 // --- helpers for export ---
-
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000/api").replace(
     /\/$/,
@@ -41,26 +44,9 @@ type FeedbackReportResponse = {
 
 function buildFeedbackReportMarkdown(
   event: { title?: string | null; id: number },
-  data: {
-    aggregates: {
-      total: number;
-      average_rating: number;
-      rating_counts: Record<string, number>;
-      anonymous_count: number;
-    };
-    ai_summary: string;
-    feedback: {
-      id: number;
-      rating: number;
-      comment: string;
-      created_at: string;
-      user_name: string;
-      user_email: string | null;
-    }[];
-  }
+  data: FeedbackReportResponse
 ) {
   const { aggregates, ai_summary, feedback } = data;
-
   const lines: string[] = [];
 
   lines.push(`# Feedback Report – ${event.title ?? "Untitled Event"}`);
@@ -84,7 +70,7 @@ function buildFeedbackReportMarkdown(
   for (let r = 5; r >= 1; r--) {
     const key = String(r);
     const count = aggregates.rating_counts[key] ?? 0;
-    const bar = "█".repeat(Math.min(count, 20)); // simple text "graph"
+    const bar = "█".repeat(Math.min(count, 20));
     lines.push(`- ${r}★: ${bar} (${count})`);
   }
   lines.push("");
@@ -104,13 +90,8 @@ function buildFeedbackReportMarkdown(
         }`
       );
       lines.push(`- Submitted at: ${new Date(fb.created_at).toLocaleString()}`);
-      if (fb.comment && fb.comment.trim()) {
-        lines.push("");
-        lines.push(fb.comment.trim());
-      } else {
-        lines.push("");
-        lines.push("_No written comment._");
-      }
+      lines.push("");
+      lines.push(fb.comment?.trim() || "_No written comment._");
       lines.push("");
     });
   }
@@ -142,7 +123,7 @@ export default function DashBoardPage() {
 
   const [exporting, setExporting] = useState(false);
 
-  // NEW: state for feedback report / AI summary
+  // AI summary / feedback report
   const [report, setReport] = useState<FeedbackReportResponse | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
 
@@ -156,7 +137,6 @@ export default function DashBoardPage() {
       );
 
       const data = await res.json();
-
       if (!res.ok) {
         console.error("Failed to load feedback report", data);
         setReport(null);
@@ -172,7 +152,6 @@ export default function DashBoardPage() {
     }
   };
 
-  // load AI summary once when event changes
   useEffect(() => {
     fetchFeedbackReport();
   }, [eventId]);
@@ -209,10 +188,11 @@ export default function DashBoardPage() {
 
   if (!state.event) return null;
 
+  // stat chip counts — always from attendanceStats / statistics (not from visibleAttendees)
   const countsForFilters =
     state.tableView === "attendance"
       ? {
-          all: visibleAttendees.length,
+          all: attendanceStats.total,
           present: attendanceStats.present,
           pending: attendanceStats.pending,
         }
@@ -291,7 +271,6 @@ export default function DashBoardPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-8 py-8">
-          {/* Top stats card – only for attendance & approval */}
           {state.tableView !== "feedback" && (
             <div className="rounded-lg shadow-sm p-8 mb-8 bg-white">
               {state.tableView === "attendance" && (
@@ -307,7 +286,6 @@ export default function DashBoardPage() {
                   total={attendanceStats.total}
                   present={attendanceStats.present}
                   pending={attendanceStats.pending}
-                  rate={attendanceStats.rate}
                 />
               ) : (
                 <ApprovalStatCards stats={state.statistics} />
@@ -315,12 +293,10 @@ export default function DashBoardPage() {
             </div>
           )}
 
-          {/* QR check-in only for attendance */}
           {state.tableView === "attendance" && (
             <QRCheckIn onSubmit={(id) => checkIn(id)} />
           )}
 
-          {/* Main content */}
           {state.tableView === "feedback" ? (
             <div className="grid lg:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] gap-6">
               <div>

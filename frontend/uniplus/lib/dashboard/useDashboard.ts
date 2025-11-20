@@ -19,6 +19,14 @@ import {
 } from "@/lib/dashboard/api";
 import { useAlert } from "@/app/components/ui/AlertProvider";
 
+type FilterType =
+  | "all"
+  | "present"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "pending_approval";
+
 type State = {
   loading: boolean;
   error: string;
@@ -29,7 +37,7 @@ type State = {
   tableView: TableView;
   selectedDate: string;
   search: string;
-  activeFilter: string;
+  activeFilter: FilterType;
   selectedTickets: string[];
   bulkBusy: boolean;
   feedbacks: EventFeedback[];
@@ -94,8 +102,9 @@ export function useDashboard(eventId: string | undefined) {
     load();
   }, [load]);
 
+  // -------- visibleAttendees: TABLE ONLY (respects filter + search) --------
   const visibleAttendees = useMemo(() => {
-    // base list
+    // 1) base list
     const base =
       state.tableView === "attendance"
         ? state.attendees.filter((a) => a.approvalStatus === "approved")
@@ -103,7 +112,7 @@ export function useDashboard(eventId: string | undefined) {
 
     const q = state.search.trim().toLowerCase();
 
-    // per-day status for attendance view
+    // 2) per-day status for attendance view
     const withDayStatus: Attendee[] = base.map((a) => {
       if (state.tableView !== "attendance" || !state.selectedDate) {
         return a;
@@ -114,33 +123,37 @@ export function useDashboard(eventId: string | undefined) {
 
       return {
         ...a,
-        eventDate: state.selectedDate, // Override with selected date
+        eventDate: state.selectedDate,
         status: isPresentForSelectedDay ? "present" : "pending",
-        // Use the per-date check-in time if available, otherwise empty
-        checkedIn: isPresentForSelectedDay ? (checkedInDates[state.selectedDate] || a.checkedIn) : "",
+        checkedIn: isPresentForSelectedDay
+          ? checkedInDates[state.selectedDate] || a.checkedIn
+          : "",
       };
     });
 
-    // filter + search
-    const filtered = withDayStatus.filter((a) => {
-      const filterOk =
-        state.tableView === "attendance"
-          ? state.activeFilter === "all" || a.status === state.activeFilter
-          : state.activeFilter === "all" || a.approvalStatus === state.activeFilter;
+    // 3) filter by activeFilter for each view
+    const filteredByStatus = withDayStatus.filter((a) => {
+      if (state.activeFilter === "all") return true;
 
-      if (!filterOk) return false;
+      if (state.tableView === "attendance") {
+        // attendance filter: "present" | "pending"
+        return a.status === state.activeFilter;
+      }
 
-      if (!q) return true;
-
-      const searchOk =
-        a.name.toLowerCase().includes(q) ||
-        a.email.toLowerCase().includes(q) ||
-        a.ticketId.toLowerCase().includes(q);
-
-      return searchOk;
+      // approval filter: "approved" | "pending" | "rejected"
+      return a.approvalStatus === state.activeFilter;
     });
 
-    return filtered;
+    // 4) search
+    if (!q) return filteredByStatus;
+
+    return filteredByStatus.filter((a) => {
+      return (
+        a.name.toLowerCase().includes(q) ||
+        a.email.toLowerCase().includes(q) ||
+        a.ticketId.toLowerCase().includes(q)
+      );
+    });
   }, [
     state.attendees,
     state.tableView,
@@ -149,17 +162,52 @@ export function useDashboard(eventId: string | undefined) {
     state.search,
   ]);
 
+  // -------- attendanceStats: ALWAYS FROM FULL BASE, IGNORE FILTER + SEARCH --------
   const attendanceStats = useMemo(() => {
-    const total = visibleAttendees.length;
-    const present = visibleAttendees.filter((a) => a.status === "present").length;
-    const pending = visibleAttendees.filter((a) => a.status === "pending").length;
-    const rate = total > 0 ? (present / total) * 100 : 0;
-    return { total, present, pending, rate };
-  }, [visibleAttendees]);
+    if (state.tableView !== "attendance") {
+      return { total: 0, present: 0, pending: 0, rate: 0 };
+    }
 
-  // setters
+    // all *approved* attendees for this event (same rule as table)
+    const approved = state.attendees.filter(
+      (a) => a.approvalStatus === "approved"
+    );
+
+    const total = approved.length;
+
+    if (!state.selectedDate) {
+      // no day selected yet -> treat all as pending
+      return {
+        total,
+        present: 0,
+        pending: total,
+        rate: 0,
+      };
+    }
+
+    let present = 0;
+
+    approved.forEach((a) => {
+      const checkedInDates = a.checkedInDates ?? {};
+      if (state.selectedDate in checkedInDates) {
+        present++;
+      }
+    });
+
+    const pending = total - present;
+    const rate = total > 0 ? (present / total) * 100 : 0;
+
+    return { total, present, pending, rate };
+  }, [state.attendees, state.tableView, state.selectedDate]);
+
+  // -------- setters --------
   const setTableView = (v: TableView) =>
-    setState((s) => ({ ...s, tableView: v, activeFilter: "all", selectedTickets: [] }));
+    setState((s) => ({
+      ...s,
+      tableView: v,
+      activeFilter: "all",
+      selectedTickets: [],
+    }));
 
   const setSelectedDate = (d: string) =>
     setState((s) => ({
@@ -167,8 +215,11 @@ export function useDashboard(eventId: string | undefined) {
       selectedDate: d,
     }));
 
-  const setSearch = (q: string) => setState((s) => ({ ...s, search: q }));
-  const setActiveFilter = (f: string) => setState((s) => ({ ...s, activeFilter: f }));
+  const setSearch = (q: string) =>
+    setState((s) => ({ ...s, search: q }));
+
+  const setActiveFilter = (f: FilterType) =>
+    setState((s) => ({ ...s, activeFilter: f }));
 
   const toggleTicket = (id: string) =>
     setState((s) => ({
@@ -187,16 +238,18 @@ export function useDashboard(eventId: string | undefined) {
           : visibleAttendees.map((a) => a.ticketId),
     }));
 
-  // approve/reject single ticket
+  // -------- approve/reject single ticket --------
   const approveReject = async (ticketId: string, action: ApprovalAction) => {
     if (!state.event) return;
 
-    // optimistic update for smoother UX
     setState((s) => ({
       ...s,
       attendees: s.attendees.map((a) =>
         a.ticketId === ticketId
-          ? { ...a, approvalStatus: action === "approve" ? "approved" : "rejected" }
+          ? {
+              ...a,
+              approvalStatus: action === "approve" ? "approved" : "rejected",
+            }
           : a
       ),
     }));
@@ -204,20 +257,22 @@ export function useDashboard(eventId: string | undefined) {
     try {
       await approveRejectOne(String(state.event.id), ticketId, action);
       alert({ text: `Ticket ${ticketId} ${action}ed.`, variant: "success" });
-      await load(); // still refresh to ensure sync
+      await load();
     } catch (err: any) {
       alert({ text: err?.message || "Action failed.", variant: "error" });
-      await load(); // rollback in case of failure
+      await load();
     }
   };
 
-  // bulk approve/reject
+  // -------- bulk approve/reject --------
   const bulkAct = async (action: ApprovalAction) => {
     if (!state.event) return;
 
     const selected = state.selectedTickets;
     const pendingIds = selected.filter((id) =>
-      state.attendees.some((a) => a.ticketId === id && a.approvalStatus === "pending")
+      state.attendees.some(
+        (a) => a.ticketId === id && a.approvalStatus === "pending"
+      )
     );
     const skipped = selected.length - pendingIds.length;
 
@@ -242,11 +297,15 @@ export function useDashboard(eventId: string | undefined) {
     } catch (err: any) {
       alert({ text: err?.message || "Bulk action failed.", variant: "error" });
     } finally {
-      setState((s) => ({ ...s, bulkBusy: false, selectedTickets: [] }));
+      setState((s) => ({
+        ...s,
+        bulkBusy: false,
+        selectedTickets: [],
+      }));
     }
   };
 
-  // check-in for specific selected date
+  // -------- check-in for selected date --------
   const checkIn = async (ticketId: string) => {
     if (!state.event) return;
 
@@ -263,15 +322,20 @@ export function useDashboard(eventId: string | undefined) {
 
     const a = state.attendees.find((x) => x.ticketId === trimmed);
     if (!a) {
-      alert({ text: `Ticket ${trimmed} not found for this event.`, variant: "warning" });
+      alert({
+        text: `Ticket ${trimmed} not found for this event.`,
+        variant: "warning",
+      });
       return;
     }
     if (a.approvalStatus !== "approved") {
-      alert({ text: `Ticket ${trimmed} isn’t approved — cannot check in.`, variant: "warning" });
+      alert({
+        text: `Ticket ${trimmed} isn’t approved — cannot check in.`,
+        variant: "warning",
+      });
       return;
     }
 
-    // Optimistically update with object format
     const now = new Date().toISOString();
     setState((s) => ({
       ...s,
@@ -282,7 +346,7 @@ export function useDashboard(eventId: string | undefined) {
               checkedIn: now,
               checkedInDates: {
                 ...(attendee.checkedInDates || {}),
-                [s.selectedDate]: now, 
+                [s.selectedDate]: now,
               },
             }
           : attendee
@@ -290,19 +354,22 @@ export function useDashboard(eventId: string | undefined) {
     }));
 
     try {
-      const res = await checkInOne(String(state.event.id), trimmed, state.selectedDate);
-      const msg = (res as any)?.message || `Checked in ${trimmed} for ${state.selectedDate}.`;
+      const res = await checkInOne(
+        String(state.event.id),
+        trimmed,
+        state.selectedDate
+      );
+      const msg =
+        (res as any)?.message ||
+        `Checked in ${trimmed} for ${state.selectedDate}.`;
 
-      // if backend says "already checked in", treat as info instead of success
       if (msg.toLowerCase().includes("already")) {
         alert({ text: msg, variant: "info" });
       } else {
         alert({ text: msg, variant: "success" });
       }
-
     } catch (err: any) {
       alert({ text: err?.message || "Check-in failed.", variant: "error" });
-      // Reload on error to revert optimistic update
       await load();
     }
   };
