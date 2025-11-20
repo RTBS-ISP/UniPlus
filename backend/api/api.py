@@ -1507,13 +1507,23 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
         if event_date_str and event_date_str in ticket.checked_in_dates:
             checked_time = ticket.checked_in_dates[event_date_str]
             try:
-                formatted_time = datetime.fromisoformat(checked_time).strftime('%d/%m/%Y %H:%M')
+                if isinstance(checked_time, str):
+                    checked_time_str = checked_time.replace('Z', '+00:00')
+                    dt = datetime.fromisoformat(checked_time_str)
+                else:
+                    dt = checked_time
+                
+                if dt.tzinfo is None:
+                    dt = pytz.UTC.localize(dt)
+                    
+                bangkok_dt = convert_to_bangkok_time(dt)
+                formatted_time = bangkok_dt.strftime("%d/%m/%Y %H:%M")
             except:
-                formatted_time = checked_time
+                formatted_time = str(checked_time)
             
             return 200, {
                 "success": False,
-                "message": f"Already checked in for {event_date_str} at {formattted_time}",
+                "message": f"Already checked in for {event_date_str} at {formatted_time}",
                 "ticket_id": ticket.qr_code,
                 "attendee_name": ticket.user_name or ticket.attendee.username,
                 "event_title": ticket.event_title or ticket.event.event_title,
