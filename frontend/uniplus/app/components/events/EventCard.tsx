@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Copy } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 // ---------- Types ----------
 export type EventItem = {
@@ -86,17 +87,19 @@ function HostPill({ label }: { label: string }) {
 }
 
 // ---------- Main Component ----------
-// NEW: optional index/stagger props to cascade cards from parent lists
 export default function EventCard({
   item,
   index = 0,
   stagger = 0.06,
+  showDuplicate = false, // NEW: prop to show duplicate button
 }: {
   item: EventItem;
   index?: number;
   stagger?: number;
+  showDuplicate?: boolean;
 }) {
   const shouldReduce = useReducedMotion();
+  const router = useRouter();
   const hostBadge = item.host?.[0] ?? "Organizer";
 
   const daysLeft = useMemo(() => {
@@ -136,6 +139,11 @@ export default function EventCard({
         delay: entranceDelay,
       };
 
+  const handleDuplicate = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/events/create?duplicate=${item.id}`);
+  };
+
   return (
     <motion.div
       initial={entranceInitial}
@@ -144,7 +152,7 @@ export default function EventCard({
       whileHover={cardHover}
       transition={transition}
       className="group rounded-2xl border border-[#6CA8FF] bg-white p-5 shadow-sm hover:shadow-lg
-                 [backface-visibility:hidden] [transform-style:preserve-3d]"
+                 [backface-visibility:hidden] [transform-style:preserve-3d] relative"
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
@@ -239,8 +247,25 @@ export default function EventCard({
         </p>
       )}
 
-      {/* Animated Detail Button */}
-      <div className="mt-4 flex justify-end">
+      {/* Action Buttons */}
+      <div className="mt-4 flex justify-end items-center gap-2">
+        {/* Duplicate Button (only shown when showDuplicate=true) */}
+        {showDuplicate && (
+          <motion.button
+            type="button"
+            onClick={handleDuplicate}
+            className="inline-flex items-center gap-1.5 rounded-full bg-purple-500 px-4 py-1.5 text-xs font-semibold text-white
+                     shadow-sm focus:outline-none hover:bg-purple-600 transition-colors"
+            whileHover={shouldReduce ? {} : { scale: 1.05 }}
+            whileTap={shouldReduce ? {} : { scale: 0.95 }}
+            aria-label="Duplicate event"
+          >
+            <Copy className="h-3.5 w-3.5" />
+            <span>Duplicate</span>
+          </motion.button>
+        )}
+
+        {/* Detail Button */}
         <MotionDetailButton id={item.id} />
       </div>
     </motion.div>

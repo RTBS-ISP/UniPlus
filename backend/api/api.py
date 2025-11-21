@@ -728,102 +728,91 @@ def register_for_event(request, event_id: int):
         return 400, {"error": str(e)}
 
 
-@api.get("/events/{event_id}", response=schemas.EventDetailSchema)
+@api.get("/events/{event_id}")
 def get_event_detail(request, event_id: int):
-    event = get_object_or_404(Event, id=event_id)
-    
-    tags_list = []
-    if event.tags:
-        try:
-            tags_list = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
-        except:
-            tags_list = [event.tags] if event.tags else []
-    
-    # Helper function to parse ISO time and convert to local time format HH:MM
-    def iso_to_local_hhmm(iso_str):
-        if not iso_str:
-            return "00:00"
-        try:
-            # normalize trailing Z into +00:00 so fromisoformat can parse it
-            if iso_str.endswith("Z"):
-                iso_str = iso_str[:-1] + "+00:00"
-            dt = datetime.fromisoformat(iso_str)
-            # If no tzinfo, assume UTC (safe default for stored ISO times)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            # Convert to Django/current timezone 
-            local_tz = timezone.get_current_timezone()
-            local_dt = dt.astimezone(local_tz)
-            return local_dt.strftime("%H:%M")
-        except Exception as e:
+    """
+    Get detailed event information including schedule
+    Used for event detail page and duplication
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Parse tags
+        tags_list = []
+        if event.tags:
             try:
-                return iso_str.split("T")[1].split(":")[0] + ":" + iso_str.split("T")[1].split(":")[1]
+                tags_list = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
             except:
-                return "00:00"
-            
-    schedule = []
-    if hasattr(event, 'schedule') and event.schedule:
-        try:
-            schedule_data = json.loads(event.schedule)
-            
-            for day in schedule_data:
-                date_str = day.get('date', '')
-                start_iso = day.get('start_iso', '')
-                end_iso = day.get('end_iso', '')
-                location = day.get('address', '') or day.get('location', '')
-                start_time = iso_to_local_hhmm(start_iso)
-                end_time = iso_to_local_hhmm(end_iso)
-                
-                schedule.append({
-                    "date": date_str,
-                    "startTime": start_time,
-                    "endTime": end_time,
-                    "location": location,
-                    "is_online": day.get('is_online', event.is_online),
-                    "meeting_link": day.get('meeting_link', event.event_meeting_link),
-                })
-        except Exception as e:
-            print(f"Error parsing schedule: {e}")
-            pass
-    
-    is_registered = False
-    if request.user.is_authenticated:
-        is_registered = Ticket.objects.filter(
-            event=event, 
-            attendee=request.user
-        ).exists()
-    
-    attendee_count = len(event.attendee) if event.attendee else 0
-    available = (event.max_attendee - attendee_count) if event.max_attendee else 100
-    
-    return {
-        "id": event.id,
-        "title": event.event_title,
-        "event_title": event.event_title,
-        "event_description": event.event_description,
-        "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
-        "organizer_username": event.organizer.username if event.organizer else "Unknown",
-        "organizer_role": event.organizer.role or "Organizer",
-        "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
-        "start_date_register": event.start_date_register,
-        "end_date_register": event.end_date_register,
-        "event_start_date": event.event_start_date or event.start_date_register,
-        "event_end_date": event.event_end_date or event.end_date_register,
-        "max_attendee": event.max_attendee or 0,
-        "capacity": event.max_attendee or 100,
-        "current_attendees": attendee_count,
-        "available": available,
-        "event_address": event.event_address or "",
-        "location": event.event_address or "Online" if event.is_online else "TBA",
-        "address2": getattr(event, 'address2', "") or "", 
-        "is_online": event.is_online,
-        "event_meeting_link": event.event_meeting_link or "",
-        "tags": tags_list,
-        "event_image": event.event_image.url if event.event_image else None,
-        "image": event.event_image.url if event.event_image else None,
-        "is_registered": is_registered,
-        "schedule": schedule,
-    }
+                tags_list = [event.tags] if event.tags else []
+        
+        # Get schedule from EventSchedule model
+        event_schedules = EventSchedule.objects.filter(event=event).order_by('event_date', 'start_time_event')
+        
+        schedule_data = []
+        for schedule in event_schedules:
+            schedule_data.append({
+                'date': schedule.event_date.isoformat() if schedule.event_date else None,
+                'startTime': schedule.start_time_event.isoformat() if schedule.start_time_event else None,
+                'start_time': schedule.start_time_event.isoformat() if schedule.start_time_event else None,
+                'endTime': schedule.end_time_event.isoformat() if schedule.end_time_event else None,
+                'end_time': schedule.end_time_event.isoformat() if schedule.end_time_event else None,
+                'is_online': event.is_online,
+                'location': event.event_address or "",
+                'address': event.event_address or "",
+                'meeting_link': event.event_meeting_link or "",
+            })
+        
+        # Fallback: if no EventSchedule exists, use event.schedule JSON field
+        if not schedule_data and event.schedule:
+            try:
+                schedule_data = json.loads(event.schedule) if isinstance(event.schedule, str) else event.schedule
+            except:
+                schedule_data = []
+        
+        # Get organizer info
+        organizer_name = f"{event.organizer.first_name} {event.organizer.last_name}".strip()
+        if not organizer_name:
+            organizer_name = event.organizer.username or event.organizer.email
+        
+        # Count attendees
+        attendee_count = len(event.attendee) if event.attendee else 0
+        
+        return {
+            "id": event.id,
+            "event_title": event.event_title,
+            "event_description": event.event_description,
+            "event_create_date": event.event_create_date.isoformat() if event.event_create_date else None,
+            "start_date_register": event.start_date_register.isoformat() if event.start_date_register else None,
+            "end_date_register": event.end_date_register.isoformat() if event.end_date_register else None,
+            "event_start_date": event.event_start_date.isoformat() if event.event_start_date else None,
+            "event_end_date": event.event_end_date.isoformat() if event.event_end_date else None,
+            "max_attendee": event.max_attendee,
+            "event_address": event.event_address or "",
+            "is_online": event.is_online,
+            "event_meeting_link": event.event_meeting_link or "",
+            "tags": tags_list,
+            "event_email": event.event_email or "",
+            "event_phone_number": event.event_phone_number or "",
+            "event_website_url": event.event_website_url or "",
+            "terms_and_conditions": event.terms_and_conditions or "",
+            "event_image": event.event_image.url if event.event_image else None,
+            "image": event.event_image.url if event.event_image else None,
+            "schedule": schedule_data,  
+            "status_registration": event.status_registration,
+            "organizer_name": organizer_name,
+            "organizer_role": event.organizer.role or "Organizer",
+            "organizer_id": event.organizer.id,
+            "attendee": event.attendee,
+            "attendee_count": attendee_count,
+            "verification_status": event.verification_status or "pending",
+        }
+        
+    except Exception as e:
+        print(f"Error fetching event detail: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
 
 
 @api.get("/tickets/{ticket_id}", auth=django_auth, response=schemas.TicketDetailSchema)

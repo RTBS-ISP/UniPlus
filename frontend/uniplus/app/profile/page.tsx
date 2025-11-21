@@ -113,7 +113,6 @@ function ProfilePage() {
   const [loadingStats, setLoadingStats] = useState(false);
   const [createdEvents, setCreatedEvents] = useState<EventData[]>([]);
   const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
-  const [duplicating, setDuplicating] = useState<number | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -186,42 +185,9 @@ function ProfilePage() {
     }
   };
 
-  const handleDuplicate = async (eventId: number) => {
-    try {
-      setDuplicating(eventId);
-      
-      // Get CSRF token
-      const csrfResponse = await fetch("http://localhost:8000/api/set-csrf-token", {
-        credentials: "include",
-      });
-      const csrfData = await csrfResponse.json();
-      
-      // Duplicate the event
-      const response = await fetch(`http://localhost:8000/api/events/${eventId}/duplicate`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": csrfData.csrftoken,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to duplicate event");
-      }
-
-      const result = await response.json();
-      
-      // Redirect to create page with duplicate parameter
-      router.push(`/events/create?duplicate=${result.event_id}`);
-      
-    } catch (err: any) {
-      console.error("Error duplicating event:", err);
-      alert(`❌ Failed to duplicate event: ${err.message}`);
-    } finally {
-      setDuplicating(null);
-    }
+  const handleDuplicate = (eventId: number) => {
+    // Simply redirect to create page with the event ID to duplicate
+    router.push(`/events/create?duplicate=${eventId}`);
   };
 
   function getCookie(name: string): string | undefined {
@@ -474,11 +440,10 @@ function ProfilePage() {
                       {sortedCreatedEventItems.length > 0 && (
                         <button
                           onClick={() => handleDuplicate(sortedCreatedEventItems[0].id)}
-                          disabled={duplicating !== null}
-                          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 transition-colors font-medium"
                         >
                           <Copy size={16} />
-                          {duplicating !== null ? "Duplicating..." : "Duplicate Last Event"}
+                          Duplicate Last Event
                         </button>
                       )}
                     </div>
@@ -486,6 +451,7 @@ function ProfilePage() {
                 </div>
               </div>
 
+              {/* Event Cards with Duplicate Buttons */}
               <div className="flex-1 space-y-4">
                 {sortedCreatedEventItems.map((eventItem, idx) => (
                   <EventCard
@@ -493,6 +459,7 @@ function ProfilePage() {
                     item={eventItem}
                     index={idx}
                     stagger={0.04}
+                    showDuplicate={true}
                   />
                 ))}
               </div>
@@ -601,7 +568,7 @@ function ProfilePage() {
           </div>
         </div>
 
-        <div className="flex flex-col w-full px-20">
+        <div className="flex-col w-full px-20">
           <Tabs items={items} />
         </div>
       </div>

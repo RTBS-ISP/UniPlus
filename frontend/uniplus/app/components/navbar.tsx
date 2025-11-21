@@ -143,6 +143,7 @@ export default function Navbar() {
                     <button
                       onClick={toggleProfileMenu}
                       className="flex items-center space-x-2 focus:outline-none"
+                      title={`${user.firstName} ${user.lastName}`}
                     >
                       <img
                         src={
@@ -153,7 +154,9 @@ export default function Navbar() {
                         alt="profile"
                         className="w-10 h-10 object-cover rounded-md border border-gray-300"
                       />
-                      <span className="font-semibold">{user.firstName} {user.lastName}</span>
+                      <span className="font-semibold max-w-[120px] truncate">
+                        {user.firstName} {user.lastName}
+                      </span>
                     </button>
                   </div>
 
