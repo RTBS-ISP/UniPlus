@@ -1755,7 +1755,7 @@ def get_user_created_events(request):
 
 # exported into csv
 
-@api.get("/events/{event_id}/export", auth=django_auth)  # Changed to .get
+@api.get("/events/{event_id}/export", auth=django_auth)  
 def export_event_registrations(request, event_id: int):
     try:
         event = get_object_or_404(Event, id=event_id)
@@ -1770,7 +1770,6 @@ def export_event_registrations(request, event_id: int):
         if not tickets.exists():
             return HttpResponse("No registrations found", status=404)
 
-        # Create CSV with better filename
         response = HttpResponse(content_type='text/csv')
         filename = f"{event.event_title}_registrations_{timezone.now().date()}.csv"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
@@ -1778,8 +1777,8 @@ def export_event_registrations(request, event_id: int):
         writer = csv.writer(response)
         
         writer.writerow([
-            'Ticket ID', 'Attendee Name', 'Attendee Email', 
-            'Phone', 'Registration Date', 'Status', 'QR Code'
+            'Ticket ID', 'Username', 'Attendee Name', 'Attendee Email', 
+            'Phone', 'Registration Date', 'Status',
         ])
         
         for ticket in tickets:
@@ -1789,13 +1788,13 @@ def export_event_registrations(request, event_id: int):
                 attendee_name = attendee.username
                 
             writer.writerow([
-                ticket.id,
+                ticket.ticket_number,
+                attendee.username,
                 attendee_name,
                 attendee.email,
                 attendee.phone_number or 'N/A',
                 ticket.purchase_date.strftime('%Y-%m-%d %H:%M:%S') if ticket.purchase_date else 'N/A',
                 ticket.approval_status,
-                ticket.qr_code
             ])
         
         return response
