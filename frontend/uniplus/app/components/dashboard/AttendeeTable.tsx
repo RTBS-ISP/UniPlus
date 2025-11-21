@@ -82,18 +82,17 @@ export function AttendeeTable({
                   </td>
                 )}
 
-                {/* Ticket ID with Copy functionality from main branch */}
                 <td className="px-6 py-4 text-gray-800 font-medium">
                   <div className="flex items-center gap-2">
-                    <span>{a.displayTicketId || a.ticketId}</span>
+                    <span>{a.ticketId}</span>
                     
                     {/* Copy button */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigator.clipboard.writeText(a.displayTicketId || a.ticketId);
+                        navigator.clipboard.writeText(a.ticketId);
                         alert({
-                          text: `${a.displayTicketId || a.ticketId} copied to clipboard.`,
+                          text: `${a.ticketId} copied to clipboard`,
                           variant: "success",
                         });
                       }}
@@ -105,7 +104,7 @@ export function AttendeeTable({
                   </div>
                 </td>
 
-                {/* Clickable Name Column from public-profile branch */}
+                {/* Clickable Name */}
                 <td className="px-6 py-4">
                   <Link
                     href={
