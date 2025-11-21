@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, Copy } from "lucide-react";
 import type { Attendee, TableView } from "@/lib/dashboard/types";
-import { formatDateTime, getCheckinTimeForDate } from "@/lib/utils/formatDate";
+import { formatDate, formatDateTime, getCheckinTimeForDate } from "@/lib/utils/formatDate";
+import { useAlert } from "@/app/components/ui/AlertProvider";
 
 export function AttendeeTable({
   view,
@@ -25,6 +26,7 @@ export function AttendeeTable({
 }) {
   const isApproval = view === "approval";
   const isAttendance = view === "attendance";
+  const alert = useAlert();
 
   const [usernames, setUsernames] = useState<{ [email: string]: string }>({});
 
@@ -80,9 +82,30 @@ export function AttendeeTable({
                   </td>
                 )}
 
-                <td className="px-6 py-4 text-gray-800 font-medium">{a.ticketId}</td>
+                {/* Ticket ID with Copy functionality from main branch */}
+                <td className="px-6 py-4 text-gray-800 font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{a.displayTicketId || a.ticketId}</span>
+                    
+                    {/* Copy button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(a.displayTicketId || a.ticketId);
+                        alert({
+                          text: `${a.displayTicketId || a.ticketId} copied to clipboard.`,
+                          variant: "success",
+                        });
+                      }}
+                      className="p-1 hover:bg-gray-100 rounded transition-colors"
+                      title="Copy Ticket ID"
+                    >
+                      <Copy className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" />
+                    </button>
+                  </div>
+                </td>
 
-                {/* Clickable Name Column */}
+                {/* Clickable Name Column from public-profile branch */}
                 <td className="px-6 py-4">
                   <Link
                     href={
