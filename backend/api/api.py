@@ -268,7 +268,8 @@ def get_user(request):
                         },
                         "event_title": event.event_title if event else None,
                         "event_description": event.event_description if event else None,
-                        "ticket_number": ticket.qr_code,
+                        "qr_code": ticket.qr_code,
+                        "ticket_number": ticket.ticket_number,
                         "event_id": event.id if event else None,
                         "is_online": ticket.is_online,
                         "event_meeting_link": ticket.meeting_link,
@@ -1180,7 +1181,8 @@ def get_event_dashboard(request, event_id: int):
                         checked_in_dates_dict[date_str[:10]] = ticket.checked_in_at.isoformat() if ticket.checked_in_at else timezone.now().isoformat()
             
             attendees.append({
-                "ticketId": ticket.ticket_number or ticket.qr_code,
+                "ticketId": ticket.qr_code,
+                "displayTicketId": ticket.ticket_number or f"T{ticket.id}",
                 "name": f"{user.first_name} {user.last_name}",
                 "email": user.email,
                 "username": user.username,
@@ -1390,13 +1392,44 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
     Only organizers can check in attendees for their events
     """
     try:
-        # Find ticket by QR code
-        try:
-            ticket = Ticket.objects.select_related('event', 'attendee').get(
-                qr_code=payload.qr_code
-            )
-        except Ticket.DoesNotExist:
-            return 400, {"error": "Invalid QR code"}
+        ticket_indentifier = payload.qr_code.strip()
+        
+        ticket = None
+        if len(ticket_indentifier) > 20 and '-' in ticket_indentifier:
+            try:
+                ticket = Ticket.objects.select_related('event', 'attendee').get(
+                    qr_code=ticket_indentifier
+                )
+            except Ticket.DoesNotExist:
+                pass
+        
+        if not ticket:
+            try:
+                ticket = Ticket.objects.select_related('event', 'attendee').get(
+                    ticket_number=ticket_indentifier
+                )
+            except Ticket.DoesNotExist:
+                pass
+        
+        if not ticket:
+            try:
+                ticket_id_num = int(ticket_indentifier.replace('T', '')) if ticket_indentifier.startswith('T') else int(ticket_indentifier)
+                ticket = Ticket.objects.select_related('event', 'attendee').get(
+                    id=ticket_id_num
+                )
+            except (Ticket.DoesNotExist, ValueError):
+                pass
+            
+        if not ticket:
+            return 400, {"error": f"Ticket '{ticket_identifier}' not found"}
+        
+        # Check if ticket belong to the SPECIFIC event dashboard being viewed 
+        expected_event_id = getattr(payload, 'event_id', None)
+        
+        if expected_event_id:
+            # If there is an event_id provided, ensure ticket belongs to that event
+            if ticket.event.id != expected_event_id:
+                return 400, {"error": f"This ticket belongs to '{ticket.event.event_title}', not the current event. Please scan the ticket from the correct event"}
         
         # Security check: Only event organizer can check in
         if ticket.event.organizer != request.user:
@@ -1408,34 +1441,93 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
                 "error": f"Ticket is {ticket.approval_status}. Only approved tickets can be checked in."
             }
         
-        # Check if already checked in
-        if ticket.checked_in_at:
+        # Parse and validate event date
+        event_date_str = None
+        if payload.event_date:
+            try:
+                parsed_date = datetime.strptime(payload.event_date, "%Y-%m-%d").date()
+                event_date_str = parsed_date.isoformat()
+            except ValueError:
+                return 400, {"error": "Invalid date format. Use YYYY-MM-DD."}
+        
+        # Validate that this date is valid for the ticket
+        if event_date_str:
+            valid_dates = []
+            for d in ticket.event_dates or []:
+                if isinstance(d, dict):
+                    date_val = d.get('date')
+                    if date_val:
+                        if len(str(date_val)) >= 10:
+                            valid_dates.append(str(date_val)[:10])
+                elif isinstance(d, str):
+                    try:
+                        dt = datetime.fromisoformat(d)
+                        valid_dates.append(dt.date().isoformat())
+                    except ValueError:
+                        if len(d) >= 10:
+                            valid_dates.append(d[:10])
+            
+            # If ticket has specific dates, validate the check-in date
+            if valid_dates and event_date_str not in valid_dates:
+                return 400, {
+                    "error": f"This ticket is not valid for {event_date_str}. Valid dates: {', '.join(valid_dates)}"
+                }
+        
+        # Initialize checked_in_dates as dict if needed
+        if not isinstance(ticket.checked_in_dates, dict):
+            ticket.checked_in_dates = {}
+        
+        # Check if already checked in for THIS specific date
+        if event_date_str and event_date_str in ticket.checked_in_dates:
+            checked_time = ticket.checked_in_dates[event_date_str]
+            try:
+                if isinstance(checked_time, str):
+                    checked_time_str = checked_time.replace('Z', '+00:00')
+                    dt = datetime.fromisoformat(checked_time_str)
+                else:
+                    dt = checked_time
+                
+                if dt.tzinfo is None:
+                    dt = pytz.UTC.localize(dt)
+                    
+                bangkok_dt = convert_to_bangkok_time(dt)
+                formatted_time = bangkok_dt.strftime("%d/%m/%Y %H:%M")
+            except:
+                formatted_time = str(checked_time)
+            
             return 200, {
                 "success": False,
-                "message": "Attendee already checked in",
-                "ticket_id": ticket.id,
-                "attendee_name": ticket.user_name,
-                "event_title": ticket.event_title,
-                "event_date": payload.event_date,
+                "message": f"Already checked in for {event_date_str} at {formatted_time}",
+                "ticket_id": ticket.qr_code,
+                "attendee_name": ticket.user_name or ticket.attendee.username,
+                "event_title": ticket.event_title or ticket.event.event_title,
+                "event_date": event_date_str,
                 "already_checked_in": True,
-                "checked_in_at": ticket.checked_in_at,
+                "checked_in_at": checked_time,
                 "approval_status": ticket.approval_status,
             }
         
-
-        ticket.checked_in_at = timezone.now()
+        # Perform check-in
+        now = timezone.now()
+        
+        # Store check-in for this specific date
+        if event_date_str:
+            ticket.checked_in_dates[event_date_str] = now.isoformat()
+        
+        # Update overall check-in status (latest check-in)
+        ticket.checked_in_at = now
         ticket.status = 'present'
         ticket.save()
         
         return 200, {
             "success": True,
-            "message": "Check-in successful",
-            "ticket_id": ticket.id,
-            "attendee_name": ticket.user_name,
-            "event_title": ticket.event_title,
-            "event_date": payload.event_date,
+            "message": f"Check-in successful for {event_date_str or 'event'}",
+            "ticket_id": ticket.qr_code,
+            "attendee_name": ticket.user_name or ticket.attendee.username,
+            "event_title": ticket.event_title or ticket.event.event_title,
+            "event_date": event_date_str,
             "already_checked_in": False,
-            "checked_in_at": ticket.checked_in_at,
+            "checked_in_at": now.isoformat(),
             "approval_status": ticket.approval_status,
         }
     except Exception as e:
@@ -1491,13 +1583,31 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
 
         if event.organizer != request.user:
             return 403, {"error": "You are not authorized to perform this action"}
-
-        # Resolve ticket by ticket_number first, then fallback to numeric ID
-        try:
-            ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
-        except Ticket.DoesNotExist:
-            ticket_id_num = int(ticket_id.replace("T", "")) if ticket_id.startswith("T") else int(ticket_id)
-            ticket = get_object_or_404(Ticket, id=ticket_id_num, event=event)
+        
+        ticket = None
+        
+        if len(ticket_id) > 20 and '-' in ticket_id:
+            # Assume it's a QR code
+            try:
+                ticket = Ticket.objects.get(qr_code=ticket_id, event=event)
+            except Ticket.DoesNotExist:
+                pass
+            
+        if not ticket:
+            try:
+                ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
+            except Ticket.DoesNotExist:
+                pass
+            
+        if not ticket:
+            try:
+                ticket_id_num = int(ticket_id.replace("T", "")) if ticket_id.startswith("T") else int(ticket_id)
+                ticket = Ticket.objects.get(id=ticket_id_num, event=event)
+            except (ValueError, Ticket.DoesNotExist):
+                pass
+            
+        if not ticket:
+            return 400, {"error": "Ticket '{ticket_id}' not found for this event."}
 
         # Parse date string from query param
         try:
@@ -1511,7 +1621,11 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
         # Normalise ticket.event_dates into 'YYYY-MM-DD' strings
         valid_dates: list[str] = []
         for d in ticket.event_dates or []:
-            if isinstance(d, str):
+            if isinstance(d, dict):
+                date_val = d.get('date')
+                if date_val and len(str(date_val)) >= 10:
+                    valid_dates.append(str(date_val)[:10])
+            elif isinstance(d, str):
                 try:
                     dt = datetime.fromisoformat(d)
                     valid_dates.append(dt.date().isoformat())
@@ -1659,6 +1773,7 @@ def get_user_tickets(request, status: str = None):
                 ticket_data = {
                     "ticket_id": ticket.id,
                     "qr_code": ticket.qr_code,
+                    "ticket_number": ticket.ticket_number,
                     "event_id": event.id if event else None,
                     "event_title": event.event_title if event else "Event not found",
                     "event_description": event.event_description if event else None,

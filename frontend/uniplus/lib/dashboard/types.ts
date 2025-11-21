@@ -1,5 +1,6 @@
 export interface Attendee {
 ticketId: string;
+displayTicketId?: string;
 name: string;
 email: string;
 username: string;

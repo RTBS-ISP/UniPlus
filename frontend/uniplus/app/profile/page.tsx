@@ -371,6 +371,7 @@ function ProfilePage() {
                     item={eventItem} 
                     index={idx}
                     stagger={0.04}
+                    showStatus={true}
                   />
                 ))}
               </div>
