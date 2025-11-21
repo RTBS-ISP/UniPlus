@@ -60,7 +60,7 @@ def convert_to_bangkok_time(dt):
 
 DEFAULT_PROFILE_PIC = "/images/logo.png" 
 
-api = NinjaAPI(csrf=True)
+api = NinjaAPI()
 
 @api.get("/", response=schemas.MessageSchema)
 def home(request):
@@ -166,7 +166,19 @@ def logout_view(request):
 @api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
 def get_user(request):
     if request.user.is_authenticated:
-        about_me_data = request.user.about_me if isinstance(request.user.about_me, dict) else {}
+        about_me_data = {}
+        if request.user.about_me:
+            if isinstance(request.user.about_me, dict):
+                about_me_data = request.user.about_me
+            elif isinstance(request.user.about_me, str):
+                try:
+                    about_me_str = request.user.about_me.strip()
+                    if about_me_str.startswith('"') and about_me_str.endswith('"'):
+                        about_me_str = about_me_str[1:-1]
+                    about_me_data = json.loads(about_me_str)
+                except json.JSONDecodeError:
+                    print(f"Failed to parse about_me: {request.user.about_me}")
+                    about_me_data = {}
 
         tickets = []
         
@@ -279,51 +291,11 @@ def get_user(request):
             "lastName": request.user.last_name,
             "phone": request.user.phone_number,
             "role": request.user.role,
-            "aboutMe": about_me_data,
+            "aboutMe": about_me_data,  # Now properly parsed
             "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC,
             "tickets": tickets
         }
     return 401, {"error": "Not authenticated"}
-
-# ============================================================================
-# NEW: PUBLIC PROFILE ENDPOINT
-# ============================================================================
-
-@api.get("/users/{username}/profile", response={200: schemas.PublicProfileSchema, 404: schemas.ErrorSchema})
-def get_public_profile(request, username: str):
-    """
-    Get public profile of a user (for clicking on organizer names)
-    """
-    try:
-        user = get_object_or_404(AttendeeUser, username=username)
-        
-        # Calculate stats
-        events_organized = Event.objects.filter(organizer=user).count()
-        
-        # Total attendees across all events
-        total_attendees = Ticket.objects.filter(
-            event__organizer=user,
-            approval_status='approved'
-        ).count()
-        
-        # Average rating
-        avg_rating = Rating.objects.filter(
-            event__organizer=user
-        ).aggregate(Avg('rates'))['rates__avg']
-        
-        return 200, {
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "role": user.role,
-            "about_me": user.about_me if isinstance(user.about_me, dict) else {},
-            "profile_pic": user.profile_picture.url if user.profile_picture else DEFAULT_PROFILE_PIC,
-            "events_organized": events_organized,
-            "total_attendees": total_attendees,
-            "avg_rating": round(avg_rating, 1) if avg_rating else None,
-        }
-    except Exception as e:
-        return 404, {"error": f"User not found: {str(e)}"}
 
 
 # ============================================================================
@@ -1008,7 +980,8 @@ def get_user_event_history(request):
     
     try:
         tickets = Ticket.objects.filter(
-            attendee=request.user
+            attendee=request.user,
+            approval_status='approved'  
         ).select_related('event').order_by('-purchase_date')
         
         events_data = []
@@ -1019,6 +992,14 @@ def get_user_event_history(request):
             event_date_str = event.event_start_date.isoformat() if event.event_start_date else None
             if ticket.event_dates and isinstance(ticket.event_dates, list) and len(ticket.event_dates) > 0:
                 event_date_str = ticket.event_dates[0].get('date', event_date_str)
+            
+            # Parse event tags
+            event_tags = []
+            if event.tags:
+                try:
+                    event_tags = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    event_tags = [event.tags] if event.tags else []
             
             events_data.append({
                 "event_id": event.id,
@@ -1031,7 +1012,7 @@ def get_user_event_history(request):
                 "approval_status": ticket.approval_status,
                 "purchase_date": ticket.purchase_date.isoformat(),
                 "event_tags": event_tags, 
-                "organizer_role": request.user.role,
+                "organizer_role": event.organizer.role if event.organizer else "organizer",
                 "is_online": event.is_online,
                 "location": event.event_address or ("Online" if event.is_online else "TBA"),
                 "qr_code": ticket.qr_code,
@@ -1046,7 +1027,10 @@ def get_user_event_history(request):
     except Exception as e:
         print(f"Error fetching event history: {e}")
         tickets = (
-            Ticket.objects.filter(attendee=request.user)
+            Ticket.objects.filter(
+                attendee=request.user,
+                approval_status='approved' 
+            )
             .select_related("event", "event__organizer")
             .order_by("-purchase_date")
         )
@@ -1101,7 +1085,6 @@ def get_user_event_history(request):
         traceback.print_exc()
         return 400, {"error": str(e)}
 
-
 @api.get("/user/statistics", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema})
 def get_user_statistics(request):
     """Get user's event statistics"""
@@ -1109,20 +1092,13 @@ def get_user_statistics(request):
         return 401, {"error": "Not authenticated"}
     
     try:
-        from django.utils import timezone
-        all_tickets = Ticket.objects.filter(attendee=request.user)
+        all_tickets = Ticket.objects.filter(attendee=request.user, approval_status='approved')
         total_events = all_tickets.values('event').distinct().count()
-        upcoming_tickets = all_tickets.filter(
-            event__event_end_date__gt=timezone.now()
-        ).values('event').distinct()
+        upcoming_tickets = all_tickets.filter(event__event_end_date__gt=timezone.now()).values('event').distinct()
         upcoming_count = upcoming_tickets.count()
-        past_tickets = all_tickets.filter(
-            event__event_end_date__lte=timezone.now()
-        ).values('event').distinct()
+        past_tickets = all_tickets.filter(event__event_end_date__lte=timezone.now()).values('event').distinct()
         attended_count = past_tickets.count()
-        
-        # Add pending count
-        pending_count = all_tickets.filter(approval_status='pending').count()
+        pending_count = Ticket.objects.filter(attendee=request.user, approval_status='pending').count()
         
         return 200, {
             "total_events": total_events,
@@ -1136,11 +1112,7 @@ def get_user_statistics(request):
         return 400, {"error": str(e)}
 
 
-@api.get(
-    "/events/{event_id}/dashboard",
-    auth=django_auth,
-    response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema},
-)
+@api.get("/events/{event_id}/dashboard",auth=django_auth,response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema},)
 def get_event_dashboard(request, event_id: int):
     """Get dashboard data for event organizer - UPDATED VERSION"""
     try:
@@ -1213,6 +1185,7 @@ def get_event_dashboard(request, event_id: int):
                 "displayTicketId": ticket.ticket_number or f"T{ticket.id}",
                 "name": f"{user.first_name} {user.last_name}",
                 "email": user.email,
+                "username": user.username,
                 "status": status,
                 "approvalStatus": ticket.approval_status,
                 "registered": ticket.purchase_date.isoformat(),
@@ -1896,14 +1869,11 @@ def get_user_created_events(request):
 
 
 # exported into csv
-
-
-@api.post("/events/{event_id}/export", auth=django_auth)
+@api.get("/events/{event_id}/export", auth=django_auth)  
 def export_event_registrations(request, event_id: int):
     try:
         event = get_object_or_404(Event, id=event_id)
         
-        # Proper authorization check
         if event.organizer != request.user:
             return HttpResponse("Unauthorized", status=403)
         
@@ -1913,17 +1883,15 @@ def export_event_registrations(request, event_id: int):
         if not tickets.exists():
             return HttpResponse("No registrations found", status=404)
 
-        # Create CSV with better filename
         response = HttpResponse(content_type='text/csv')
         filename = f"{event.event_title}_registrations_{timezone.now().date()}.csv"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         writer = csv.writer(response)
         
-        # Enhanced headers
         writer.writerow([
-            'Ticket ID', 'Attendee Name', 'Attendee Email', 
-            'Phone', 'Registration Date', 'Status', 'QR Code'
+            'Ticket ID', 'Username', 'Attendee Name', 'Attendee Email', 
+            'Phone', 'Registration Date', 'Status', 'Checked In Dates'
         ])
         
         for ticket in tickets:
@@ -1931,17 +1899,32 @@ def export_event_registrations(request, event_id: int):
             attendee_name = f"{attendee.first_name} {attendee.last_name}".strip()
             if not attendee_name:
                 attendee_name = attendee.username
+
+            checked_in_dates = "Didn't check in yet"
+            if ticket.checked_in_dates:
+                # Format each timestamp 
+                formatted_dates = []
+                for date_str in ticket.checked_in_dates.values():
+                    try:
+                        bangkok_dt = convert_to_bangkok_time(datetime.fromisoformat(date_str.replace('Z', '+00:00')))
+                        formatted_dates.append(bangkok_dt.strftime('%Y-%m-%d %H:%M:%S'))
+                    except (ValueError, AttributeError) as e:
+                        print(f"Error parsing date {date_str}: {e}")
+                        formatted_dates.append(str(date_str))
                 
+                checked_in_dates = ", ".join(formatted_dates)
+
             writer.writerow([
-                ticket.id,
+                ticket.ticket_number,
+                attendee.username,
                 attendee_name,
                 attendee.email,
                 attendee.phone_number or 'N/A',
                 ticket.purchase_date.strftime('%Y-%m-%d %H:%M:%S') if ticket.purchase_date else 'N/A',
-                ticket.approval_status,  # Include approval status
-                ticket.qr_code
+                ticket.approval_status,
+                checked_in_dates
             ])
-        
+    
         return response
         
     except Event.DoesNotExist:
@@ -1950,8 +1933,6 @@ def export_event_registrations(request, event_id: int):
         print(f"Export error: {str(e)}")
         return HttpResponse("Export failed", status=500)
     
-
-
 # ============================================================================
 # EVENT VERIFICATION ENDPOINTS
 # ============================================================================
@@ -2082,6 +2063,7 @@ def get_admin_events(request):
                 "event_description": event.event_description,
                 "event_create_date": event.event_create_date.isoformat(),
                 "organizer_name": organizer_name,
+                "organizer_username": event.organizer.username,  
                 "organizer_id": event.organizer.id,
                 "status_registration": event.status_registration,
                 "verification_status": verification_status,
@@ -2172,3 +2154,268 @@ def clear_all_notifications(request):
     count = Notification.objects.filter(user=user).count()
     Notification.objects.filter(user=user).delete()
     return {"success": True, "message": f"{count} notifications cleared"}
+
+# ============================================================================
+# NEW: PUBLIC PROFILE ENDPOINT
+# ============================================================================
+
+@api.get("/user/{username}/event-history", response={200: dict, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def get_public_user_event_history(request, username: str):
+    """Get public event history for a specific user (only approved events)"""
+    try:
+        user = get_object_or_404(AttendeeUser, username=username)
+        
+        tickets = Ticket.objects.filter(
+            attendee=user,
+            approval_status='approved'
+        ).select_related('event').order_by('-purchase_date')
+        
+        events_data = []
+        for ticket in tickets:
+            event = ticket.event
+            
+            if event.verification_status != "approved":
+                continue
+                
+            event_date_str = event.event_start_date.isoformat() if event.event_start_date else None
+            if ticket.event_dates and isinstance(ticket.event_dates, list) and len(ticket.event_dates) > 0:
+                event_date_str = ticket.event_dates[0].get('date', event_date_str)
+            
+            event_tags = []
+            if event.tags:
+                try:
+                    event_tags = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    event_tags = [event.tags] if event.tags else []
+            
+            events_data.append({
+                "event_id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_date": event_date_str,
+                "location": ticket.location,
+                "organizer": event.organizer.username,
+                "status": ticket.status,
+                "approval_status": ticket.approval_status,
+                "purchase_date": ticket.purchase_date.isoformat(),
+                "event_tags": event_tags, 
+                "organizer_role": event.organizer.role if event.organizer else "organizer",
+                "is_online": event.is_online,
+                "location": event.event_address or ("Online" if event.is_online else "TBA"),
+                "qr_code": ticket.qr_code,
+                "is_online": ticket.is_online,
+                "meeting_link": ticket.meeting_link,
+                "user_name": f"{user.first_name} {user.last_name}".strip() or user.username,
+                "user_email": user.email,
+            })
+        
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data),
+        }
+        
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with username '{username}' not found"}
+    except Exception as e:
+        print(f"Error fetching public event history: {e}")
+        return 400, {"error": str(e)}
+
+    
+
+@api.get("/user/{username}/created-events", response={200: dict, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def get_public_user_created_events(request, username: str):
+    """Get public created events for a specific user (only approved events)"""
+    try:
+        user = get_object_or_404(AttendeeUser, username=username)
+        
+        # Only show approved events for public viewing
+        created_events = Event.objects.filter(
+            organizer=user,
+            verification_status="approved"
+        ).select_related("organizer").order_by("-event_start_date")
+        
+        events_data = []
+        for event in created_events:
+            status = "upcoming" if (
+                event.event_start_date and event.event_start_date > timezone.now()
+            ) else "past"
+
+            event_tags = []
+            if event.tags:
+                try:
+                    event_tags = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    event_tags = [event.tags] if event.tags else []
+
+            event_date_str = (
+                event.event_start_date.isoformat()
+                if event.event_start_date
+                else None
+            )
+            
+            attendee_count = Ticket.objects.filter(
+                event=event, 
+                approval_status='approved'
+            ).count()
+            
+            events_data.append({
+                "event_id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_date": event_date_str,
+                "location": event.event_address,
+                "is_online": event.is_online,
+                "meeting_link": event.event_meeting_link,
+                "status": status,
+                "organizer": event.organizer.username,
+                "organizer_role": getattr(event.organizer, "role", "organizer"),
+                "event_tags": event_tags,
+                "user_name": user.username, 
+                "user_email": "",  
+                "purchase_date": None,  
+                "qr_code": None,  
+            })
+        
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data),
+        }
+        
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with username '{username}' not found"}
+    except Exception as e:
+        import traceback
+        print("Error fetching public created events:")
+        traceback.print_exc()
+        return 400, {"error": str(e)}
+    
+
+@api.get("/user/{username}/statistics", response={200: dict, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def get_public_user_statistics(request, username: str):
+    """Get public statistics for a specific user"""
+    try:
+        user = get_object_or_404(AttendeeUser, username=username)
+        
+        # Only count approved events and tickets for public viewing
+        approved_tickets = Ticket.objects.filter(attendee=user, approval_status='approved')
+        
+        # Only count events that are approved/verified
+        approved_events_ids = approved_tickets.filter(event__verification_status="approved").values_list('event_id', flat=True).distinct()
+        total_events = len(approved_events_ids)
+        
+        # Upcoming events (approved events with future dates)
+        upcoming_count = approved_tickets.filter(event__verification_status="approved",event__event_end_date__gt=timezone.now()).values('event').distinct().count()
+        
+        attended_count = approved_tickets.filter(event__verification_status="approved",event__event_end_date__lte=timezone.now()).values('event').distinct().count()
+        
+        created_events_count = Event.objects.filter(
+            organizer=user,
+            verification_status="approved"
+        ).count()
+        
+        return 200, {
+            "total_events": total_events,
+            "upcoming_events": upcoming_count,
+            "attended_events": attended_count,
+            "created_events": created_events_count,
+            "total_registrations": approved_tickets.count(),
+            "user_info": {
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": user.role
+            }
+        }
+        
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with username '{username}' not found"}
+    except Exception as e:
+        print(f"Error calculating public statistics: {e}")
+        return 400, {"error": str(e)}
+    
+@api.get("/user/{username}/profile", response={200: schemas.PublicProfileSchema, 404: schemas.ErrorSchema})
+def get_public_profile(request, username: str):
+    """Get public profile of a user"""
+    try:
+        user = get_object_or_404(AttendeeUser, username=username)
+        
+        about_me_data = {}
+        if user.about_me:
+            if isinstance(user.about_me, dict):
+                about_me_data = user.about_me
+            elif isinstance(user.about_me, str):
+                try:
+                    about_me_str = user.about_me.strip()
+                    if about_me_str.startswith('"') and about_me_str.endswith('"'):
+                        about_me_str = about_me_str[1:-1]
+                    about_me_data = json.loads(about_me_str)
+                except json.JSONDecodeError:
+                    print(f"Failed to parse about_me for user {username}: {user.about_me}")
+                    about_me_data = {}
+        
+        # Calculate stats 
+        events_organized = Event.objects.filter(
+            organizer=user, 
+            verification_status="approved"
+        ).count()
+        
+        total_attendees = Ticket.objects.filter(
+            event__organizer=user,
+            event__verification_status="approved",
+            approval_status='approved'
+        ).count()
+        
+        avg_rating = Rating.objects.filter(
+            event_id__organizer=user,
+            event_id__verification_status="approved"
+        ).aggregate(Avg('rates'))['rates__avg']
+        
+        user_tickets = Ticket.objects.filter(
+            attendee=user, 
+            approval_status='approved',
+            event__verification_status="approved"
+        )
+        user_total_events = user_tickets.values('event').distinct().count()
+        
+        return 200, {
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "phone_number": user.phone_number, 
+            "role": user.role,
+            "about_me": about_me_data,  
+            "profile_pic": user.profile_picture.url if user.profile_picture else DEFAULT_PROFILE_PIC,
+            "events_organized": events_organized,
+            "total_attendees": total_attendees,
+            "user_total_events": user_total_events,
+            "avg_rating": round(avg_rating, 1) if avg_rating else None,
+        }
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with username '{username}' not found"}
+    except Exception as e:
+        print(f"Error in public profile: {e}")
+        import traceback
+        traceback.print_exc()
+        return 404, {"error": f"Error loading profile: {str(e)}"}
+    
+@api.get("/user/{email}", response={200: schemas.UserByEmailSchema, 404: schemas.ErrorSchema})
+def get_user_by_email(request, email: str):
+    """
+    Get user information by email address
+    Useful for finding usernames when only emails are available
+    """
+    try:
+        user = get_object_or_404(AttendeeUser, email=email)
+        
+        return 200, {
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+        }
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with email '{email}' not found"}
+    except Exception as e:
+        print(f"Error fetching user by email: {e}")
+        return 400, {"error": str(e)}

@@ -1071,7 +1071,13 @@ export default function EventDetailPage({ params }: Params) {
           <div className="flex flex-wrap items-end gap-2">
             <h2 className="text-xl font-bold text-[#0B1220]">About this event</h2>
             <p className="text-x1 text-[#0B1220]/70">
-              Organized by <span className="font-semibold">{event.organizer_username}</span>
+              Organized by{" "}
+              <Link 
+                href={`/profile/${event.organizer_username}`}
+                className="font-semibold text-[#6366F1] hover:text-[#4F46E5] hover:underline transition-colors"
+              >
+                {event.organizer_username}
+              </Link>
             </p>
           </div>
 
