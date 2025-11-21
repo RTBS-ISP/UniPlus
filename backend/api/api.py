@@ -1869,13 +1869,11 @@ def get_user_created_events(request):
 
 
 # exported into csv
-
 @api.get("/events/{event_id}/export", auth=django_auth)  
 def export_event_registrations(request, event_id: int):
     try:
         event = get_object_or_404(Event, id=event_id)
         
-        # Proper authorization check
         if event.organizer != request.user:
             return HttpResponse("Unauthorized", status=403)
         
@@ -1893,7 +1891,7 @@ def export_event_registrations(request, event_id: int):
         
         writer.writerow([
             'Ticket ID', 'Username', 'Attendee Name', 'Attendee Email', 
-            'Phone', 'Registration Date', 'Status',
+            'Phone', 'Registration Date', 'Status', 'Checked In Dates'
         ])
         
         for ticket in tickets:
@@ -1901,7 +1899,21 @@ def export_event_registrations(request, event_id: int):
             attendee_name = f"{attendee.first_name} {attendee.last_name}".strip()
             if not attendee_name:
                 attendee_name = attendee.username
+
+            checked_in_dates = "Didn't check in yet"
+            if ticket.checked_in_dates:
+                # Format each timestamp 
+                formatted_dates = []
+                for date_str in ticket.checked_in_dates.values():
+                    try:
+                        bangkok_dt = convert_to_bangkok_time(datetime.fromisoformat(date_str.replace('Z', '+00:00')))
+                        formatted_dates.append(bangkok_dt.strftime('%Y-%m-%d %H:%M:%S'))
+                    except (ValueError, AttributeError) as e:
+                        print(f"Error parsing date {date_str}: {e}")
+                        formatted_dates.append(str(date_str))
                 
+                checked_in_dates = ", ".join(formatted_dates)
+
             writer.writerow([
                 ticket.ticket_number,
                 attendee.username,
@@ -1910,8 +1922,9 @@ def export_event_registrations(request, event_id: int):
                 attendee.phone_number or 'N/A',
                 ticket.purchase_date.strftime('%Y-%m-%d %H:%M:%S') if ticket.purchase_date else 'N/A',
                 ticket.approval_status,
+                checked_in_dates
             ])
-        
+    
         return response
         
     except Event.DoesNotExist:
