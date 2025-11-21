@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Navbar from "../../components/navbar";
 import TagSelector from "../../components/events/TagSelector";
@@ -50,8 +49,6 @@ const sectionCard =
 
 export default function EventCreatePage() {
   const toast = useAlert();
-  const searchParams = useSearchParams();
-  const duplicateId = searchParams.get("duplicate");
 
   const [data, setData] = useState<FormData>({
     eventTitle: "",
@@ -76,88 +73,8 @@ export default function EventCreatePage() {
   ]);
 
   const [loading, setLoading] = useState(false);
-  const [loadingEvent, setLoadingEvent] = useState(false);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-fill form if duplicating
-  useEffect(() => {
-    if (duplicateId) {
-      fetchEventData(duplicateId);
-    }
-  }, [duplicateId]);
-
-  const fetchEventData = async (eventId: string) => {
-    try {
-      setLoadingEvent(true);
-      const response = await fetch(`http://localhost:8000/api/events/${eventId}`, {
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch event data");
-      }
-
-      const event = await response.json();
-      
-      // Parse tags
-      let tagsArray: string[] = [];
-      if (event.tags) {
-        if (Array.isArray(event.tags)) {
-          tagsArray = event.tags;
-        } else if (typeof event.tags === 'string') {
-          try {
-            const parsed = JSON.parse(event.tags);
-            tagsArray = Array.isArray(parsed) ? parsed : [event.tags];
-          } catch {
-            tagsArray = [event.tags];
-          }
-        }
-      }
-
-      // Extract category from tags (first tag)
-      const category = tagsArray.length > 0 ? tagsArray[0] : "";
-
-      // Auto-fill form data
-      setData({
-        eventTitle: `${event.event_title} (Copy)`,
-        eventDescription: event.event_description || "",
-        category: category,
-        maxAttendee: event.max_attendee ? event.max_attendee.toString() : "",
-        tags: tagsArray,
-        eventEmail: event.event_email || "",
-        eventPhoneNumber: event.event_phone_number || "",
-        eventWebsiteUrl: event.event_website_url || "",
-        termsAndConditions: event.terms_and_conditions || "",
-        registrationStartDate: "",
-        registrationEndDate: "",
-        eventStartDate: "",
-        eventEndDate: "",
-        imageFile: null,
-        imagePreview: event.event_image || event.image || "",
-      });
-
-      // Auto-fill schedule days
-      if (event.schedule && Array.isArray(event.schedule)) {
-        const days: DaySlot[] = event.schedule.map((day: any) => ({
-          date: day.date || "",
-          startTime: day.startTime || day.start_time || "",
-          endTime: day.endTime || day.end_time || "",
-          isOnline: day.is_online || false,
-          address: day.location || day.address || "",
-          meetingLink: day.meeting_link || "",
-        }));
-        setScheduleDays(days.length > 0 ? days : [{ date: "", startTime: "", endTime: "", isOnline: false, address: "", meetingLink: "" }]);
-      }
-
-      toast({ text: "Event data loaded! Modify the details and save.", variant: "success" });
-    } catch (err: any) {
-      console.error("Error fetching event:", err);
-      toast({ text: "Failed to load event data for duplication", variant: "error" });
-    } finally {
-      setLoadingEvent(false);
-    }
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -171,9 +88,7 @@ export default function EventCreatePage() {
   };
 
   const removeImage = () => {
-    if (data.imagePreview && data.imagePreview.startsWith('blob:')) {
-      URL.revokeObjectURL(data.imagePreview);
-    }
+    if (data.imagePreview) URL.revokeObjectURL(data.imagePreview);
     setData((s) => ({ ...s, imageFile: null, imagePreview: "" }));
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -343,31 +258,14 @@ export default function EventCreatePage() {
     }
   };
 
-  if (loadingEvent) {
-    return (
-      <div className="min-h-screen bg-[#E0E7FF]">
-        <Navbar />
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-2xl text-gray-600">Loading event data...</div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#E0E7FF]">
       <Navbar />
 
       <header className="mx-auto max-w-6xl px-5 pt-10">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
-            {duplicateId ? "Duplicate Event" : "Create a new event"}
-          </h1>
-          <p className="text-gray-600">
-            {duplicateId 
-              ? "Modify the details below and create your duplicated event."
-              : "Add the core details, schedule your days, and publish."}
-          </p>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Create a new event</h1>
+          <p className="text-gray-600">Add the core details, schedule your days, and publish.</p>
         </div>
       </header>
 
@@ -566,7 +464,7 @@ export default function EventCreatePage() {
                   <label htmlFor="imageUpload" className="cursor-pointer block">
                     {data.imagePreview ? (
                       <img
-                        src={data.imagePreview.startsWith('http') ? data.imagePreview : `http://localhost:8000${data.imagePreview}`}
+                        src={data.imagePreview}
                         alt="Preview"
                         className="mx-auto h-40 w-full object-cover rounded-lg"
                       />
@@ -665,7 +563,7 @@ export default function EventCreatePage() {
                   <div className="pt-2">
                     <dt className="text-xs uppercase tracking-wide text-gray-500">Event Image</dt>
                     <img
-                      src={data.imagePreview.startsWith('http') ? data.imagePreview : `http://localhost:8000${data.imagePreview}`}
+                      src={data.imagePreview}
                       alt="Preview"
                       className="mt-2 h-24 w-full rounded-md object-cover border border-gray-200"
                     />

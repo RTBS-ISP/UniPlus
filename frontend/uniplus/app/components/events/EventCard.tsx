@@ -91,7 +91,7 @@ export default function EventCard({
   item,
   index = 0,
   stagger = 0.06,
-  showDuplicate = false, // NEW: prop to show duplicate button
+  showDuplicate = false, 
 }: {
   item: EventItem;
   index?: number;
