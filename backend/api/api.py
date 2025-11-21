@@ -1088,8 +1088,10 @@ def get_my_event_feedback(request, event_id: int):
             "updated_at": fb.updated_at,
             "user_name": full_name,
             "user_email": user_obj.email,
-            "anonymous": fb.anonymous,  # 👈 NEW (so frontend could pre-fill toggle later)
+            "anonymous": fb.anonymous,
         }
+        print("get_my_event_feedback payload:", payload)
+        return 200, payload
 
     except Exception as e:
         print(f"Error loading feedback: {e}")

@@ -475,7 +475,7 @@ class EventFeedbackOutSchema(Schema):
     comment: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    user_name: str
+    user_name: str | None = None
     user_email: Optional[str] = None
     anonymous: bool 
     
