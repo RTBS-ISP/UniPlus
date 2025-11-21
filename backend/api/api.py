@@ -256,7 +256,8 @@ def get_user(request):
                         },
                         "event_title": event.event_title if event else None,
                         "event_description": event.event_description if event else None,
-                        "ticket_number": ticket.qr_code,
+                        "qr_code": ticket.qr_code,
+                        "ticket_number": ticket.ticket_number,
                         "event_id": event.id if event else None,
                         "is_online": ticket.is_online,
                         "event_meeting_link": ticket.meeting_link,
@@ -1687,6 +1688,7 @@ def get_user_tickets(request, status: str = None):
                 ticket_data = {
                     "ticket_id": ticket.id,
                     "qr_code": ticket.qr_code,
+                    "ticket_number": ticket.ticket_number,
                     "event_id": event.id if event else None,
                     "event_title": event.event_title if event else "Event not found",
                     "event_description": event.event_description if event else None,
