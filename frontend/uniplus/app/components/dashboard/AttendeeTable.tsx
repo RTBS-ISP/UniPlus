@@ -75,8 +75,8 @@ export function AttendeeTable({
                   <td className="px-6 py-4 text-center">
                     <input
                       type="checkbox"
-                      checked={selected.includes(a.ticketId)}
-                      onChange={() => toggle(a.ticketId)}
+                      checked={selected.includes(a.displayTicketId ||a.ticketId)}
+                      onChange={() => toggle(a.displayTicketId ||a.ticketId)}
                       className="w-4 h-4 cursor-pointer"
                     />
                   </td>
@@ -84,15 +84,15 @@ export function AttendeeTable({
 
                 <td className="px-6 py-4 text-gray-800 font-medium">
                   <div className="flex items-center gap-2">
-                    <span>{a.ticketId}</span>
+                    <span>{a.displayTicketId || a.ticketId}</span>
                     
                     {/* Copy button */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigator.clipboard.writeText(a.ticketId);
+                        navigator.clipboard.writeText(a.displayTicketId || a.ticketId);
                         alert({
-                          text: `${a.ticketId} copied to clipboard`,
+                          text: `${a.displayTicketId || a.ticketId} copied to clipboard`,
                           variant: "success",
                         });
                       }}
