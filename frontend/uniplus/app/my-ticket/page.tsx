@@ -28,6 +28,7 @@ interface Ticket {
   user_information: UserInformation;
   event_title: string;
   event_description: string;
+  qr_code: string;
   ticket_number: string;
   event_id: number;
   is_online: boolean;
@@ -78,7 +79,8 @@ function MyTicketPage() {
           },
           event_title: ticket.event_title,
           event_description: ticket.event_description || '',
-          ticket_number: ticket.qr_code, // Map qr_code to ticket_number
+          qr_code: ticket.qr_code,
+          ticket_number: ticket.ticket_number,
           event_id: ticket.event_id || 0,
           is_online: ticket.is_online,
           event_meeting_link: ticket.event_meeting_link,
@@ -94,6 +96,7 @@ function MyTicketPage() {
         
         setTickets(approvedTickets);
         setLoading(false);
+        console.log('Fetched tickets:', approvedTickets);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An error occurred');
         setLoading(false);

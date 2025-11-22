@@ -1022,6 +1022,7 @@ def get_user_event_history(request):
             attendee=request.user,
             approval_status='approved',  # Only approved by organizer
             event__verification_status='approved'  # ✅ NEW: Only approved events
+            approval_status='approved'  
         ).select_related('event').order_by('-purchase_date')
         
         events_data = []
@@ -1075,6 +1076,7 @@ def get_user_event_history(request):
                 attendee=request.user,
                 approval_status='approved',
                 event__verification_status='approved'  # ✅ NEW: Only approved events
+                approval_status='approved' 
             )
             .select_related("event", "event__organizer")
             .order_by("-purchase_date")
@@ -1134,7 +1136,6 @@ def get_user_event_history(request):
         print("Error fetching event history:")
         traceback.print_exc()
         return 400, {"error": str(e)}
-
 
 @api.get("/user/statistics", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema})
 def get_user_statistics(request):
@@ -2729,4 +2730,25 @@ def get_event_for_duplication(request, event_id: int):
         print(f"Error fetching event for duplication: {e}")
         import traceback
         traceback.print_exc()
+        return 400, {"error": str(e)}
+@api.get("/user/{email}", response={200: schemas.UserByEmailSchema, 404: schemas.ErrorSchema})
+def get_user_by_email(request, email: str):
+    """
+    Get user information by email address
+    Useful for finding usernames when only emails are available
+    """
+    try:
+        user = get_object_or_404(AttendeeUser, email=email)
+        
+        return 200, {
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+        }
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with email '{email}' not found"}
+    except Exception as e:
+        print(f"Error fetching user by email: {e}")
         return 400, {"error": str(e)}

@@ -1,9 +1,11 @@
 "use client";
 
-import React from "react";
-import { CheckCircle, XCircle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { CheckCircle, XCircle, Copy } from "lucide-react";
 import type { Attendee, TableView } from "@/lib/dashboard/types";
 import { formatDate, formatDateTime, getCheckinTimeForDate } from "@/lib/utils/formatDate";
+import { useAlert } from "@/app/components/ui/AlertProvider";
 
 export function AttendeeTable({
   view,
@@ -24,6 +26,24 @@ export function AttendeeTable({
 }) {
   const isApproval = view === "approval";
   const isAttendance = view === "attendance";
+  const alert = useAlert();
+
+  const [usernames, setUsernames] = useState<{ [email: string]: string }>({});
+
+  useEffect(() => {
+    data.forEach((attendee) => {
+      if (!usernames[attendee.email]) {
+        fetch(`http://localhost:8000/api/user/${encodeURIComponent(attendee.email)}`)
+          .then((res) => res.json())
+          .then((json) => {
+            setUsernames((prev) => ({ ...prev, [attendee.email]: json.username }));
+          })
+          .catch(() => {
+            setUsernames((prev) => ({ ...prev, [attendee.email]: "unknown" }));
+          });
+      }
+    });
+  }, [data, usernames]);
 
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -55,15 +75,49 @@ export function AttendeeTable({
                   <td className="px-6 py-4 text-center">
                     <input
                       type="checkbox"
-                      checked={selected.includes(a.ticketId)}
-                      onChange={() => toggle(a.ticketId)}
+                      checked={selected.includes(a.displayTicketId ||a.ticketId)}
+                      onChange={() => toggle(a.displayTicketId ||a.ticketId)}
                       className="w-4 h-4 cursor-pointer"
                     />
                   </td>
                 )}
 
-                <td className="px-6 py-4 text-gray-800 font-medium">{a.ticketId}</td>
-                <td className="px-6 py-4 text-gray-800 font-medium">{a.name}</td>
+                <td className="px-6 py-4 text-gray-800 font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{a.displayTicketId || a.ticketId}</span>
+                    
+                    {/* Copy button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(a.displayTicketId || a.ticketId);
+                        alert({
+                          text: `${a.displayTicketId || a.ticketId} copied to clipboard`,
+                          variant: "success",
+                        });
+                      }}
+                      className="p-1 hover:bg-gray-100 rounded transition-colors"
+                      title="Copy Ticket ID"
+                    >
+                      <Copy className="w-4 h-4 text-gray-400 group-hover:text-indigo-500 transition-colors" />
+                    </button>
+                  </div>
+                </td>
+
+                {/* Clickable Name */}
+                <td className="px-6 py-4">
+                  <Link
+                    href={
+                      usernames[a.email]
+                        ? `/profile/${usernames[a.email]}`
+                        : "#"
+                    }
+                    className="text-indigo-600 hover:text-indigo-800 font-medium hover:underline transition-colors"
+                  >
+                    {a.name}
+                  </Link>
+                </td>
+
                 <td className="px-6 py-4 text-gray-800">{a.email}</td>
 
                 <td className="px-6 py-4 text-center">
@@ -104,7 +158,7 @@ export function AttendeeTable({
                   <td className="px-6 py-4 text-gray-800">
                     {(() => {
                       const checkinTime = getCheckinTimeForDate(a.checkedInDates, a.eventDate);
-                      
+
                       if (!checkinTime) {
                         return (
                           <button
@@ -115,7 +169,7 @@ export function AttendeeTable({
                           </button>
                         );
                       }
-                      
+
                       return formatDateTime(checkinTime);
                     })()}
                   </td>
@@ -140,11 +194,11 @@ export function AttendeeTable({
                       </div>
                     ) : (
                       <span className="text-gray-800">
-                         {a.approvalStatus === "approved" && a.approvedAt
-                            ? formatDateTime(a.approvedAt)
-                            : a.approvalStatus === "rejected" && a.rejectedAt
-                            ? formatDateTime(a.rejectedAt)
-                            : formatDateTime(a.registered)}
+                        {a.approvalStatus === "approved" && a.approvedAt
+                          ? formatDateTime(a.approvedAt)
+                          : a.approvalStatus === "rejected" && a.rejectedAt
+                          ? formatDateTime(a.rejectedAt)
+                          : formatDateTime(a.registered)}
                       </span>
                     )}
                   </td>

@@ -51,6 +51,49 @@ function isValidISODate(d?: string) {
   return !!(d && /^\d{4}-\d{2}-\d{2}$/.test(d));
 }
 
+function getEventStatus(dateStr?: string) {
+  if (!isValidISODate(dateStr)) {
+    return { status: "other", border: "border-transparent", pill: null };
+  }
+
+  const today = new Date();
+  const event = new Date(dateStr + "T00:00:00Z");
+
+  const diff = Math.ceil(
+    (event.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (diff < 0) {
+    return {
+      status: "past",
+      border: "border-gray-300",
+      pill: { text: "Past", bg: "bg-gray-200", textColor: "text-gray-700" },
+    };
+  }
+
+  if (diff === 0) {
+    return {
+      status: "today",
+      border: "border-[#8B9CFF]",
+      pill: { text: "Today", bg: "bg-indigo-100", textColor: "text-indigo-700" },
+    };
+  }
+
+  if (diff <= 7) {
+    return {
+      status: "soon",
+      border: "border-[#6366F1]",
+      pill: { text: "Soon", bg: "bg-indigo-200", textColor: "text-indigo-800" },
+    };
+  }
+
+  return {
+    status: "upcoming",
+    border: "border-indigo-700",
+    pill: { text: "Upcoming", bg: "bg-indigo-300", textColor: "text-indigo-900" },
+  };
+}
+
 // ---------- Pills ----------
 function BluePill({ children }: { children: React.ReactNode }) {
   return (
@@ -86,17 +129,38 @@ function HostPill({ label }: { label: string }) {
   );
 }
 
+// ---------- Status Pill Component ----------
+function StatusPill({
+  text,
+  bg,
+  textColor,
+}: {
+  text: string;
+  bg: string;
+  textColor: string;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${bg} ${textColor}`}
+    >
+      {text}
+    </span>
+  );
+}
+
 // ---------- Main Component ----------
 export default function EventCard({
   item,
   index = 0,
   stagger = 0.06,
   showDuplicate = false, 
+  showStatus = false,
 }: {
   item: EventItem;
   index?: number;
   stagger?: number;
   showDuplicate?: boolean;
+  showStatus?: boolean;
 }) {
   const shouldReduce = useReducedMotion();
   const router = useRouter();
@@ -144,6 +208,8 @@ export default function EventCard({
     router.push(`/events/create?duplicate=${item.id}`);
   };
 
+  const { status, border, pill } = getEventStatus(item.startDate || item.date);
+  
   return (
     <motion.div
       initial={entranceInitial}
@@ -153,10 +219,25 @@ export default function EventCard({
       transition={transition}
       className="group rounded-2xl border border-[#6CA8FF] bg-white p-5 shadow-sm hover:shadow-lg
                  [backface-visibility:hidden] [transform-style:preserve-3d] relative"
+      className={`group rounded-2xl border bg-white p-5 shadow-sm hover:shadow-lg
+                  [backface-visibility:hidden] [transform-style:preserve-3d]
+                  ${showStatus ? `border-l-4 ${border}` : 'border border-[#6CA8FF]'}`}
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
-        <h3 className="text-xl font-semibold text-[#0B1220]">{item.title}</h3>
+        <div className="flex items-center gap-3 mb-1">
+          {showStatus && pill && (
+            <StatusPill
+              text={pill.text}
+              bg={pill.bg}
+              textColor={pill.textColor}
+            />
+          )}
+          <h3 className="text-xl font-semibold text-[#0B1220] leading-snug break-words">
+            {item.title}
+          </h3>
+        </div>
+        
         {typeof daysLeft === "number" && (
           <span className="text-xs text-[#0B1220]/70">
             Registration end {daysLeft} days

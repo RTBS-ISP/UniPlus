@@ -3,6 +3,7 @@ import Navbar from "../../components/navbar"
 import { Calendar, Clock, MapPin, ArrowLeft, User, Mail, AlertCircle, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { QRCodeCanvas } from "qrcode.react"
 import { useState, useEffect } from "react"
 
 interface EventDay {
@@ -566,7 +567,7 @@ function TicketDetailPage() {
                 <div className="w-full max-w-sm aspect-square bg-gray-200 rounded-lg flex items-center justify-center">
                   {/* Placeholder for QR Code */}
                   <div className="text-gray-400 text-center">
-                    <p className="text-sm">QR Code</p>
+                    <QRCodeCanvas value={ticket.qr_code} size={285} />
                     <p className="text-xs mt-2">{ticket.qr_code}</p>
                   </div>
                 </div>

@@ -1,7 +1,9 @@
 export interface Attendee {
 ticketId: string;
+displayTicketId?: string;
 name: string;
 email: string;
+username: string;
 status: "present" | "pending" | "absent";
 approvalStatus: "approved" | "pending" | "rejected";
 registered: string;
