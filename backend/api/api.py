@@ -1006,19 +1006,31 @@ def get_event_comments(request, event_id: int):
       
 @api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_event_history(request):
-    """Get user's registered events and attendance history"""
+    """
+    Get user's registered events and attendance history.
+    
+    ✅ ONLY shows events that are APPROVED by admin
+    ✅ Filters out pending/rejected events
+    ✅ Shows tickets that are APPROVED by organizer
+    """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     
     try:
+        # ✅ FIX: Filter BOTH approved event AND approved ticket
         tickets = Ticket.objects.filter(
             attendee=request.user,
-            approval_status='approved'  
+            approval_status='approved',  # Only approved by organizer
+            event__verification_status='approved'  # ✅ NEW: Only approved events
         ).select_related('event').order_by('-purchase_date')
         
         events_data = []
         for ticket in tickets:
             event = ticket.event
+            
+            # ✅ Double-check event is approved (extra safety)
+            if event.verification_status != 'approved':
+                continue
             
             # Get first date from event_dates
             event_date_str = event.event_start_date.isoformat() if event.event_start_date else None
@@ -1061,7 +1073,8 @@ def get_user_event_history(request):
         tickets = (
             Ticket.objects.filter(
                 attendee=request.user,
-                approval_status='approved' 
+                approval_status='approved',
+                event__verification_status='approved'  # ✅ NEW: Only approved events
             )
             .select_related("event", "event__organizer")
             .order_by("-purchase_date")
@@ -1069,6 +1082,11 @@ def get_user_event_history(request):
         events_data = []
         for ticket in tickets:
             event_obj = ticket.event
+            
+            # ✅ Skip if event not approved
+            if event_obj.verification_status != 'approved':
+                continue
+            
             status = "upcoming" if (
                 (ticket.event_date or ticket.start_date or (event_obj and getattr(event_obj, "event_start_date", None)))
                 and (ticket.event_date or ticket.start_date or event_obj.event_start_date) > timezone.now()
@@ -1116,6 +1134,7 @@ def get_user_event_history(request):
         print("Error fetching event history:")
         traceback.print_exc()
         return 400, {"error": str(e)}
+
 
 @api.get("/user/statistics", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema})
 def get_user_statistics(request):
@@ -1874,13 +1893,18 @@ def get_user_tickets(request, status: str = None):
         
 @api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_created_events(request):
-    """Return events created by the logged-in user"""
+    """
+    Return events created by the logged-in user.
+    
+    """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     try:
         created_events = (
-            Event.objects.filter(organizer=request.user)
-            .select_related("organizer")
+            Event.objects.filter(
+                organizer=request.user
+            )
+            .exclude(verification_status='rejected')  
             .order_by("-event_start_date")
         )
         events_data = []
@@ -1903,6 +1927,10 @@ def get_user_created_events(request):
                 if event.event_start_date
                 else None
             )
+            
+            # Get verification status for badge/display
+            verification_status = event.verification_status or "pending"
+            
             events_data.append({
                 "event_id": event.id,
                 "event_title": event.event_title,
@@ -1912,6 +1940,7 @@ def get_user_created_events(request):
                 "is_online": event.is_online,
                 "meeting_link": event.event_meeting_link,  
                 "status": status,
+                "verification_status": verification_status,  
                 "organizer": event.organizer.username if event.organizer else None,
                 "organizer_role": getattr(event.organizer, "role", "organizer") if event.organizer else "organizer",
                 "event_tags": event_tags,
