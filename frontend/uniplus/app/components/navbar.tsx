@@ -190,13 +190,13 @@ export default function Navbar() {
               {/* User Info Header */}
               <div className="px-4 py-3 bg-gradient-to-br from-indigo-50 to-purple-50 border-b border-gray-200">
                 <p className="text-sm font-semibold text-gray-900 truncate">
-                  {user.email}
+                  {user?.email}
                 </p>
                 <p className="text-xs text-gray-600 mt-0.5 capitalize">
-                  {user.role === "admin" && "Administrator"}
-                  {user.role === "student" && "Student"}
-                  {user.role === "professor" && "Professor"}
-                  {user.role === "organizer" && "Organizer"}
+                  {user?.role === "admin" && "Administrator"}
+                  {user?.role === "student" && "Student"}
+                  {user?.role === "professor" && "Professor"}
+                  {user?.role === "organizer" && "Organizer"}
                 </p>
               </div>
 

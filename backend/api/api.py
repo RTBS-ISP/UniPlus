@@ -1910,6 +1910,7 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
 
     DEPRECATED: Use /checkin endpoint instead, but kept for backwards compatibility.
     """
+    print(f"[CHECKIN] event_id={event_id}, ticket_id={ticket_id!r}, checkin_date={checkin_date!r}")
     try:
         event = get_object_or_404(Event, id=event_id)
 
@@ -1975,7 +1976,7 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
 
         # Validate that this date is in the ticket's event_dates (if event_dates is set)
         if valid_dates and date_str not in valid_dates:
-            return 400, {"error": "This ticket is not valid for the selected date."}
+            return 400, {"error": f"Ticket '{ticket_id}' not found for this event."}
 
         # Initialize checked_in_dates as dict if it's a list or None
         if not isinstance(ticket.checked_in_dates, dict):
