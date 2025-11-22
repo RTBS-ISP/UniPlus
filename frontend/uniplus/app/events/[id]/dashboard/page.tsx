@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RefreshCw, Download} from "lucide-react";
+import { RefreshCw, Download } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/navbar";
 
 import { useDashboard } from "@/lib/dashboard/useDashboard";
+
 import { Header } from "@/app/components/dashboard/Header";
 import { ViewToggle } from "@/app/components/dashboard/ViewToggle";
 import { DateSelector } from "@/app/components/dashboard/DateSelector";
@@ -122,64 +123,79 @@ export default function DashBoardPage() {
 
   const exportCSV = async () => {
     if (!eventId) {
-      alert('No event ID found');
+      alert("No event ID found");
       return;
     }
 
     try {
-      console.log('Starting CSV export for event:', eventId);
-      
-      // Use absolute URL to your Django backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/events/${eventId}/export`, {
-        method: 'GET',
-        credentials: 'include', // Important for session cookies
-      });
+      console.log("Starting CSV export for event:", eventId);
 
-      console.log('Export response status:', response.status);
+      const response = await fetch(
+        `${API_BASE}/events/${eventId}/export`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+
+      console.log("Export response status:", response.status);
 
       if (response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('text/csv')) {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("text/csv")) {
           const blob = await response.blob();
           const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
+          const a = document.createElement("a");
           a.href = url;
-          
-          const contentDisposition = response.headers.get('Content-Disposition');
-          let filename = `event_${eventId}_registrations_${new Date().toISOString().split('T')[0]}.csv`;
+
+          const contentDisposition = response.headers.get(
+            "Content-Disposition"
+          );
+          let filename = `event_${eventId}_registrations_${
+            new Date().toISOString().split("T")[0]
+          }.csv`;
           if (contentDisposition) {
             const filenameMatch = contentDisposition.match(/filename="(.+)"/);
             if (filenameMatch) {
               filename = filenameMatch[1];
             }
           }
-          
+
           a.download = filename;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
-          console.log('CSV export successful');
+          console.log("CSV export successful");
         } else {
           const text = await response.text();
-          console.error('Server returned non-CSV response:', text);
-          alert('Export failed: Server returned an error. Please check console for details.');
+          console.error("Server returned non-CSV response:", text);
+          alert(
+            "Export failed: Server returned an error. Please check console for details."
+          );
         }
       } else {
         const errorText = await response.text();
-        console.error('Export failed with status:', response.status, 'Response:', errorText);
-        
+        console.error(
+          "Export failed with status:",
+          response.status,
+          "Response:",
+          errorText
+        );
+
         if (response.status === 403) {
-          alert('Export failed: You are not authorized to export this event.');
+          alert("Export failed: You are not authorized to export this event.");
         } else if (response.status === 404) {
-          alert('Export failed: Event not found or no registrations available.');
+          alert("Export failed: Event not found or no registrations available.");
         } else {
-          alert(`Export failed: Server returned error ${response.status}. Please try again.`);
+          alert(
+            `Export failed: Server returned error ${response.status}. Please try again.`
+          );
         }
       }
     } catch (error) {
-      console.error('Export error:', error);
-      alert('Error exporting CSV. Please check your connection and try again.');
+      console.error("Export error:", error);
+      alert("Error exporting CSV. Please check your connection and try again.");
     }
   };
 
@@ -269,7 +285,7 @@ export default function DashBoardPage() {
 
   const anySelected =
     state.selectedTickets.length > 0 &&
-    state.selectedTickets.length < visibleAttendees.length;
+    state.selectedTickets.length <= visibleAttendees.length;
 
   const handleExportFeedbackReport = async () => {
     if (!eventId || !state.event) return;
