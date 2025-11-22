@@ -140,13 +140,13 @@ export default function Page() {
           </div>
         </div>
 
-        {/* Scroll Indicator */}
+        {/* Scroll Indicator - ✅ FIXED: Uses window.scrollBy instead of scrollIntoView */}
         <div className="mt-24 flex justify-center relative z-10">
           <button
             onClick={() => {
-              document.getElementById('features-section')?.scrollIntoView({ 
-                behavior: 'smooth',
-                block: 'start'
+              window.scrollBy({
+                top: 800,
+                behavior: 'smooth'
               });
             }}
             className="w-16 h-16 rounded-full shadow-2xl shadow-indigo-400/50 flex items-center justify-center animate-bounce bg-white hover:bg-indigo-50 transition-colors duration-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400"
@@ -157,7 +157,7 @@ export default function Page() {
         </div>
 
         {/*Feature Section*/}
-        <div id="features-section" className="mt-32 p-10 flex flex-col bg-white relative scroll-mt-20 z-10">
+        <div id="features-section" className="mt-32 p-10 flex flex-col bg-white relative z-10">
           {/* MASCOT 4 - Feature Section Top Right */}
           <div className="absolute right-10 top-10 w-[200px] h-[200px] opacity-10 pointer-events-none hidden xl:block">
             <img 
