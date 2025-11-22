@@ -4,10 +4,10 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../components/navbar";
 import EditPopup from "../components/profile/EditPopup";
-import Tabs from '../components/profile/Tabs';
+import Tabs from "../components/profile/Tabs";
 import EventCard from "../components/events/EventCard";
-import { useUser } from "../context/UserContext"; 
-import { Calendar, Copy } from 'lucide-react';
+import { useUser } from "../context/UserContext";
+import { Calendar, Copy } from "lucide-react";
 
 interface EventData {
   event_id?: number;
@@ -34,26 +34,27 @@ interface StatisticsData {
 }
 
 function transformEventToItem(event: any, index: number) {
-  const eventDateStr = 
-    event.event_date ||           
-    event.event_start_date ||     
-    event.start_date_register || 
-    '';
-    
+  const eventDateStr =
+    event.event_date ||
+    event.event_start_date ||
+    event.start_date_register ||
+    "";
+
   const eventDate = eventDateStr ? new Date(eventDateStr) : null;
   const now = new Date();
   const isPast = eventDate ? eventDate < now : false;
-  
-  const organizerRole = event.organizer_role 
-    ? event.organizer_role.charAt(0).toUpperCase() + event.organizer_role.slice(1)
-    : 'Organizer';
-  
+
+  const organizerRole = event.organizer_role
+    ? event.organizer_role.charAt(0).toUpperCase() +
+      event.organizer_role.slice(1)
+    : "Organizer";
+
   let eventTags: string[] = [];
-  
+
   if (event.event_tags) {
     if (Array.isArray(event.event_tags)) {
       eventTags = event.event_tags;
-    } else if (typeof event.event_tags === 'string') {
+    } else if (typeof event.event_tags === "string") {
       try {
         const parsed = JSON.parse(event.event_tags);
         eventTags = Array.isArray(parsed) ? parsed : [event.event_tags];
@@ -62,11 +63,11 @@ function transformEventToItem(event: any, index: number) {
       }
     }
   }
-  
+
   if (eventTags.length === 0 && event.tags) {
     if (Array.isArray(event.tags)) {
       eventTags = event.tags;
-    } else if (typeof event.tags === 'string') {
+    } else if (typeof event.tags === "string") {
       try {
         const parsed = JSON.parse(event.tags);
         eventTags = Array.isArray(parsed) ? parsed : [event.tags];
@@ -75,37 +76,38 @@ function transformEventToItem(event: any, index: number) {
       }
     }
   }
-  
-  const category = eventTags.length > 0 ? eventTags[0] : undefined;
-  
-  const excerpt = event.event_description 
-    ? (event.event_description.length > 150 
-        ? event.event_description.substring(0, 150) + '...' 
-        : event.event_description)
-    : 'No description available';
 
-  const location = event.is_online 
-    ? 'Online Event' 
-    : (event.location || event.event_address || 'TBA');
+  const category = eventTags.length > 0 ? eventTags[0] : undefined;
+
+  const excerpt = event.event_description
+    ? event.event_description.length > 150
+      ? event.event_description.substring(0, 150) + "..."
+      : event.event_description
+    : "No description available";
+
+  const location = event.is_online
+    ? "Online Event"
+    : event.location || event.event_address || "TBA";
 
   return {
     id: event.event_id || event.id || index,
-    title: event.event_title || 'Untitled Event',
+    title: event.event_title || "Untitled Event",
     host: [organizerRole],
-    tags: eventTags, 
-    category: category,
-    excerpt: excerpt,
+    tags: eventTags,
+    category,
+    excerpt,
     date: eventDateStr,
-    createdAt: event.event_create_date || eventDateStr || new Date().toISOString(),
+    createdAt:
+      event.event_create_date || eventDateStr || new Date().toISOString(),
     popularity: event.attendee_count || 0,
     startDate: eventDateStr,
     endDate: event.event_end_date || eventDateStr,
-    location: location,
+    location,
   };
 }
 
 function ProfilePage() {
-  const { user, setUser } = useUser(); 
+  const { user, setUser, loading } = useUser();
   const [editOpen, setEditOpen] = useState(false);
   const [eventHistory, setEventHistory] = useState<EventData[]>([]);
   const [statistics, setStatistics] = useState<StatisticsData | null>(null);
@@ -116,30 +118,37 @@ function ProfilePage() {
   const router = useRouter();
 
   useEffect(() => {
+    if (loading) return; // wait for user to be resolved
+
     if (user === null) {
-      router.push('/login');
-    } else if (user) {
-      fetchEventHistory();
-      fetchCreatedEvents();
-      fetchStatistics();
+      router.replace("/login");
+      return;
     }
-  }, [user, router]);
+
+    // user is logged in
+    fetchEventHistory();
+    fetchCreatedEvents();
+    fetchStatistics();
+  }, [user, loading, router]);
 
   const fetchEventHistory = async () => {
     try {
       setLoadingEvents(true);
-      const response = await fetch('http://localhost:8000/api/user/event-history', {
-        credentials: 'include',
-      });
-      
+      const response = await fetch(
+        "http://localhost:8000/api/user/event-history",
+        {
+          credentials: "include",
+        }
+      );
+
       if (response.ok) {
         const data = await response.json();
         setEventHistory(data.events || []);
       } else {
-        console.error('Failed to fetch event history');
+        console.error("Failed to fetch event history");
       }
     } catch (error) {
-      console.error('Error fetching event history:', error);
+      console.error("Error fetching event history:", error);
     } finally {
       setLoadingEvents(false);
     }
@@ -148,9 +157,12 @@ function ProfilePage() {
   const fetchCreatedEvents = async () => {
     try {
       setLoadingEvents(true);
-      const response = await fetch("http://localhost:8000/api/user/created-events", {
-        credentials: "include",
-      });
+      const response = await fetch(
+        "http://localhost:8000/api/user/created-events",
+        {
+          credentials: "include",
+        }
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -168,25 +180,27 @@ function ProfilePage() {
   const fetchStatistics = async () => {
     try {
       setLoadingStats(true);
-      const response = await fetch('http://localhost:8000/api/user/statistics', {
-        credentials: 'include',
-      });
-      
+      const response = await fetch(
+        "http://localhost:8000/api/user/statistics",
+        {
+          credentials: "include",
+        }
+      );
+
       if (response.ok) {
         const data = await response.json();
         setStatistics(data);
       } else {
-        console.error('Failed to fetch statistics');
+        console.error("Failed to fetch statistics");
       }
     } catch (error) {
-      console.error('Error fetching statistics:', error);
+      console.error("Error fetching statistics:", error);
     } finally {
       setLoadingStats(false);
     }
   };
 
   const handleDuplicate = (eventId: number) => {
-    // Simply redirect to create page with the event ID to duplicate
     router.push(`/events/create?duplicate=${eventId}`);
   };
 
@@ -226,9 +240,23 @@ function ProfilePage() {
     }
   };
 
-  if (!user) return <p>Loading.....</p>
+  if (loading) {
+    return (
+      <main>
+        <Navbar />
+        <div className="min-h-screen flex items-center justify-center bg-indigo-100">
+          <p className="text-gray-700">Loading profile...</p>
+        </div>
+      </main>
+    );
+  }
 
-  const eventItems = eventHistory.map((event, idx) => 
+  if (user === null) {
+    // redirect effect will handle this
+    return null;
+  }
+
+  const eventItems = eventHistory.map((event, idx) =>
     transformEventToItem(event, idx)
   );
 
@@ -236,14 +264,14 @@ function ProfilePage() {
     const aDate = a.date ? new Date(a.date).getTime() : 0;
     const bDate = b.date ? new Date(b.date).getTime() : 0;
     const now = Date.now();
-    
+
     const aIsUpcoming = aDate >= now;
     const bIsUpcoming = bDate >= now;
-    
+
     if (aIsUpcoming && !bIsUpcoming) return -1;
     if (!aIsUpcoming && bIsUpcoming) return 1;
-    
-    return bDate - aDate; 
+
+    return bDate - aDate;
   });
 
   const filteredEvents = sortedEventItems.filter((e) => {
@@ -316,7 +344,7 @@ function ProfilePage() {
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="mt-6 pt-6 border-t border-gray-200">
                     <h4 className="font-semibold text-sm text-gray-700 mb-3">
                       Filter by Status
@@ -359,9 +387,9 @@ function ProfilePage() {
 
               <div className="flex-1 space-y-4">
                 {filteredEvents.map((eventItem, idx) => (
-                  <EventCard 
-                    key={eventItem.id} 
-                    item={eventItem} 
+                  <EventCard
+                    key={eventItem.id}
+                    item={eventItem}
                     index={idx}
                     stagger={0.04}
                     showStatus={true}
@@ -398,7 +426,9 @@ function ProfilePage() {
                   </h3>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-                      <span className="text-gray-600 text-sm">Total Created</span>
+                      <span className="text-gray-600 text-sm">
+                        Total Created
+                      </span>
                       <span className="font-bold text-indigo-600">
                         {sortedCreatedEventItems.length}
                       </span>
@@ -424,23 +454,24 @@ function ProfilePage() {
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="mt-6 pt-6 border-t border-gray-200">
                     <h4 className="font-semibold text-medium text-gray-700 mb-3">
                       Quick Actions
                     </h4>
                     <div className="flex flex-col w-full space-y-2">
-                      <a 
-                        href="/events/create" 
+                      <a
+                        href="/events/create"
                         className="w-full text-center px-3 py-2 rounded-lg text-sm bg-indigo-500 hover:bg-indigo-600 text-white transition-colors font-medium"
                       >
                         Create New Event
                       </a>
-                      
-                      {/* Duplicate from last event */}
+
                       {sortedCreatedEventItems.length > 0 && (
                         <button
-                          onClick={() => handleDuplicate(sortedCreatedEventItems[0].id)}
+                          onClick={() =>
+                            handleDuplicate(sortedCreatedEventItems[0].id)
+                          }
                           className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 transition-colors font-medium"
                         >
                           <Copy size={16} />
@@ -452,7 +483,6 @@ function ProfilePage() {
                 </div>
               </div>
 
-              {/* Event Cards with Duplicate Buttons */}
               <div className="flex-1 space-y-4">
                 {sortedCreatedEventItems.map((eventItem, idx) => (
                   <EventCard
@@ -468,7 +498,7 @@ function ProfilePage() {
           )}
         </div>
       ),
-    }
+    },
   ];
 
   return (
@@ -507,10 +537,12 @@ function ProfilePage() {
               <div className="flex flex-col justify-between h-64">
                 <div>
                   <div className="text-gray-800 font-extrabold text-5xl">
-                    {user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1)}{" "}
-                    {user.lastName.charAt(0).toUpperCase() + user.lastName.slice(1)}
+                    {user.firstName.charAt(0).toUpperCase() +
+                      user.firstName.slice(1)}{" "}
+                    {user.lastName.charAt(0).toUpperCase() +
+                      user.lastName.slice(1)}
                   </div>
-                  
+
                   {user.role && (
                     <div className="flex mt-3 mb-4">
                       {user.role === "student" ? (
@@ -525,32 +557,42 @@ function ProfilePage() {
                         <div className="bg-purple-100 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
                           Organizer
                         </div>
-                      ) : user.role === "admin" && (
-                        <div className="bg-slate-200 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
-                          Admin
-                        </div>
+                      ) : (
+                        user.role === "admin" && (
+                          <div className="bg-slate-200 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
+                            Admin
+                          </div>
+                        )
                       )}
                     </div>
                   )}
 
                   {user.role === "student" && user.aboutMe && (
                     <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
-                      <div className="font-medium">Faculty: {user.aboutMe.faculty}</div>
-                      <div className="font-medium">Year: {user.aboutMe.year}</div>
+                      <div className="font-medium">
+                        Faculty: {user.aboutMe.faculty}
+                      </div>
+                      <div className="font-medium">
+                        Year: {user.aboutMe.year}
+                      </div>
                       <div className="font-medium">Tel: {user.phone}</div>
                     </div>
                   )}
 
                   {user.role === "professor" && user.aboutMe && (
                     <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
-                      <div className="font-medium">Faculty: {user.aboutMe.faculty}</div>
+                      <div className="font-medium">
+                        Faculty: {user.aboutMe.faculty}
+                      </div>
                       <div className="font-medium">Tel: {user.phone}</div>
                     </div>
                   )}
 
                   {user.role === "organizer" && user.aboutMe && (
                     <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
-                      <div className="font-medium">Organizer: {user.aboutMe.organizerName}</div>
+                      <div className="font-medium">
+                        Organizer: {user.aboutMe.organizerName}
+                      </div>
                       <div className="font-medium">Tel: {user.phone}</div>
                     </div>
                   )}

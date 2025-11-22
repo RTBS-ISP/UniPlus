@@ -60,7 +60,7 @@ function LoginPage() {
           console.log('User data set:', userData);
         }
 
-        router.push('/profile');
+        router.replace('/profile');
       } else {
         setError(data.error || "Login failed. Please check your credentials");
       }
