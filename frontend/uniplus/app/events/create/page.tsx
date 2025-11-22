@@ -113,23 +113,39 @@ export default function EventCreatePage() {
       // Filter out category from tags list
       const filteredTags = (eventData.tags || []).filter((t: string) => t !== category && t.trim() !== "");
 
-      // ✅ FIX: Handle image URL properly - make it absolute if needed
+      // ✅ CRITICAL FIX: Convert image URL to File object for submission
       let imagePreviewUrl = "";
+      let imageFileObject: File | null = null;
       const imageUrl = eventData.event_image || eventData.image;
+      
       if (imageUrl) {
-        // If it starts with http, it's already absolute
+        // Build absolute URL for preview
         if (imageUrl.startsWith('http')) {
           imagePreviewUrl = imageUrl;
         } else if (imageUrl.startsWith('/')) {
-          // If it starts with /, add the domain
           imagePreviewUrl = `http://localhost:8000${imageUrl}`;
         } else {
-          // Otherwise assume it needs the full path
           imagePreviewUrl = `http://localhost:8000/media/${imageUrl}`;
+        }
+
+        // ✅ NEW: Fetch the image and convert to File object
+        try {
+          const imageRes = await fetch(imagePreviewUrl);
+          if (imageRes.ok) {
+            const blob = await imageRes.blob();
+            // Get filename from URL
+            const filename = imageUrl.split('/').pop() || 'event-image.jpg';
+            imageFileObject = new File([blob], filename, { type: blob.type });
+            console.log("✅ Image converted to File object:", filename);
+          }
+        } catch (imageErr) {
+          console.warn("Could not fetch image, will skip it:", imageErr);
         }
       }
 
-      console.log("Image URL:", imageUrl, "→ Preview URL:", imagePreviewUrl);
+      console.log("Image URL:", imageUrl);
+      console.log("Preview URL:", imagePreviewUrl);
+      console.log("Image File Object:", imageFileObject ? "✅ Ready to submit" : "❌ Could not fetch");
       console.log("Optional fields:", {
         event_email: eventData.event_email,
         event_phone_number: eventData.event_phone_number,
@@ -152,9 +168,9 @@ export default function EventCreatePage() {
         eventWebsiteUrl: eventData.event_website_url || "",
         termsAndConditions: eventData.terms_and_conditions || "",
         
-        // ✅ FIX: Image preview with proper URL
+        // ✅ CRITICAL: Set imageFile to the fetched File object (not null!)
         imagePreview: imagePreviewUrl,
-        imageFile: null,
+        imageFile: imageFileObject, // ✅ This is the key fix!
       }));
 
       // ✅ FIX: Auto-fill schedule days with proper time fields and address
@@ -363,7 +379,12 @@ export default function EventCreatePage() {
         formData.append("event_website_url", data.eventWebsiteUrl);
       if (data.termsAndConditions.trim())
         formData.append("terms_and_conditions", data.termsAndConditions);
-      if (data.imageFile) formData.append("event_image", data.imageFile);
+      
+      // ✅ CRITICAL FIX: Send imageFile if it exists
+      // This now includes images from duplicated events (imageFile is set in fetchAndAutofill)
+      if (data.imageFile) {
+        formData.append("event_image", data.imageFile);
+      }
 
       // ---------- Send ----------
       const res = await fetch("http://localhost:8000/api/events/create", {
@@ -635,6 +656,10 @@ export default function EventCreatePage() {
                         src={data.imagePreview}
                         alt="Preview"
                         className="mx-auto h-40 w-full object-cover rounded-lg"
+                        onError={(e) => {
+                          console.error("Image failed to load:", e);
+                          (e.target as HTMLImageElement).src = "/placeholder.png";
+                        }}
                       />
                     ) : (
                       <div className="py-8 text-gray-500">Click to upload an image (JPG/PNG)</div>
@@ -736,6 +761,7 @@ export default function EventCreatePage() {
                       src={data.imagePreview}
                       alt="Preview"
                       className="mt-2 h-24 w-full rounded-md object-cover border border-gray-200"
+                      onError={(e) => console.error("Summary image load failed:", e)}
                     />
                   </div>
                 )}
