@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RefreshCw, , Download} from "lucide-react";
+import { RefreshCw, Download} from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/navbar";
 
 import { useDashboard } from "@/lib/dashboard/useDashboard";
-
 import { Header } from "@/app/components/dashboard/Header";
 import { ViewToggle } from "@/app/components/dashboard/ViewToggle";
 import { DateSelector } from "@/app/components/dashboard/DateSelector";
@@ -120,69 +119,69 @@ export default function DashBoardPage() {
     checkIn,
     feedbacks,
   } = useDashboard(eventId);
-const exportCSV = async () => {
-  if (!eventId) {
-    alert('No event ID found');
-    return;
-  }
 
-  try {
-    console.log('Starting CSV export for event:', eventId);
-    
-    // Use absolute URL to your Django backend
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/events/${eventId}/export`, {
-      method: 'GET',
-      credentials: 'include', // Important for session cookies
-    });
-
-    console.log('Export response status:', response.status);
-
-    if (response.ok) {
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('text/csv')) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = `event_${eventId}_registrations_${new Date().toISOString().split('T')[0]}.csv`;
-        if (contentDisposition) {
-          const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-          if (filenameMatch) {
-            filename = filenameMatch[1];
-          }
-        }
-        
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        console.log('CSV export successful');
-      } else {
-        const text = await response.text();
-        console.error('Server returned non-CSV response:', text);
-        alert('Export failed: Server returned an error. Please check console for details.');
-      }
-    } else {
-      const errorText = await response.text();
-      console.error('Export failed with status:', response.status, 'Response:', errorText);
-      
-      if (response.status === 403) {
-        alert('Export failed: You are not authorized to export this event.');
-      } else if (response.status === 404) {
-        alert('Export failed: Event not found or no registrations available.');
-      } else {
-        alert(`Export failed: Server returned error ${response.status}. Please try again.`);
-      }
+  const exportCSV = async () => {
+    if (!eventId) {
+      alert('No event ID found');
+      return;
     }
-  } catch (error) {
-    console.error('Export error:', error);
-    alert('Error exporting CSV. Please check your connection and try again.');
-  }
-};
 
+    try {
+      console.log('Starting CSV export for event:', eventId);
+      
+      // Use absolute URL to your Django backend
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/events/${eventId}/export`, {
+        method: 'GET',
+        credentials: 'include', // Important for session cookies
+      });
+
+      console.log('Export response status:', response.status);
+
+      if (response.ok) {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('text/csv')) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          
+          const contentDisposition = response.headers.get('Content-Disposition');
+          let filename = `event_${eventId}_registrations_${new Date().toISOString().split('T')[0]}.csv`;
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (filenameMatch) {
+              filename = filenameMatch[1];
+            }
+          }
+          
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          console.log('CSV export successful');
+        } else {
+          const text = await response.text();
+          console.error('Server returned non-CSV response:', text);
+          alert('Export failed: Server returned an error. Please check console for details.');
+        }
+      } else {
+        const errorText = await response.text();
+        console.error('Export failed with status:', response.status, 'Response:', errorText);
+        
+        if (response.status === 403) {
+          alert('Export failed: You are not authorized to export this event.');
+        } else if (response.status === 404) {
+          alert('Export failed: Event not found or no registrations available.');
+        } else {
+          alert(`Export failed: Server returned error ${response.status}. Please try again.`);
+        }
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Error exporting CSV. Please check your connection and try again.');
+    }
+  };
 
   const [exporting, setExporting] = useState(false);
 
@@ -270,7 +269,7 @@ const exportCSV = async () => {
 
   const anySelected =
     state.selectedTickets.length > 0 &&
-    state.selectedTickets.length <= visibleAttendees.length;
+    state.selectedTickets.length < visibleAttendees.length;
 
   const handleExportFeedbackReport = async () => {
     if (!eventId || !state.event) return;
@@ -318,28 +317,28 @@ const exportCSV = async () => {
         <Header title={state.event?.title} id={state.event?.id} />
 
         <div className="max-w-7xl mx-auto px-8 -mt-4 mb-2 flex flex-col items-start gap-4">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              load();
-              fetchFeedbackReport();
-            }}
-            className="inline-flex items-center justify-center gap-2 px-4 py-1 text-base font-bold leading-6 text-white bg-indigo-500 border border-transparent rounded-lg hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={exportCSV}
-            disabled={state.loading}
-            className="inline-flex items-center justify-center gap-2 px-4 py-1 text-base font-bold leading-6 text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-400 disabled:bg-green-400 disabled:cursor-not-allowed"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
-        </div>  
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                load();
+                fetchFeedbackReport();
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-1 text-base font-bold leading-6 text-white bg-indigo-500 border border-transparent rounded-lg hover:bg-indigo-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-400"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
+            <button
+              type="button"
+              onClick={exportCSV}
+              disabled={state.loading}
+              className="inline-flex items-center justify-center gap-2 px-4 py-1 text-base font-bold leading-6 text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-400 disabled:bg-green-400 disabled:cursor-not-allowed"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+          </div>
 
           <ViewToggle view={state.tableView} onChange={setTableView} />
         </div>
