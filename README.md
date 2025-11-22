@@ -79,7 +79,7 @@ Before getting started, ensure you have the following installed:
 
 ### Package Managers
 - **pip** (Python package manager)
-- **npm** or **yarn** (Node.js package manager)
+- **npm** (Node.js package manager)
 
 ---
 
