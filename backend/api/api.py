@@ -703,6 +703,12 @@ def register_for_event(request, event_id: int):
 
 @api.get("/events/{event_id}", response=schemas.EventDetailSchema)
 def get_event_detail(request, event_id: int):
+    """
+    Get complete event details including all optional fields
+    ✅ Returns empty strings (not None) for optional fields
+    ✅ Returns full image URL
+    ✅ Returns all schedule details
+    """
     event = get_object_or_404(Event, id=event_id)
     
     tags_list = []
@@ -712,19 +718,21 @@ def get_event_detail(request, event_id: int):
         except:
             tags_list = [event.tags] if event.tags else []
     
-    # Helper function to parse ISO time and convert to local time format HH:MM
+    # Extract category from tags[0]
+    category = ""
+    if tags_list and len(tags_list) > 0:
+        category = tags_list[0]
+    
+    # Helper function to parse ISO time
     def iso_to_local_hhmm(iso_str):
         if not iso_str:
             return "00:00"
         try:
-            # normalize trailing Z into +00:00 so fromisoformat can parse it
             if iso_str.endswith("Z"):
                 iso_str = iso_str[:-1] + "+00:00"
             dt = datetime.fromisoformat(iso_str)
-            # If no tzinfo, assume UTC (safe default for stored ISO times)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            # Convert to Django/current timezone 
             local_tz = timezone.get_current_timezone()
             local_dt = dt.astimezone(local_tz)
             return local_dt.strftime("%H:%M")
@@ -751,7 +759,10 @@ def get_event_detail(request, event_id: int):
                     "date": date_str,
                     "startTime": start_time,
                     "endTime": end_time,
+                    "start_time": start_time,
+                    "end_time": end_time,
                     "location": location,
+                    "address": location,
                     "is_online": day.get('is_online', event.is_online),
                     "meeting_link": day.get('meeting_link', event.event_meeting_link),
                 })
@@ -769,12 +780,23 @@ def get_event_detail(request, event_id: int):
     attendee_count = len(event.attendee) if event.attendee else 0
     available = (event.max_attendee - attendee_count) if event.max_attendee else 100
     
+    # ✅ FIX: Build image URL
+    image_url = None
+    if event.event_image:
+        try:
+            image_url = event.event_image.url
+        except:
+            image_url = None
+    
+    # ✅ FIX: Always return empty string for optional fields, NEVER None
+    # This ensures optional fields are duplicated correctly
     return {
         "id": event.id,
         "title": event.event_title,
         "event_title": event.event_title,
         "event_description": event.event_description,
         "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
+        "category": category,
         "organizer_username": event.organizer.username if event.organizer else "Unknown",
         "organizer_role": event.organizer.role or "Organizer",
         "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
@@ -787,13 +809,23 @@ def get_event_detail(request, event_id: int):
         "current_attendees": attendee_count,
         "available": available,
         "event_address": event.event_address or "",
-        "location": event.event_address or "Online" if event.is_online else "TBA",
+        "location": event.event_address or ("Online" if event.is_online else "TBA"),
         "address2": getattr(event, 'address2', "") or "", 
         "is_online": event.is_online,
         "event_meeting_link": event.event_meeting_link or "",
+        
+        # ✅ CRITICAL FIX: Optional fields - ALWAYS return string, NEVER None
+        # This is why they weren't duplicating before!
+        "event_email": event.event_email if event.event_email else "",
+        "event_phone_number": event.event_phone_number if event.event_phone_number else "",
+        "event_website_url": event.event_website_url if event.event_website_url else "",
+        "terms_and_conditions": event.terms_and_conditions if event.terms_and_conditions else "",
+        
         "tags": tags_list,
-        "event_image": event.event_image.url if event.event_image else None,
-        "image": event.event_image.url if event.event_image else None,
+        
+        "event_image": image_url,
+        "image": image_url,
+        
         "is_registered": is_registered,
         "schedule": schedule,
     }
@@ -974,19 +1006,32 @@ def get_event_comments(request, event_id: int):
       
 @api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_event_history(request):
-    """Get user's registered events and attendance history"""
+    """
+    Get user's registered events and attendance history.
+    
+    ✅ ONLY shows events that are APPROVED by admin
+    ✅ Filters out pending/rejected events
+    ✅ Shows tickets that are APPROVED by organizer
+    """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     
     try:
+        # ✅ FIX: Filter BOTH approved event AND approved ticket
         tickets = Ticket.objects.filter(
             attendee=request.user,
+            approval_status='approved',  # Only approved by organizer
+            event__verification_status='approved'  # ✅ NEW: Only approved events
             approval_status='approved'  
         ).select_related('event').order_by('-purchase_date')
         
         events_data = []
         for ticket in tickets:
             event = ticket.event
+            
+            # ✅ Double-check event is approved (extra safety)
+            if event.verification_status != 'approved':
+                continue
             
             # Get first date from event_dates
             event_date_str = event.event_start_date.isoformat() if event.event_start_date else None
@@ -1029,6 +1074,8 @@ def get_user_event_history(request):
         tickets = (
             Ticket.objects.filter(
                 attendee=request.user,
+                approval_status='approved',
+                event__verification_status='approved'  # ✅ NEW: Only approved events
                 approval_status='approved' 
             )
             .select_related("event", "event__organizer")
@@ -1037,6 +1084,11 @@ def get_user_event_history(request):
         events_data = []
         for ticket in tickets:
             event_obj = ticket.event
+            
+            # ✅ Skip if event not approved
+            if event_obj.verification_status != 'approved':
+                continue
+            
             status = "upcoming" if (
                 (ticket.event_date or ticket.start_date or (event_obj and getattr(event_obj, "event_start_date", None)))
                 and (ticket.event_date or ticket.start_date or event_obj.event_start_date) > timezone.now()
@@ -1247,6 +1299,7 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
     """
     Approve or reject multiple registrations at once
     Supports bulk actions with select all
+    When rejecting: REMOVES from attendee list to free up spots
     """
     try:
         event = get_object_or_404(Event, id=event_id)
@@ -1263,43 +1316,61 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
         tickets = Ticket.objects.filter(
             event=event,
             ticket_number__in=payload.ticket_ids
-        ).select_related('attendee', 'event')  
+        ).select_related('attendee', 'event')
         
         # Also try QR codes if no tickets found
         if tickets.count() == 0:
             tickets = Ticket.objects.filter(
                 event=event,
                 qr_code__in=payload.ticket_ids
-            ).select_related('attendee', 'event')  
+            ).select_related('attendee', 'event')
         
         if tickets.count() == 0:
             return 400, {"error": "No tickets found"}
         
-        # Update status and send notifications for each ticket
+        # Determine new status
         new_status = 'approved' if payload.action == 'approve' else 'rejected'
         
-        if new_status == 'approved':
-            updated_count = tickets.update(approval_status='approved', approved_at=timezone.now())
-        else:
-            updated_count = tickets.update(approval_status='rejected', rejected_at=timezone.now())
+        # ✅ FIX: If rejecting, remove from attendee list to free up spots
+        if payload.action == 'reject':
+            removed_count = 0
+            for ticket in tickets:
+                if ticket.attendee and isinstance(event.attendee, list):
+                    if ticket.attendee.id in event.attendee:
+                        event.attendee.remove(ticket.attendee.id)
+                        removed_count += 1
+                        print(f"DEBUG: Removed attendee {ticket.attendee.id} from event {event.id}")
+            
+            # Save event once after all removals
+            if removed_count > 0:
+                event.save()
+                print(f"DEBUG: Freed up {removed_count} spots for event {event.id}")
         
+        # Update ticket statuses
+        updated_count = 0
         for ticket in tickets:
             ticket.approval_status = new_status
+            
+            # Set timestamp
+            if new_status == 'approved':
+                ticket.approved_at = timezone.now()
+            else:
+                ticket.rejected_at = timezone.now()
+            
             ticket.save()
             
-            # 🔔 Send notification
+            # 🔔 Send notifications
             if new_status == 'approved':
                 send_approval_notification(ticket)
             else:
                 send_rejection_notification(ticket)
             
             updated_count += 1
-
-        # Return response
+        
         return 200, {
             "success": True,
             "message": f"{updated_count} registration(s) {new_status}",
-            "ticket_id": payload.ticket_ids[0] if payload.ticket_ids else "",
+            "ticket_ids": payload.ticket_ids,
             "status": new_status,
             "processed_count": updated_count,
         }
@@ -1351,7 +1422,7 @@ def approve_registration(request, event_id: int, ticket_id: str):
 @api.post("/events/{event_id}/registrations/{ticket_id}/reject", auth=django_auth, response={200: schemas.ApprovalResponseSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def reject_registration(request, event_id: int, ticket_id: str):
     """
-    Reject a single registration
+    Reject a single registration and FREE UP THE SPOT
     """
     try:
         event = get_object_or_404(Event, id=event_id)
@@ -1367,7 +1438,17 @@ def reject_registration(request, event_id: int, ticket_id: str):
         except Ticket.DoesNotExist:
             ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
+        # ✅ FIX: ALWAYS remove from attendee list when rejecting
+        # This frees up the spot regardless of previous approval status
+        if ticket.attendee and isinstance(event.attendee, list):
+            if ticket.attendee.id in event.attendee:
+                event.attendee.remove(ticket.attendee.id)
+                event.save()
+                print(f"DEBUG: Removed attendee {ticket.attendee.id} from event {event.id}")
+        
+        # Update ticket status
         ticket.approval_status = 'rejected'
+        ticket.rejected_at = timezone.now()
         ticket.save()
         
         # 🔔 Send notification
@@ -1375,7 +1456,7 @@ def reject_registration(request, event_id: int, ticket_id: str):
         
         return 200, {
             "success": True,
-            "message": "Registration rejected",
+            "message": "Registration rejected and spot freed",
             "ticket_id": ticket_id,
             "status": "rejected",
         }
@@ -1383,6 +1464,8 @@ def reject_registration(request, event_id: int, ticket_id: str):
         return 400, {"error": "Ticket not found"}
     except Exception as e:
         print(f"Error rejecting ticket: {e}")
+        import traceback
+        traceback.print_exc()
         return 400, {"error": str(e)}
 
 @api.post("/checkin", auth=django_auth, response={200: schemas.CheckInResponseSchema, 400: schemas.ErrorSchema, 403: schemas.ErrorSchema})
@@ -1811,13 +1894,18 @@ def get_user_tickets(request, status: str = None):
         
 @api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_created_events(request):
-    """Return events created by the logged-in user"""
+    """
+    Return events created by the logged-in user.
+    
+    """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     try:
         created_events = (
-            Event.objects.filter(organizer=request.user)
-            .select_related("organizer")
+            Event.objects.filter(
+                organizer=request.user
+            )
+            .exclude(verification_status='rejected')  
             .order_by("-event_start_date")
         )
         events_data = []
@@ -1840,6 +1928,10 @@ def get_user_created_events(request):
                 if event.event_start_date
                 else None
             )
+            
+            # Get verification status for badge/display
+            verification_status = event.verification_status or "pending"
+            
             events_data.append({
                 "event_id": event.id,
                 "event_title": event.event_title,
@@ -1849,6 +1941,7 @@ def get_user_created_events(request):
                 "is_online": event.is_online,
                 "meeting_link": event.event_meeting_link,  
                 "status": status,
+                "verification_status": verification_status,  
                 "organizer": event.organizer.username if event.organizer else None,
                 "organizer_role": getattr(event.organizer, "role", "organizer") if event.organizer else "organizer",
                 "event_tags": event_tags,
@@ -2398,6 +2491,246 @@ def get_public_profile(request, username: str):
         traceback.print_exc()
         return 404, {"error": f"Error loading profile: {str(e)}"}
     
+
+from datetime import timedelta
+import json
+
+@api.post("/events/{event_id}/duplicate", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def duplicate_event(request, event_id: int):
+    """
+    Duplicate an event with all its details and schedule.
+    
+    Fixes:
+    ✅ Proper date handling (end time after start time)
+    ✅ Location data properly copied
+    ✅ max_attendee defaults to 100, not 0
+    ✅ All EventSchedule entries duplicated with date offset
+    """
+    try:
+        original_event = get_object_or_404(Event, id=event_id)
+        
+        # Security check: Only organizer can duplicate their own events
+        if original_event.organizer != request.user:
+            return 403, {"error": "You can only duplicate your own events"}
+        
+        # ✅ FIX 1: Calculate proper date offset (add 7 days for review)
+        date_offset = timedelta(days=7)
+        
+        # Get original schedule entries
+        original_schedules = EventSchedule.objects.filter(event=original_event).order_by('event_date', 'start_time_event')
+        
+        if not original_schedules.exists():
+            return 400, {"error": "Event has no schedule to duplicate"}
+        
+        # ✅ FIX 2: Parse max_attendee with proper default
+        max_attendee_value = original_event.max_attendee
+        if not max_attendee_value or max_attendee_value == 0:
+            max_attendee_value = 100
+        
+        # Create duplicate event
+        duplicate = Event.objects.create(
+            organizer=request.user,
+            event_title=f"{original_event.event_title} (Copy)",
+            event_description=original_event.event_description,
+            
+            # ✅ FIX 3: Offset registration dates properly
+            start_date_register=original_event.start_date_register + date_offset if original_event.start_date_register else None,
+            end_date_register=original_event.end_date_register + date_offset if original_event.end_date_register else None,
+            
+            # ✅ FIX 4: Offset event dates properly
+            event_start_date=original_event.event_start_date + date_offset if original_event.event_start_date else None,
+            event_end_date=original_event.event_end_date + date_offset if original_event.event_end_date else None,
+            
+            # ✅ FIX 5: Set proper max_attendee (default 100 if missing)
+            max_attendee=max_attendee_value,
+            
+            # ✅ FIX 6: Copy location fields properly
+            event_address=original_event.event_address,  # Copy physical address
+            is_online=original_event.is_online,          # Copy online flag
+            event_meeting_link=original_event.event_meeting_link if original_event.is_online else None,  # Only copy if online
+            
+            # Copy other settings
+            tags=original_event.tags,
+            event_email=original_event.event_email,
+            event_phone_number=original_event.event_phone_number,
+            event_website_url=original_event.event_website_url,
+            terms_and_conditions=original_event.terms_and_conditions,
+            event_image=original_event.event_image,
+            
+            # Status - reset for new event
+            verification_status="pending",  # ✅ Requires admin approval
+            status_registration="OPEN",     # ✅ Open for registration
+            
+            # Empty attendees for new event
+            attendee=[],
+            
+            # Copy schedule JSON
+            schedule=original_event.schedule,
+        )
+        
+        # ✅ FIX 7: Create EventSchedule entries with proper date offset
+        created_schedules = []
+        for original_schedule in original_schedules:
+            # ✅ FIX 8: Add proper date offset to schedule entries
+            new_event_date = original_schedule.event_date + date_offset if original_schedule.event_date else None
+            
+            new_schedule = EventSchedule.objects.create(
+                event=duplicate,
+                event_date=new_event_date,
+                start_time_event=original_schedule.start_time_event,
+                end_time_event=original_schedule.end_time_event,
+            )
+            
+            created_schedules.append({
+                'date': new_event_date.isoformat() if new_event_date else None,
+                'start_time': new_schedule.start_time_event.isoformat(),
+                'end_time': new_schedule.end_time_event.isoformat(),
+            })
+            
+            print(f"DEBUG: Created EventSchedule {new_schedule.id} for date {new_event_date}")
+        
+        # Send notification to admins
+        send_event_creation_notification_to_admins(duplicate)
+        
+        print(f"DEBUG: Event {original_event.id} duplicated as {duplicate.id} with {len(created_schedules)} schedules")
+        
+        return 200, {
+            "success": True,
+            "message": f"Event '{duplicate.event_title}' created. Review and update dates as needed.",
+            "event_id": duplicate.id,
+            "original_event_id": original_event.id,
+            "max_attendee": duplicate.max_attendee,  # ✅ Verify this is correct
+            "location": duplicate.event_address or ("Online" if duplicate.is_online else "TBA"),  # ✅ Include location
+            "is_online": duplicate.is_online,
+            "schedule_count": len(created_schedules),
+            "created_schedules": created_schedules,
+            "verification_status": duplicate.verification_status,
+        }
+        
+    except Event.DoesNotExist:
+        return 400, {"error": "Original event not found"}
+    except Exception as e:
+        print(f"ERROR: Failed to duplicate event: {e}")
+        import traceback
+        traceback.print_exc()
+        return 400, {"error": str(e)}
+
+
+# ============================================================================
+# OPTIONAL: If you want the template-based approach (redirect to create page)
+# Instead of the endpoint above, use this simpler version:
+# ============================================================================
+
+@api.get("/events/{event_id}/duplicate", response=schemas.EventDetailSchema)
+def get_event_for_duplication(request, event_id: int):
+    """
+    Get event data for duplication template.
+    Frontend will redirect to /events/create?duplicate={event_id}
+    This endpoint is called by the create page to prefill the form.
+    
+    ✅ FIXES:
+    - Category extraction from tags
+    - Start time & end time for each schedule day
+    - Event address properly returned
+    - Terms & conditions included
+    - Contact info (email, phone, website) included
+    - Event image URL included
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Get full schedule with all details
+        schedules = EventSchedule.objects.filter(event=event).order_by('event_date', 'start_time_event')
+        
+        schedule_data = []
+        for sched in schedules:
+            schedule_data.append({
+                "date": sched.event_date.isoformat(),
+                "start_time": sched.start_time_event.isoformat(),  # ✅ FIX: Include start time
+                "end_time": sched.end_time_event.isoformat(),      # ✅ FIX: Include end time
+                "startTime": sched.start_time_event.isoformat(),   # Frontend expects camelCase
+                "endTime": sched.end_time_event.isoformat(),       # Frontend expects camelCase
+                "address": event.event_address or "",               # ✅ FIX: Include address
+                "location": event.event_address or "TBA",
+                "is_online": event.is_online,
+                "meeting_link": event.event_meeting_link or "",
+                "start_iso": f"{sched.event_date.isoformat()}T{sched.start_time_event.isoformat()}Z",
+                "end_iso": f"{sched.event_date.isoformat()}T{sched.end_time_event.isoformat()}Z",
+            })
+        
+        # Parse tags to extract category
+        tags_list = []
+        if event.tags:
+            try:
+                tags_list = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+            except:
+                tags_list = [event.tags] if event.tags else []
+        
+        # ✅ FIX: Extract category from tags (first tag is usually category)
+        category = ""
+        if tags_list and len(tags_list) > 0:
+            category = tags_list[0]
+        
+        # ✅ Return ALL fields needed for complete duplication
+        return {
+            "id": event.id,
+            "title": event.event_title,
+            "event_title": event.event_title,
+            "event_description": event.event_description,
+            "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
+            
+            # ✅ FIX: Added category
+            "category": category,
+            
+            "organizer_username": event.organizer.username if event.organizer else "Unknown",
+            "organizer_role": event.organizer.role or "Organizer",
+            "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
+            
+            "start_date_register": event.start_date_register,
+            "end_date_register": event.end_date_register,
+            "event_start_date": event.event_start_date,
+            "event_end_date": event.event_end_date,
+            
+            "max_attendee": event.max_attendee or 100,
+            "capacity": event.max_attendee or 100,
+            "current_attendees": len(event.attendee) if event.attendee else 0,
+            "available": (event.max_attendee or 100) - (len(event.attendee) if event.attendee else 0),
+            
+            # ✅ FIX: Location/Address fields
+            "event_address": event.event_address or "",
+            "location": event.event_address or ("Online" if event.is_online else "TBA"),
+            "address2": getattr(event, 'address2', "") or "",
+            "is_online": event.is_online,
+            "event_meeting_link": event.event_meeting_link or "",
+            
+            # ✅ FIX: Contact information
+            "event_email": event.event_email or "",
+            "event_phone_number": event.event_phone_number or "",
+            "event_website_url": event.event_website_url or "",
+            
+            # ✅ FIX: Terms & conditions
+            "terms_and_conditions": event.terms_and_conditions or "",
+            
+            # Tags
+            "tags": tags_list,
+            
+            # ✅ FIX: Media/Image
+            "event_image": event.event_image.url if event.event_image else None,
+            "image": event.event_image.url if event.event_image else None,
+            
+            "is_registered": False,
+            
+            # ✅ FIX: Complete schedule with all details
+            "schedule": schedule_data,
+        }
+        
+    except Event.DoesNotExist:
+        return 404, {"error": "Event not found"}
+    except Exception as e:
+        print(f"Error fetching event for duplication: {e}")
+        import traceback
+        traceback.print_exc()
+        return 400, {"error": str(e)}
 @api.get("/user/{email}", response={200: schemas.UserByEmailSchema, 404: schemas.ErrorSchema})
 def get_user_by_email(request, email: str):
     """

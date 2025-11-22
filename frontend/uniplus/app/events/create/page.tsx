@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../../components/navbar";
 import TagSelector from "../../components/events/TagSelector";
 import EventScheduleDays, { DaySlot } from "../../components/events/EventScheduleDays";
 import { useAlert } from "../../components/ui/AlertProvider";
-import { Trash2 } from "lucide-react";
+import { Trash2, Loader } from "lucide-react";
 
 // ---- Categories (edit this list as needed) ----
 const CATEGORIES = [
@@ -49,6 +50,8 @@ const sectionCard =
 
 export default function EventCreatePage() {
   const toast = useAlert();
+  const searchParams = useSearchParams();
+  const duplicateId = searchParams?.get("duplicate");
 
   const [data, setData] = useState<FormData>({
     eventTitle: "",
@@ -73,8 +76,145 @@ export default function EventCreatePage() {
   ]);
 
   const [loading, setLoading] = useState(false);
+  const [fetchingTemplate, setFetchingTemplate] = useState(false);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ========== DUPLICATION LOGIC ==========
+  useEffect(() => {
+    if (duplicateId) {
+      fetchAndAutofill(parseInt(duplicateId));
+    }
+  }, [duplicateId]);
+
+  const fetchAndAutofill = async (eventId: number) => {
+    setFetchingTemplate(true);
+    setError("");
+    try {
+      const res = await fetch(`http://localhost:8000/api/events/${eventId}`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch event: ${res.status}`);
+      }
+
+      const eventData = await res.json();
+
+      console.log("Fetched event data for duplication:", eventData);
+
+      // Extract category from tags[0]
+      let category = eventData.category || "";
+      if (!category && eventData.tags && Array.isArray(eventData.tags) && eventData.tags.length > 0) {
+        category = eventData.tags[0];
+      }
+
+      // Filter out category from tags list
+      const filteredTags = (eventData.tags || []).filter((t: string) => t !== category && t.trim() !== "");
+
+      // ✅ FIX: Handle image URL properly - make it absolute if needed
+      let imagePreviewUrl = "";
+      const imageUrl = eventData.event_image || eventData.image;
+      if (imageUrl) {
+        // If it starts with http, it's already absolute
+        if (imageUrl.startsWith('http')) {
+          imagePreviewUrl = imageUrl;
+        } else if (imageUrl.startsWith('/')) {
+          // If it starts with /, add the domain
+          imagePreviewUrl = `http://localhost:8000${imageUrl}`;
+        } else {
+          // Otherwise assume it needs the full path
+          imagePreviewUrl = `http://localhost:8000/media/${imageUrl}`;
+        }
+      }
+
+      console.log("Image URL:", imageUrl, "→ Preview URL:", imagePreviewUrl);
+      console.log("Optional fields:", {
+        event_email: eventData.event_email,
+        event_phone_number: eventData.event_phone_number,
+        event_website_url: eventData.event_website_url,
+        terms_and_conditions: eventData.terms_and_conditions,
+      });
+
+      // ✅ FIX: Auto-fill ALL fields including optional ones
+      setData((prevData) => ({
+        ...prevData,
+        eventTitle: `${eventData.event_title || eventData.title} (Copy)`,
+        eventDescription: eventData.event_description || "",
+        category: category,
+        maxAttendee: (eventData.max_attendee || eventData.capacity || "100").toString(),
+        tags: filteredTags,
+        
+        // ✅ FIX: Optional fields - ensure they're strings not undefined
+        eventEmail: eventData.event_email || "",
+        eventPhoneNumber: eventData.event_phone_number || "",
+        eventWebsiteUrl: eventData.event_website_url || "",
+        termsAndConditions: eventData.terms_and_conditions || "",
+        
+        // ✅ FIX: Image preview with proper URL
+        imagePreview: imagePreviewUrl,
+        imageFile: null,
+      }));
+
+      // ✅ FIX: Auto-fill schedule days with proper time fields and address
+      if (eventData.schedule && Array.isArray(eventData.schedule)) {
+        const daySlots: DaySlot[] = eventData.schedule.map(
+          (s: any) => ({
+            date: s.date || "",
+            startTime: s.startTime || s.start_time || "",
+            endTime: s.endTime || s.end_time || "",
+            isOnline: s.is_online || s.isOnline || false,
+            address: (s.address || s.location || eventData.event_address || "").trim() || "",
+            meetingLink: s.meeting_link || s.meetingLink || "",
+          })
+        );
+        if (daySlots.length > 0) {
+          setScheduleDays(daySlots);
+          console.log("Loaded schedule days:", daySlots);
+        }
+      }
+
+      // Auto-fill registration dates
+      if (eventData.start_date_register) {
+        try {
+          const regStart = new Date(eventData.start_date_register);
+          setData((prevData) => ({
+            ...prevData,
+            registrationStartDate: regStart.toISOString().slice(0, 16),
+          }));
+        } catch (e) {
+          console.error("Error parsing start_date_register:", e);
+        }
+      }
+
+      if (eventData.end_date_register) {
+        try {
+          const regEnd = new Date(eventData.end_date_register);
+          setData((prevData) => ({
+            ...prevData,
+            registrationEndDate: regEnd.toISOString().slice(0, 16),
+          }));
+        } catch (e) {
+          console.error("Error parsing end_date_register:", e);
+        }
+      }
+
+      toast({
+        text: "Event template loaded successfully! Modify as needed.",
+        variant: "success",
+      });
+    } catch (ex) {
+      console.error("Failed to fetch event for duplication:", ex);
+      const msg = "Failed to load event template. Try again.";
+      setError(msg);
+      toast({ text: msg, variant: "error" });
+    } finally {
+      setFetchingTemplate(false);
+    }
+  };
+
+  // ========== END DUPLICATION LOGIC ==========
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -126,9 +266,9 @@ export default function EventCreatePage() {
   }, [scheduleDays, data.maxAttendee, data.tags]);
 
   const submit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError("");
-  setLoading(true);
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
     try {
       // ---------- Validation (with toasts) ----------
@@ -217,9 +357,12 @@ export default function EventCreatePage() {
       if (data.maxAttendee.trim()) formData.append("max_attendee", data.maxAttendee);
       if (data.tags.length) formData.append("tags", JSON.stringify(data.tags));
       if (data.eventEmail.trim()) formData.append("event_email", data.eventEmail);
-      if (data.eventPhoneNumber.trim()) formData.append("event_phone_number", data.eventPhoneNumber);
-      if (data.eventWebsiteUrl.trim()) formData.append("event_website_url", data.eventWebsiteUrl);
-      if (data.termsAndConditions.trim()) formData.append("terms_and_conditions", data.termsAndConditions);
+      if (data.eventPhoneNumber.trim())
+        formData.append("event_phone_number", data.eventPhoneNumber);
+      if (data.eventWebsiteUrl.trim())
+        formData.append("event_website_url", data.eventWebsiteUrl);
+      if (data.termsAndConditions.trim())
+        formData.append("terms_and_conditions", data.termsAndConditions);
       if (data.imageFile) formData.append("event_image", data.imageFile);
 
       // ---------- Send ----------
@@ -258,14 +401,33 @@ export default function EventCreatePage() {
     }
   };
 
+  // Show loading state while fetching template
+  if (fetchingTemplate) {
+    return (
+      <div className="min-h-screen bg-[#E0E7FF] flex items-center justify-center">
+        <Navbar />
+        <div className="flex flex-col items-center gap-4">
+          <Loader className="h-8 w-8 text-indigo-600 animate-spin" />
+          <p className="text-gray-600">Loading event template...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#E0E7FF]">
       <Navbar />
 
       <header className="mx-auto max-w-6xl px-5 pt-10">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900">Create a new event</h1>
-          <p className="text-gray-600">Add the core details, schedule your days, and publish.</p>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900">
+            {duplicateId ? "Create event from template" : "Create a new event"}
+          </h1>
+          <p className="text-gray-600">
+            {duplicateId
+              ? "The event details are pre-filled. Modify as needed and click Create."
+              : "Add the core details, schedule your days, and publish."}
+          </p>
         </div>
       </header>
 
@@ -371,7 +533,9 @@ export default function EventCreatePage() {
               <h2 className="text-lg font-semibold text-gray-900">Capacity & Tags</h2>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Max Attendees <span className="text-red-500">*</span></label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">
+                    Max Attendees <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -412,7 +576,9 @@ export default function EventCreatePage() {
                   <input
                     type="tel"
                     value={data.eventPhoneNumber}
-                    onChange={(e) => setData({ ...data, eventPhoneNumber: e.target.value || "" })}
+                    onChange={(e) =>
+                      setData({ ...data, eventPhoneNumber: e.target.value || "" })
+                    }
                     placeholder="+66 8x xxx xxxx"
                     className={inputBase}
                   />
@@ -420,7 +586,9 @@ export default function EventCreatePage() {
               </div>
 
               <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Website (Optional)</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Website (Optional)
+                </label>
                 <input
                   type="url"
                   value={data.eventWebsiteUrl}
@@ -483,7 +651,9 @@ export default function EventCreatePage() {
                 <textarea
                   rows={7}
                   value={data.termsAndConditions}
-                  onChange={(e) => setData({ ...data, termsAndConditions: e.target.value })}
+                  onChange={(e) =>
+                    setData({ ...data, termsAndConditions: e.target.value })
+                  }
                   placeholder="Any rules or conditions for attendees..."
                   className={inputBase}
                 />
