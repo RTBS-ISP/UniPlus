@@ -1009,20 +1009,15 @@ def get_user_event_history(request):
     """
     Get user's registered events and attendance history.
     
-    ✅ ONLY shows events that are APPROVED by admin
-    ✅ Filters out pending/rejected events
-    ✅ Shows tickets that are APPROVED by organizer
     """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     
     try:
-        # ✅ FIX: Filter BOTH approved event AND approved ticket
         tickets = Ticket.objects.filter(
             attendee=request.user,
             approval_status='approved',  # Only approved by organizer
-            event__verification_status='approved'  # ✅ NEW: Only approved events
-            approval_status='approved'  
+            event__verification_status='approved',  # ✅ NEW: Only approved events
         ).select_related('event').order_by('-purchase_date')
         
         events_data = []
@@ -1075,8 +1070,7 @@ def get_user_event_history(request):
             Ticket.objects.filter(
                 attendee=request.user,
                 approval_status='approved',
-                event__verification_status='approved'  # ✅ NEW: Only approved events
-                approval_status='approved' 
+                event__verification_status='approved',  # ✅ NEW: Only approved events
             )
             .select_related("event", "event__organizer")
             .order_by("-purchase_date")
@@ -2752,3 +2746,4 @@ def get_user_by_email(request, email: str):
     except Exception as e:
         print(f"Error fetching user by email: {e}")
         return 400, {"error": str(e)}
+    
