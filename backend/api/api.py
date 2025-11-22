@@ -2489,136 +2489,85 @@ def get_public_profile(request, username: str):
     
 
 from datetime import timedelta
-import json
 
-@api.get("/events/{event_id}/duplicate", response=schemas.EventDetailSchema)
-def get_event_for_duplication(request, event_id: int):
+@api.post("/events/{event_id}/duplicate", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def duplicate_event(request, event_id: int):
     """
-    Get event data for duplication template.
-    Frontend will redirect to /events/create?duplicate={event_id}
-    This endpoint is called by the create page to prefill the form.
-    
-    ✅ FIXES:
-    - Category extraction from tags
-    - Start time & end time for each schedule day
-    - Event address properly returned
-    - Terms & conditions included
-    - Contact info (email, phone, website) included
-    - Event image URL included
+    Duplicate an event - simple version that just references the same image
     """
     try:
-        event = get_object_or_404(Event, id=event_id)
+        original_event = get_object_or_404(Event, id=event_id)
         
-        # Get full schedule with all details
-        schedules = EventSchedule.objects.filter(event=event).order_by('event_date', 'start_time_event')
+        if original_event.organizer != request.user:
+            return 403, {"error": "You can only duplicate your own events"}
         
-        schedule_data = []
-        for sched in schedules:
-            schedule_data.append({
-                "date": sched.event_date.isoformat(),
-                "start_time": sched.start_time_event.isoformat(),  # ✅ FIX: Include start time
-                "end_time": sched.end_time_event.isoformat(),      # ✅ FIX: Include end time
-                "startTime": sched.start_time_event.isoformat(),   # Frontend expects camelCase
-                "endTime": sched.end_time_event.isoformat(),       # Frontend expects camelCase
-                "address": event.event_address or "",               # ✅ FIX: Include address
-                "location": event.event_address or "TBA",
-                "is_online": event.is_online,
-                "meeting_link": event.event_meeting_link or "",
-                "start_iso": f"{sched.event_date.isoformat()}T{sched.start_time_event.isoformat()}Z",
-                "end_iso": f"{sched.event_date.isoformat()}T{sched.end_time_event.isoformat()}Z",
+        date_offset = timedelta(days=7)
+        original_schedules = EventSchedule.objects.filter(event=original_event).order_by('event_date', 'start_time_event')
+        
+        if not original_schedules.exists():
+            return 400, {"error": "Event has no schedule to duplicate"}
+        
+        # Create duplicate event
+        duplicate = Event.objects.create(
+            organizer=request.user,
+            event_title=f"{original_event.event_title} (Copy)",
+            event_description=original_event.event_description,
+            start_date_register=original_event.start_date_register + date_offset if original_event.start_date_register else None,
+            end_date_register=original_event.end_date_register + date_offset if original_event.end_date_register else None,
+            event_start_date=original_event.event_start_date + date_offset if original_event.event_start_date else None,
+            event_end_date=original_event.event_end_date + date_offset if original_event.event_end_date else None,
+            max_attendee=original_event.max_attendee or 100,
+            event_address=original_event.event_address,
+            is_online=original_event.is_online,
+            event_meeting_link=original_event.event_meeting_link if original_event.is_online else None,
+            tags=original_event.tags,
+            event_email=original_event.event_email,
+            event_phone_number=original_event.event_phone_number,
+            event_website_url=original_event.event_website_url,
+            terms_and_conditions=original_event.terms_and_conditions,
+            event_image=original_event.event_image,  # ✅ Just reference the same image
+            verification_status="pending",
+            status_registration="OPEN",
+            attendee=[],
+            schedule=original_event.schedule,
+        )
+        
+        # Create schedule entries
+        created_schedules = []
+        for original_schedule in original_schedules:
+            new_event_date = original_schedule.event_date + date_offset
+            EventSchedule.objects.create(
+                event=duplicate,
+                event_date=new_event_date,
+                start_time_event=original_schedule.start_time_event,
+                end_time_event=original_schedule.end_time_event,
+            )
+            created_schedules.append({
+                'date': new_event_date.isoformat(),
+                'start_time': original_schedule.start_time_event.isoformat(),
+                'end_time': original_schedule.end_time_event.isoformat(),
             })
         
-        # Parse tags to extract category
-        tags_list = []
-        if event.tags:
-            try:
-                tags_list = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
-            except:
-                tags_list = [event.tags] if event.tags else []
+        send_event_creation_notification_to_admins(duplicate)
         
-        # ✅ FIX: Extract category from tags (first tag is usually category)
-        category = ""
-        if tags_list and len(tags_list) > 0:
-            category = tags_list[0]
-        
-        # ✅ Return ALL fields needed for complete duplication
-        return {
-            "id": event.id,
-            "title": event.event_title,
-            "event_title": event.event_title,
-            "event_description": event.event_description,
-            "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
-            
-            # ✅ FIX: Added category
-            "category": category,
-            
-            "organizer_username": event.organizer.username if event.organizer else "Unknown",
-            "organizer_role": event.organizer.role or "Organizer",
-            "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
-            
-            "start_date_register": event.start_date_register,
-            "end_date_register": event.end_date_register,
-            "event_start_date": event.event_start_date,
-            "event_end_date": event.event_end_date,
-            
-            "max_attendee": event.max_attendee or 100,
-            "capacity": event.max_attendee or 100,
-            "current_attendees": len(event.attendee) if event.attendee else 0,
-            "available": (event.max_attendee or 100) - (len(event.attendee) if event.attendee else 0),
-            
-            # ✅ FIX: Location/Address fields
-            "event_address": event.event_address or "",
-            "location": event.event_address or ("Online" if event.is_online else "TBA"),
-            "address2": getattr(event, 'address2', "") or "",
-            "is_online": event.is_online,
-            "event_meeting_link": event.event_meeting_link or "",
-            
-            # ✅ FIX: Contact information
-            "event_email": event.event_email or "",
-            "event_phone_number": event.event_phone_number or "",
-            "event_website_url": event.event_website_url or "",
-            
-            # ✅ FIX: Terms & conditions
-            "terms_and_conditions": event.terms_and_conditions or "",
-            
-            # Tags
-            "tags": tags_list,
-            
-            # ✅ FIX: Media/Image
-            "event_image": event.event_image.url if event.event_image else None,
-            "image": event.event_image.url if event.event_image else None,
-            
-            "is_registered": False,
-            
-            # ✅ FIX: Complete schedule with all details
-            "schedule": schedule_data,
+        return 200, {
+            "success": True,
+            "message": f"Event '{duplicate.event_title}' duplicated successfully",
+            "event_id": duplicate.id,
+            "original_event_id": original_event.id,
+            "max_attendee": duplicate.max_attendee,
+            "location": duplicate.event_address or ("Online" if duplicate.is_online else "TBA"),
+            "is_online": duplicate.is_online,
+            "event_image": duplicate.event_image.url if duplicate.event_image else None,
+            "schedule_count": len(created_schedules),
+            "verification_status": duplicate.verification_status,
         }
         
     except Event.DoesNotExist:
-        return 404, {"error": "Event not found"}
+        return 400, {"error": "Original event not found"}
     except Exception as e:
-        print(f"Error fetching event for duplication: {e}")
+        print(f"ERROR: Failed to duplicate event: {e}")
         import traceback
         traceback.print_exc()
         return 400, {"error": str(e)}
-@api.get("/user/{email}", response={200: schemas.UserByEmailSchema, 404: schemas.ErrorSchema})
-def get_user_by_email(request, email: str):
-    """
-    Get user information by email address
-    Useful for finding usernames when only emails are available
-    """
-    try:
-        user = get_object_or_404(AttendeeUser, email=email)
-        
-        return 200, {
-            "username": user.username,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "role": user.role,
-        }
-    except AttendeeUser.DoesNotExist:
-        return 404, {"error": f"User with email '{email}' not found"}
-    except Exception as e:
-        print(f"Error fetching user by email: {e}")
-        return 400, {"error": str(e)}
+
