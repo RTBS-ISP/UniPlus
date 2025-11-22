@@ -21,12 +21,14 @@ interface User {
 
 interface UserContextType {
   user: User | null;
+  loading: boolean;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   fetchUser: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType>({
   user: null,
+  loading: true,
   setUser: () => {},
   fetchUser: async () => {},
 });
@@ -35,8 +37,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 💡 Reusable fetch function
   const fetchUser = async () => {
+    setLoading(true);
     try {
       const res = await fetch("http://localhost:8000/api/user", {
         credentials: "include",
@@ -50,6 +52,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (err) {
       console.log("No logged-in user found");
       setUser(null);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -58,7 +62,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   return (
-    <UserContext.Provider value={{ user, setUser, fetchUser }}>
+    <UserContext.Provider value={{ user, loading, setUser, fetchUser }}>
       {children}
     </UserContext.Provider>
   );
