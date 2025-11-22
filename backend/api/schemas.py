@@ -6,6 +6,7 @@ from datetime import datetime
 class UserTicketSchema(Schema):
     ticket_id: int
     qr_code: str
+    ticket_number: Optional[str] = None
     event_id: Optional[int]
     event_title: str
     event_description: Optional[str]
@@ -291,6 +292,7 @@ class UserEventSchema(Schema):
 class AttendeeSchema(Schema):
     """Attendee information for organizer dashboard"""
     ticketId: str
+    displayTicketId: Optional[str] = None
     name: str
     email: str
     status: str  # 'present', 'pending', 'absent'
@@ -381,19 +383,19 @@ class CheckInRequestSchema(Schema):
     """Request to check in an attendee"""
     qr_code: str
     event_date: Optional[str] = None  # Which day for multi-day events
-
+    event_id: Optional[int] = None 
 
 class CheckInResponseSchema(Schema):
     """Response after check-in attempt"""
     success: bool
     message: str
-    ticket_id: Optional[int] = None
-    attendee_name: Optional[str] = None
-    event_title: Optional[str] = None
+    ticket_id: str
+    attendee_name: str
+    event_title: str
     event_date: Optional[str] = None
     already_checked_in: bool = False
-    checked_in_at: Optional[datetime] = None
-    approval_status: Optional[str] = None
+    checked_in_at: Optional[str] = None
+    approval_status: str
 
 
 # ============================================================================
@@ -528,6 +530,7 @@ class AdminEventSchema(Schema):
     event_description: str
     event_create_date: str
     organizer_name: str
+    organizer_username: str
     organizer_id: int
     status_registration: str
     verification_status: str
@@ -578,3 +581,37 @@ class NotificationMarkReadIn(Schema):
 
 class NotificationBulkMarkReadIn(Schema):
     notification_ids: list[int]
+
+
+class PublicProfileSchema(Schema):
+    username: str
+    first_name: str
+    last_name: str
+    role: str
+    phone_number: Optional[str] = None
+    about_me: Optional[dict] = None
+    profile_pic: str
+    events_organized: int
+    total_attendees: int
+    user_total_events: int
+    avg_rating: Optional[float] = None
+
+class PublicEventSchema(Schema):
+    id: int
+    event_title: str
+    event_description: str
+    event_start_date: str = None
+    event_image: str = None
+    is_online: bool
+    location: str
+    tags: list = []
+    max_attendee: int = None
+    current_attendees: int = 0
+
+class UserByEmailSchema(Schema):
+    """Schema for user information by email"""
+    username: str
+    email: str
+    first_name: str
+    last_name: str
+    role: str

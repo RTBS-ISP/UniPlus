@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, Clock, MapPin, ChevronLeft, ChevronRight, Ticket } from "lucide-react";
 
 interface EventDay {
   date: string;
@@ -32,6 +32,7 @@ interface TicketInfo {
   };
   event_title: string;
   event_description: string;
+  qr_code: string;
   ticket_number: string;
   event_id: number;
   is_online: boolean;
@@ -53,6 +54,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
   const [loading, setLoading] = useState(true);
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [showTitlePopover, setShowTitlePopover] = useState(false);
+  const isMoble = typeof window !== 'undefined' && window.innerWidth <= 768;
 
   const fetchEventDetail = async (eventId: number) => {
     try {
@@ -81,6 +83,73 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     }
   }, [ticket.event_id]);
 
+  // Helper functions defined first
+  const getCurrentDayInfo = () => {
+    if (ticket.event_dates && ticket.event_dates.length > 0) {
+      return ticket.event_dates[selectedDayIndex];
+    }
+    return {
+      date: ticket.date,
+      time: ticket.time,
+      location: ticket.location,
+      is_online: ticket.is_online,
+    };
+  };
+
+  // Determine if event is past, today, or upcoming
+  const getEventStatus = () => {
+    const currentDay = getCurrentDayInfo();
+    const eventDate = new Date(currentDay.date.split('T')[0] + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const diffTime = eventDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return 'past';
+    if (diffDays === 0) return 'today';
+    if (diffDays <= 7) return 'soon'; // Within a week
+    return 'upcoming';
+  };
+
+  const status = getEventStatus();
+
+  // Get styling based on status
+    const getStatusStyles = () => {
+    switch (status) {
+      case 'past':
+        return {
+          cardClass: 'opacity-60',
+          headerBg: 'bg-slate-400',
+          iconColor: 'text-slate-400',
+          badge: { text: 'Past', bg: 'bg-slate-500/90' }
+        };
+      case 'today':
+        return {
+          cardClass: '',
+          headerBg: 'bg-[#8B9CFF]',
+          iconColor: 'text-[#8B9CFF]',
+          badge: { text: 'Today', bg: 'bg-[#6B7CFF]/90' }
+        };
+      case 'soon':
+        return {
+          cardClass: '',
+          headerBg: 'bg-[#6366F1]',
+          iconColor: 'text-[#6366F1]',
+          badge: { text: 'Soon', bg: 'bg-[#4F46E5]/90' }
+        };
+      default: // upcoming
+        return {
+          cardClass: '',
+          headerBg: 'bg-indigo-700',
+          iconColor: 'text-indigo-700',
+          badge: { text: 'Upcoming', bg: 'bg-indigo-800/90' }
+        };
+    }
+  };
+
+  const styles = getStatusStyles();
+
   const formatDate = (dateString: string) => {
     if (!dateString) return "TBA";
     const date = new Date(dateString.split('T')[0]); 
@@ -102,42 +171,6 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
       month: "short",
       day: "numeric",
     });
-  };
-  
-  const formatDateRangeSummary = (eventDates: EventDay[], fallbackDate: string) => {
-    if (!eventDates || eventDates.length === 0) {
-      return formatDate(fallbackDate);
-    }
-
-    const sortedDates = eventDates
-      .map((d) => new Date(d.date.split('T')[0])) 
-      .filter(d => !isNaN(d.getTime()))
-      .sort((a, b) => a.getTime() - b.getTime());
-
-    if (sortedDates.length === 0) {
-        return formatDate(fallbackDate);
-    }
-
-    const startDate = sortedDates[0];
-    const endDate = sortedDates[sortedDates.length - 1];
-
-    if (sortedDates.length === 1 || startDate.getTime() === endDate.getTime()) {
-      return formatDate(eventDates[0].date);
-    }
-
-    const oneDay = 24 * 60 * 60 * 1000;
-    const diffDays = Math.round(
-      Math.abs((endDate.getTime() - startDate.getTime()) / oneDay)
-    );
-    
-    if (diffDays === sortedDates.length - 1) {
-      const formattedStart = formatDate(startDate.toISOString().split('T')[0]);
-      const formattedEnd = formatDate(endDate.toISOString().split('T')[0]);
-      return `${formattedStart} - ${formattedEnd}`;
-    } else {
-      const formattedStart = formatDate(startDate.toISOString().split('T')[0]);
-      return `${formattedStart} (${eventDates.length} Dates)`;
-    }
   };
 
   const formatTimeRange = (time?: string, endTime?: string) => {
@@ -166,51 +199,11 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     }
   };
 
-  const getEventLocation = () => {
-    const hasPhysicalLocation =
-      schedule && schedule.some(s => s.location && s.location.trim() !== "");
-
-    if (isOnline && hasPhysicalLocation) {
-      return "Hybrid (Online & Onsite)";
-    }
-
-    if (isOnline) {
-      return "Online Event";
-    }
-
-    if (hasPhysicalLocation) {
-      const locations = schedule.map(s => s.location).filter(Boolean);
-      const uniqueLocations = [...new Set(locations)];
-      if (uniqueLocations.length === 1) {
-        return uniqueLocations[0];
-      }
-      return `${uniqueLocations[0]} (+${uniqueLocations.length - 1} more)`;
-    }
-
-    const firstDate = ticket.event_dates?.[0];
-    return firstDate?.location || ticket.location || "TBA";
-  };
-
-  // Get current day info based on selected index
-  const getCurrentDayInfo = () => {
-    if (ticket.event_dates && ticket.event_dates.length > 0) {
-      return ticket.event_dates[selectedDayIndex];
-    }
-    return {
-      date: ticket.date,
-      time: ticket.time,
-      location: ticket.location,
-      is_online: ticket.is_online,
-    };
-  };
-
-  // Get location for the current selected day by matching with schedule
   const getCurrentDayLocation = () => {
     const currentDay = getCurrentDayInfo();
     
-    // Try to find matching schedule entry for this day
     if (schedule && schedule.length > 0) {
-      const currentDateStr = currentDay.date.split('T')[0]; // Get YYYY-MM-DD format
+      const currentDateStr = currentDay.date.split('T')[0];
       const matchingSchedule = schedule.find(s => s.date === currentDateStr);
       
       if (matchingSchedule && matchingSchedule.location && matchingSchedule.location.trim() !== "") {
@@ -261,6 +254,12 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
     );
   };
 
+  const togglePopover = () => {
+    if (isMoble && ticket.event_title.length > 80) {
+      setShowTitlePopover(!showTitlePopover);
+    }
+  };
+
   if (loading) {
     return (
       <div className="rounded-lg bg-white p-6 shadow-sm text-gray-500 text-sm text-center">
@@ -271,13 +270,51 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
 
   return (
     <Link
-      href={`/my-ticket/${ticket.ticket_number}`}
-      className="rounded-lg shadow-sm bg-white flex flex-col transition-transform hover:scale-[1.02] hover:shadow-md"
+      href={`/my-ticket/${ticket.qr_code}`}
+      className={`relative rounded-lg shadow-sm bg-white flex flex-col transition-all duration-300 hover:shadow-lg ${styles.cardClass}`}
     >
-      {/* Header */}
-      <div className="flex items-start justify-between rounded-t-lg w-full h-36 bg-indigo-500 relative p-6 gap-4 overflow-hidden">
-        <div className="flex flex-col gap-y-3 flex-1 pr-2 relative">
-          <div className="relative group/title">
+      {/* Header - Updated Layout with Fixed Height */}
+      <div className={`flex flex-col justify-between rounded-t-lg w-full h-[180px] ${styles.headerBg} relative p-6 gap-2 overflow-visible z-10`}>
+        <div className="flex flex-col gap-3 flex-1">
+        {/* Top Row: Status Badge + Day Selector */}
+          <div className="flex items-center justify-between">
+          {/* Status Badge */}
+        {styles.badge && (
+            <div className={`${styles.badge.bg} text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg`}>
+            {styles.badge.text}
+          </div>
+        )}
+
+          {/* Day Selector - Top Right */}
+          <div className="flex-shrink-0">
+            {hasMultipleDays && (
+                <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-full px-2 py-1.5 border border-white/30">
+                <button
+                  onClick={handlePrevDay}
+                  className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
+                  aria-label="Previous day"
+                >
+                  <ChevronLeft size={14} className="text-white" />
+                </button>
+                
+                <span className="text-xs font-semibold text-white whitespace-nowrap px-1">
+                  Day {selectedDayIndex + 1} of {ticket.event_dates.length}
+                </span>
+
+                <button
+                  onClick={handleNextDay}
+                  className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
+                  aria-label="Next day"
+                >
+                  <ChevronRight size={14} className="text-white" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+          {/* Event Title - Fixed height area */}
+          <div className="relative group/title z-20 h-[56px]">
             <h2 
               className="text-white text-xl font-bold line-clamp-2 cursor-pointer"
               onClick={(e) => {
@@ -292,10 +329,12 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
             </h2>
             
             {/* Popover - Shows on hover (desktop) or click (mobile) */}
-            {ticket.event_title && ticket.event_title.length > 80 && (
-              <div className={`absolute left-0 top-full mt-2 w-[min(400px,90vw)] bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50 transition-all duration-200
+          {ticket.event_title && ticket.event_title.length > 30 && (
+              <div className={`absolute left-0 top-full mt-2 w-[min(400px,90vw)]
+                bg-white rounded-lg shadow-xl border border-gray-200 p-4 z-50
+                transition-all duration-200 pointer-events-auto
                 ${showTitlePopover ? 'opacity-100 visible' : 'opacity-0 invisible'}
-                md:group-hover/title:opacity-100 md:group-hover/title:visible md:pointer-events-none
+                md:group-hover/title:opacity-100 md:group-hover/title:visible
               `}>
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-gray-900 text-sm font-semibold leading-relaxed flex-1">
@@ -321,50 +360,29 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
               </div>
             )}
           </div>
-          
-          <p className="text-white text-sm font-medium">
-            {ticket.ticket_number}
-          </p>
-        </div>
-
-        {/* Day Selector - Top Right in Header */}
-        {hasMultipleDays && (
-          <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm rounded-full px-2 py-1.5 border border-white/30 flex-shrink-0">
-            <button
-              onClick={handlePrevDay}
-              className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
-              aria-label="Previous day"
-            >
-              <ChevronLeft size={14} className="text-white" />
-            </button>
-            
-            <span className="text-xs font-semibold text-white whitespace-nowrap px-1">
-              Day {selectedDayIndex + 1} of {ticket.event_dates.length}
-            </span>
-
-            <button
-              onClick={handleNextDay}
-              className="p-0.5 hover:bg-white/30 rounded-full transition-colors"
-              aria-label="Next day"
-            >
-              <ChevronRight size={14} className="text-white" />
-            </button>
           </div>
-        )}
+          
+        {/* Ticket ID Badge */}
+        <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-white/30 w-fit">
+          <Ticket size={14} className="text-white" />
+          <span className="text-white text-xs font-bold tracking-wide">
+            {ticket.ticket_number || "N/A"}
+          </span>
+        </div>
       </div>
 
       {/* Detail Section */}
       <div className="p-6 flex-1 flex flex-col">
         <div className="flex gap-x-2 mb-2">
-          <Calendar size={20} className="text-indigo-500" />
+          <Calendar size={20} className={styles.iconColor} />
           <p className="text-gray-800 text-sm font-semibold">{formattedDate}</p>
         </div>
         <div className="flex gap-x-2 mb-2">
-          <Clock size={20} className="text-indigo-500" />
+          <Clock size={20} className={styles.iconColor} />
           <p className="text-gray-800 text-sm font-semibold">{formattedTime}</p>
         </div>
         <div className="flex gap-x-2 mb-4">
-          <MapPin size={20} className="text-indigo-500" />
+          <MapPin size={20} className={styles.iconColor} />
           <p className="text-gray-800 text-sm font-semibold line-clamp-1">
             {eventLocation}
           </p>
@@ -385,7 +403,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
               ))}
 
               {hiddenTags.length > 0 && (
-                <span className="relative group inline-block">
+                <span className="relative z-[9999] group inline-block">
                   <button
                     type="button"
                     className="inline-flex items-center rounded-md bg-[#E8EEFF] px-2 py-1 text-xs font-semibold text-[#1F2A44]"
@@ -395,7 +413,7 @@ export default function TicketCard({ ticket }: { ticket: TicketInfo }) {
 
                   {/* hover dropdown */}
                   <div
-                    className="pointer-events-none absolute left-1/2 z-50 mt-2 w-[min(420px,90vw)]
+                    className="pointer-events-none absolute left-1/2 z-[99999] mt-2 w-[min(420px,90vw)]
                               -translate-x-1/2 rounded-xl border border-gray-200 bg-white/95 p-3
                               shadow-lg backdrop-blur opacity-0 scale-95 transition-all duration-150
                               group-hover:opacity-100 group-hover:scale-100"

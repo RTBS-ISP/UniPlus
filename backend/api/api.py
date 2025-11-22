@@ -168,7 +168,19 @@ def logout_view(request):
 @api.get("/user", auth=django_auth, response={200: schemas.UserSchema, 401: schemas.ErrorSchema})
 def get_user(request):
     if request.user.is_authenticated:
-        about_me_data = request.user.about_me if isinstance(request.user.about_me, dict) else {}
+        about_me_data = {}
+        if request.user.about_me:
+            if isinstance(request.user.about_me, dict):
+                about_me_data = request.user.about_me
+            elif isinstance(request.user.about_me, str):
+                try:
+                    about_me_str = request.user.about_me.strip()
+                    if about_me_str.startswith('"') and about_me_str.endswith('"'):
+                        about_me_str = about_me_str[1:-1]
+                    about_me_data = json.loads(about_me_str)
+                except json.JSONDecodeError:
+                    print(f"Failed to parse about_me: {request.user.about_me}")
+                    about_me_data = {}
 
         tickets = []
         
@@ -258,7 +270,8 @@ def get_user(request):
                         },
                         "event_title": event.event_title if event else None,
                         "event_description": event.event_description if event else None,
-                        "ticket_number": ticket.qr_code,
+                        "qr_code": ticket.qr_code,
+                        "ticket_number": ticket.ticket_number,
                         "event_id": event.id if event else None,
                         "is_online": ticket.is_online,
                         "event_meeting_link": ticket.meeting_link,
@@ -280,51 +293,11 @@ def get_user(request):
             "lastName": request.user.last_name,
             "phone": request.user.phone_number,
             "role": request.user.role,
-            "aboutMe": about_me_data,
+            "aboutMe": about_me_data,  # Now properly parsed
             "profilePic": request.user.profile_picture.url if request.user.profile_picture else DEFAULT_PROFILE_PIC,
             "tickets": tickets
         }
     return 401, {"error": "Not authenticated"}
-
-# ============================================================================
-# NEW: PUBLIC PROFILE ENDPOINT
-# ============================================================================
-
-@api.get("/users/{username}/profile", response={200: schemas.PublicProfileSchema, 404: schemas.ErrorSchema})
-def get_public_profile(request, username: str):
-    """
-    Get public profile of a user (for clicking on organizer names)
-    """
-    try:
-        user = get_object_or_404(AttendeeUser, username=username)
-        
-        # Calculate stats
-        events_organized = Event.objects.filter(organizer=user).count()
-        
-        # Total attendees across all events
-        total_attendees = Ticket.objects.filter(
-            event__organizer=user,
-            approval_status='approved'
-        ).count()
-        
-        # Average rating
-        avg_rating = Rating.objects.filter(
-            event__organizer=user
-        ).aggregate(Avg('rates'))['rates__avg']
-        
-        return 200, {
-            "username": user.username,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "role": user.role,
-            "about_me": user.about_me if isinstance(user.about_me, dict) else {},
-            "profile_pic": user.profile_picture.url if user.profile_picture else DEFAULT_PROFILE_PIC,
-            "events_organized": events_organized,
-            "total_attendees": total_attendees,
-            "avg_rating": round(avg_rating, 1) if avg_rating else None,
-        }
-    except Exception as e:
-        return 404, {"error": f"User not found: {str(e)}"}
 
 
 # ============================================================================
@@ -732,6 +705,12 @@ def register_for_event(request, event_id: int):
 
 @api.get("/events/{event_id}", response=schemas.EventDetailSchema)
 def get_event_detail(request, event_id: int):
+    """
+    Get complete event details including all optional fields
+    ✅ Returns empty strings (not None) for optional fields
+    ✅ Returns full image URL
+    ✅ Returns all schedule details
+    """
     event = get_object_or_404(Event, id=event_id)
     
     tags_list = []
@@ -741,19 +720,21 @@ def get_event_detail(request, event_id: int):
         except:
             tags_list = [event.tags] if event.tags else []
     
-    # Helper function to parse ISO time and convert to local time format HH:MM
+    # Extract category from tags[0]
+    category = ""
+    if tags_list and len(tags_list) > 0:
+        category = tags_list[0]
+    
+    # Helper function to parse ISO time
     def iso_to_local_hhmm(iso_str):
         if not iso_str:
             return "00:00"
         try:
-            # normalize trailing Z into +00:00 so fromisoformat can parse it
             if iso_str.endswith("Z"):
                 iso_str = iso_str[:-1] + "+00:00"
             dt = datetime.fromisoformat(iso_str)
-            # If no tzinfo, assume UTC (safe default for stored ISO times)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            # Convert to Django/current timezone 
             local_tz = timezone.get_current_timezone()
             local_dt = dt.astimezone(local_tz)
             return local_dt.strftime("%H:%M")
@@ -780,7 +761,10 @@ def get_event_detail(request, event_id: int):
                     "date": date_str,
                     "startTime": start_time,
                     "endTime": end_time,
+                    "start_time": start_time,
+                    "end_time": end_time,
                     "location": location,
+                    "address": location,
                     "is_online": day.get('is_online', event.is_online),
                     "meeting_link": day.get('meeting_link', event.event_meeting_link),
                 })
@@ -798,12 +782,23 @@ def get_event_detail(request, event_id: int):
     attendee_count = len(event.attendee) if event.attendee else 0
     available = (event.max_attendee - attendee_count) if event.max_attendee else 100
     
+    # ✅ FIX: Build image URL
+    image_url = None
+    if event.event_image:
+        try:
+            image_url = event.event_image.url
+        except:
+            image_url = None
+    
+    # ✅ FIX: Always return empty string for optional fields, NEVER None
+    # This ensures optional fields are duplicated correctly
     return {
         "id": event.id,
         "title": event.event_title,
         "event_title": event.event_title,
         "event_description": event.event_description,
         "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
+        "category": category,
         "organizer_username": event.organizer.username if event.organizer else "Unknown",
         "organizer_role": event.organizer.role or "Organizer",
         "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
@@ -816,13 +811,23 @@ def get_event_detail(request, event_id: int):
         "current_attendees": attendee_count,
         "available": available,
         "event_address": event.event_address or "",
-        "location": event.event_address or "Online" if event.is_online else "TBA",
+        "location": event.event_address or ("Online" if event.is_online else "TBA"),
         "address2": getattr(event, 'address2', "") or "", 
         "is_online": event.is_online,
         "event_meeting_link": event.event_meeting_link or "",
+        
+        # ✅ CRITICAL FIX: Optional fields - ALWAYS return string, NEVER None
+        # This is why they weren't duplicating before!
+        "event_email": event.event_email if event.event_email else "",
+        "event_phone_number": event.event_phone_number if event.event_phone_number else "",
+        "event_website_url": event.event_website_url if event.event_website_url else "",
+        "terms_and_conditions": event.terms_and_conditions if event.terms_and_conditions else "",
+        
         "tags": tags_list,
-        "event_image": event.event_image.url if event.event_image else None,
-        "image": event.event_image.url if event.event_image else None,
+        
+        "event_image": image_url,
+        "image": image_url,
+        
         "is_registered": is_registered,
         "schedule": schedule,
     }
@@ -1256,23 +1261,40 @@ def get_event_feedback_report(request, event_id: int):
       
 @api.get("/user/event-history", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_event_history(request):
-    """Get user's registered events and attendance history"""
+    """
+    Get user's registered events and attendance history.
+    
+    """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     
     try:
         tickets = Ticket.objects.filter(
-            attendee=request.user
+            attendee=request.user,
+            approval_status='approved',  # Only approved by organizer
+            event__verification_status='approved',  # ✅ NEW: Only approved events
         ).select_related('event').order_by('-purchase_date')
         
         events_data = []
         for ticket in tickets:
             event = ticket.event
             
+            # ✅ Double-check event is approved (extra safety)
+            if event.verification_status != 'approved':
+                continue
+            
             # Get first date from event_dates
             event_date_str = event.event_start_date.isoformat() if event.event_start_date else None
             if ticket.event_dates and isinstance(ticket.event_dates, list) and len(ticket.event_dates) > 0:
                 event_date_str = ticket.event_dates[0].get('date', event_date_str)
+            
+            # Parse event tags
+            event_tags = []
+            if event.tags:
+                try:
+                    event_tags = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    event_tags = [event.tags] if event.tags else []
             
             events_data.append({
                 "event_id": event.id,
@@ -1285,7 +1307,7 @@ def get_user_event_history(request):
                 "approval_status": ticket.approval_status,
                 "purchase_date": ticket.purchase_date.isoformat(),
                 "event_tags": event_tags, 
-                "organizer_role": request.user.role,
+                "organizer_role": event.organizer.role if event.organizer else "organizer",
                 "is_online": event.is_online,
                 "location": event.event_address or ("Online" if event.is_online else "TBA"),
                 "qr_code": ticket.qr_code,
@@ -1300,13 +1322,22 @@ def get_user_event_history(request):
     except Exception as e:
         print(f"Error fetching event history: {e}")
         tickets = (
-            Ticket.objects.filter(attendee=request.user)
+            Ticket.objects.filter(
+                attendee=request.user,
+                approval_status='approved',
+                event__verification_status='approved',  # ✅ NEW: Only approved events
+            )
             .select_related("event", "event__organizer")
             .order_by("-purchase_date")
         )
         events_data = []
         for ticket in tickets:
             event_obj = ticket.event
+            
+            # ✅ Skip if event not approved
+            if event_obj.verification_status != 'approved':
+                continue
+            
             status = "upcoming" if (
                 (ticket.event_date or ticket.start_date or (event_obj and getattr(event_obj, "event_start_date", None)))
                 and (ticket.event_date or ticket.start_date or event_obj.event_start_date) > timezone.now()
@@ -1355,7 +1386,6 @@ def get_user_event_history(request):
         traceback.print_exc()
         return 400, {"error": str(e)}
 
-
 @api.get("/user/statistics", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema})
 def get_user_statistics(request):
     """Get user's event statistics"""
@@ -1363,20 +1393,13 @@ def get_user_statistics(request):
         return 401, {"error": "Not authenticated"}
     
     try:
-        from django.utils import timezone
-        all_tickets = Ticket.objects.filter(attendee=request.user)
+        all_tickets = Ticket.objects.filter(attendee=request.user, approval_status='approved')
         total_events = all_tickets.values('event').distinct().count()
-        upcoming_tickets = all_tickets.filter(
-            event__event_end_date__gt=timezone.now()
-        ).values('event').distinct()
+        upcoming_tickets = all_tickets.filter(event__event_end_date__gt=timezone.now()).values('event').distinct()
         upcoming_count = upcoming_tickets.count()
-        past_tickets = all_tickets.filter(
-            event__event_end_date__lte=timezone.now()
-        ).values('event').distinct()
+        past_tickets = all_tickets.filter(event__event_end_date__lte=timezone.now()).values('event').distinct()
         attended_count = past_tickets.count()
-        
-        # Add pending count
-        pending_count = all_tickets.filter(approval_status='pending').count()
+        pending_count = Ticket.objects.filter(attendee=request.user, approval_status='pending').count()
         
         return 200, {
             "total_events": total_events,
@@ -1390,11 +1413,7 @@ def get_user_statistics(request):
         return 400, {"error": str(e)}
 
 
-@api.get(
-    "/events/{event_id}/dashboard",
-    auth=django_auth,
-    response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema},
-)
+@api.get("/events/{event_id}/dashboard",auth=django_auth,response={200: schemas.EventDashboardSchema, 403: schemas.ErrorSchema, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema},)
 def get_event_dashboard(request, event_id: int):
     """Get dashboard data for event organizer - UPDATED VERSION"""
     try:
@@ -1463,9 +1482,11 @@ def get_event_dashboard(request, event_id: int):
                         checked_in_dates_dict[date_str[:10]] = ticket.checked_in_at.isoformat() if ticket.checked_in_at else timezone.now().isoformat()
             
             attendees.append({
-                "ticketId": ticket.ticket_number or ticket.qr_code,
+                "ticketId": ticket.qr_code,
+                "displayTicketId": ticket.ticket_number or f"T{ticket.id}",
                 "name": f"{user.first_name} {user.last_name}",
                 "email": user.email,
+                "username": user.username,
                 "status": status,
                 "approvalStatus": ticket.approval_status,
                 "registered": ticket.purchase_date.isoformat(),
@@ -1527,6 +1548,7 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
     """
     Approve or reject multiple registrations at once
     Supports bulk actions with select all
+    When rejecting: REMOVES from attendee list to free up spots
     """
     try:
         event = get_object_or_404(Event, id=event_id)
@@ -1543,43 +1565,61 @@ def bulk_approve_reject(request, event_id: int, payload: schemas.ApprovalRequest
         tickets = Ticket.objects.filter(
             event=event,
             ticket_number__in=payload.ticket_ids
-        ).select_related('attendee', 'event')  
+        ).select_related('attendee', 'event')
         
         # Also try QR codes if no tickets found
         if tickets.count() == 0:
             tickets = Ticket.objects.filter(
                 event=event,
                 qr_code__in=payload.ticket_ids
-            ).select_related('attendee', 'event')  
+            ).select_related('attendee', 'event')
         
         if tickets.count() == 0:
             return 400, {"error": "No tickets found"}
         
-        # Update status and send notifications for each ticket
+        # Determine new status
         new_status = 'approved' if payload.action == 'approve' else 'rejected'
         
-        if new_status == 'approved':
-            updated_count = tickets.update(approval_status='approved', approved_at=timezone.now())
-        else:
-            updated_count = tickets.update(approval_status='rejected', rejected_at=timezone.now())
+        # ✅ FIX: If rejecting, remove from attendee list to free up spots
+        if payload.action == 'reject':
+            removed_count = 0
+            for ticket in tickets:
+                if ticket.attendee and isinstance(event.attendee, list):
+                    if ticket.attendee.id in event.attendee:
+                        event.attendee.remove(ticket.attendee.id)
+                        removed_count += 1
+                        print(f"DEBUG: Removed attendee {ticket.attendee.id} from event {event.id}")
+            
+            # Save event once after all removals
+            if removed_count > 0:
+                event.save()
+                print(f"DEBUG: Freed up {removed_count} spots for event {event.id}")
         
+        # Update ticket statuses
+        updated_count = 0
         for ticket in tickets:
             ticket.approval_status = new_status
+            
+            # Set timestamp
+            if new_status == 'approved':
+                ticket.approved_at = timezone.now()
+            else:
+                ticket.rejected_at = timezone.now()
+            
             ticket.save()
             
-            # 🔔 Send notification
+            # 🔔 Send notifications
             if new_status == 'approved':
                 send_approval_notification(ticket)
             else:
                 send_rejection_notification(ticket)
             
             updated_count += 1
-
-        # Return response
+        
         return 200, {
             "success": True,
             "message": f"{updated_count} registration(s) {new_status}",
-            "ticket_id": payload.ticket_ids[0] if payload.ticket_ids else "",
+            "ticket_ids": payload.ticket_ids,
             "status": new_status,
             "processed_count": updated_count,
         }
@@ -1631,7 +1671,7 @@ def approve_registration(request, event_id: int, ticket_id: str):
 @api.post("/events/{event_id}/registrations/{ticket_id}/reject", auth=django_auth, response={200: schemas.ApprovalResponseSchema, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def reject_registration(request, event_id: int, ticket_id: str):
     """
-    Reject a single registration
+    Reject a single registration and FREE UP THE SPOT
     """
     try:
         event = get_object_or_404(Event, id=event_id)
@@ -1647,7 +1687,17 @@ def reject_registration(request, event_id: int, ticket_id: str):
         except Ticket.DoesNotExist:
             ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
+        # ✅ FIX: ALWAYS remove from attendee list when rejecting
+        # This frees up the spot regardless of previous approval status
+        if ticket.attendee and isinstance(event.attendee, list):
+            if ticket.attendee.id in event.attendee:
+                event.attendee.remove(ticket.attendee.id)
+                event.save()
+                print(f"DEBUG: Removed attendee {ticket.attendee.id} from event {event.id}")
+        
+        # Update ticket status
         ticket.approval_status = 'rejected'
+        ticket.rejected_at = timezone.now()
         ticket.save()
         
         # 🔔 Send notification
@@ -1655,7 +1705,7 @@ def reject_registration(request, event_id: int, ticket_id: str):
         
         return 200, {
             "success": True,
-            "message": "Registration rejected",
+            "message": "Registration rejected and spot freed",
             "ticket_id": ticket_id,
             "status": "rejected",
         }
@@ -1663,6 +1713,8 @@ def reject_registration(request, event_id: int, ticket_id: str):
         return 400, {"error": "Ticket not found"}
     except Exception as e:
         print(f"Error rejecting ticket: {e}")
+        import traceback
+        traceback.print_exc()
         return 400, {"error": str(e)}
 
 @api.post("/checkin", auth=django_auth, response={200: schemas.CheckInResponseSchema, 400: schemas.ErrorSchema, 403: schemas.ErrorSchema})
@@ -1672,13 +1724,44 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
     Only organizers can check in attendees for their events
     """
     try:
-        # Find ticket by QR code
-        try:
-            ticket = Ticket.objects.select_related('event', 'attendee').get(
-                qr_code=payload.qr_code
-            )
-        except Ticket.DoesNotExist:
-            return 400, {"error": "Invalid QR code"}
+        ticket_indentifier = payload.qr_code.strip()
+        
+        ticket = None
+        if len(ticket_indentifier) > 20 and '-' in ticket_indentifier:
+            try:
+                ticket = Ticket.objects.select_related('event', 'attendee').get(
+                    qr_code=ticket_indentifier
+                )
+            except Ticket.DoesNotExist:
+                pass
+        
+        if not ticket:
+            try:
+                ticket = Ticket.objects.select_related('event', 'attendee').get(
+                    ticket_number=ticket_indentifier
+                )
+            except Ticket.DoesNotExist:
+                pass
+        
+        if not ticket:
+            try:
+                ticket_id_num = int(ticket_indentifier.replace('T', '')) if ticket_indentifier.startswith('T') else int(ticket_indentifier)
+                ticket = Ticket.objects.select_related('event', 'attendee').get(
+                    id=ticket_id_num
+                )
+            except (Ticket.DoesNotExist, ValueError):
+                pass
+            
+        if not ticket:
+            return 400, {"error": f"Ticket '{ticket_identifier}' not found"}
+        
+        # Check if ticket belong to the SPECIFIC event dashboard being viewed 
+        expected_event_id = getattr(payload, 'event_id', None)
+        
+        if expected_event_id:
+            # If there is an event_id provided, ensure ticket belongs to that event
+            if ticket.event.id != expected_event_id:
+                return 400, {"error": f"This ticket belongs to '{ticket.event.event_title}', not the current event. Please scan the ticket from the correct event"}
         
         # Security check: Only event organizer can check in
         if ticket.event.organizer != request.user:
@@ -1690,35 +1773,93 @@ def check_in_attendee(request, payload: schemas.CheckInRequestSchema):
                 "error": f"Ticket is {ticket.approval_status}. Only approved tickets can be checked in."
             }
         
-        # Check if already checked in
-        if ticket.checked_in_at:
+        # Parse and validate event date
+        event_date_str = None
+        if payload.event_date:
+            try:
+                parsed_date = datetime.strptime(payload.event_date, "%Y-%m-%d").date()
+                event_date_str = parsed_date.isoformat()
+            except ValueError:
+                return 400, {"error": "Invalid date format. Use YYYY-MM-DD."}
+        
+        # Validate that this date is valid for the ticket
+        if event_date_str:
+            valid_dates = []
+            for d in ticket.event_dates or []:
+                if isinstance(d, dict):
+                    date_val = d.get('date')
+                    if date_val:
+                        if len(str(date_val)) >= 10:
+                            valid_dates.append(str(date_val)[:10])
+                elif isinstance(d, str):
+                    try:
+                        dt = datetime.fromisoformat(d)
+                        valid_dates.append(dt.date().isoformat())
+                    except ValueError:
+                        if len(d) >= 10:
+                            valid_dates.append(d[:10])
+            
+            # If ticket has specific dates, validate the check-in date
+            if valid_dates and event_date_str not in valid_dates:
+                return 400, {
+                    "error": f"This ticket is not valid for {event_date_str}. Valid dates: {', '.join(valid_dates)}"
+                }
+        
+        # Initialize checked_in_dates as dict if needed
+        if not isinstance(ticket.checked_in_dates, dict):
+            ticket.checked_in_dates = {}
+        
+        # Check if already checked in for THIS specific date
+        if event_date_str and event_date_str in ticket.checked_in_dates:
+            checked_time = ticket.checked_in_dates[event_date_str]
+            try:
+                if isinstance(checked_time, str):
+                    checked_time_str = checked_time.replace('Z', '+00:00')
+                    dt = datetime.fromisoformat(checked_time_str)
+                else:
+                    dt = checked_time
+                
+                if dt.tzinfo is None:
+                    dt = pytz.UTC.localize(dt)
+                    
+                bangkok_dt = convert_to_bangkok_time(dt)
+                formatted_time = bangkok_dt.strftime("%d/%m/%Y %H:%M")
+            except:
+                formatted_time = str(checked_time)
+            
             return 200, {
                 "success": False,
-                "message": "Attendee already checked in",
-                "ticket_id": ticket.id,
-                "attendee_name": ticket.user_name,
-                "event_title": ticket.event_title,
-                "event_date": payload.event_date,
+                "message": f"Already checked in for {event_date_str} at {formatted_time}",
+                "ticket_id": ticket.qr_code,
+                "attendee_name": ticket.user_name or ticket.attendee.username,
+                "event_title": ticket.event_title or ticket.event.event_title,
+                "event_date": event_date_str,
                 "already_checked_in": True,
-                "checked_in_at": ticket.checked_in_at,
+                "checked_in_at": checked_time,
                 "approval_status": ticket.approval_status,
             }
         
-        # Check in
-        from django.utils import timezone
-        ticket.checked_in_at = timezone.now()
+        # Perform check-in
+        now = timezone.now()
+        
+        # Store check-in for this specific date
+        if event_date_str:
+            ticket.checked_in_dates[event_date_str] = now.isoformat()
+        
+        # Update overall check-in status (latest check-in)
+        ticket.checked_in_at = now
         ticket.status = 'present'
         ticket.save()
         
         return 200, {
             "success": True,
-            "message": "Check-in successful",
-            "ticket_id": ticket.id,
-            "attendee_name": ticket.user_name,
-            "event_title": ticket.event_title,
-            "event_date": payload.event_date,
+            "message": f"Check-in successful for {event_date_str or 'event'}",
+            "ticket_id": ticket.qr_code,
+            "attendee_name": ticket.user_name or ticket.attendee.username,
+            "event_title": ticket.event_title or ticket.event.event_title,
+            "event_date": event_date_str,
             "already_checked_in": False,
-            "checked_in_at": ticket.checked_in_at,
+            "checked_in_at": now.isoformat(),
             "approval_status": ticket.approval_status,
         }
     except Exception as e:
@@ -1774,13 +1915,31 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
 
         if event.organizer != request.user:
             return 403, {"error": "You are not authorized to perform this action"}
-
-        # Resolve ticket by ticket_number first, then fallback to numeric ID
-        try:
-            ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
-        except Ticket.DoesNotExist:
-            ticket_id_num = int(ticket_id.replace("T", "")) if ticket_id.startswith("T") else int(ticket_id)
-            ticket = get_object_or_404(Ticket, id=ticket_id_num, event=event)
+        
+        ticket = None
+        
+        if len(ticket_id) > 20 and '-' in ticket_id:
+            # Assume it's a QR code
+            try:
+                ticket = Ticket.objects.get(qr_code=ticket_id, event=event)
+            except Ticket.DoesNotExist:
+                pass
+            
+        if not ticket:
+            try:
+                ticket = Ticket.objects.get(ticket_number=ticket_id, event=event)
+            except Ticket.DoesNotExist:
+                pass
+            
+        if not ticket:
+            try:
+                ticket_id_num = int(ticket_id.replace("T", "")) if ticket_id.startswith("T") else int(ticket_id)
+                ticket = Ticket.objects.get(id=ticket_id_num, event=event)
+            except (ValueError, Ticket.DoesNotExist):
+                pass
+            
+        if not ticket:
+            return 400, {"error": "Ticket '{ticket_id}' not found for this event."}
 
         # Parse date string from query param
         try:
@@ -1794,7 +1953,11 @@ def check_in_attendee_legacy(request, event_id: int, ticket_id: str, checkin_dat
         # Normalise ticket.event_dates into 'YYYY-MM-DD' strings
         valid_dates: list[str] = []
         for d in ticket.event_dates or []:
-            if isinstance(d, str):
+            if isinstance(d, dict):
+                date_val = d.get('date')
+                if date_val and len(str(date_val)) >= 10:
+                    valid_dates.append(str(date_val)[:10])
+            elif isinstance(d, str):
                 try:
                     dt = datetime.fromisoformat(d)
                     valid_dates.append(dt.date().isoformat())
@@ -1942,6 +2105,7 @@ def get_user_tickets(request, status: str = None):
                 ticket_data = {
                     "ticket_id": ticket.id,
                     "qr_code": ticket.qr_code,
+                    "ticket_number": ticket.ticket_number,
                     "event_id": event.id if event else None,
                     "event_title": event.event_title if event else "Event not found",
                     "event_description": event.event_description if event else None,
@@ -1979,13 +2143,18 @@ def get_user_tickets(request, status: str = None):
         
 @api.get("/user/created-events", auth=django_auth, response={200: dict, 401: schemas.ErrorSchema, 400: schemas.ErrorSchema})
 def get_user_created_events(request):
-    """Return events created by the logged-in user"""
+    """
+    Return events created by the logged-in user.
+    
+    """
     if not request.user.is_authenticated:
         return 401, {"error": "Not authenticated"}
     try:
         created_events = (
-            Event.objects.filter(organizer=request.user)
-            .select_related("organizer")
+            Event.objects.filter(
+                organizer=request.user
+            )
+            .exclude(verification_status='rejected')  
             .order_by("-event_start_date")
         )
         events_data = []
@@ -2008,6 +2177,10 @@ def get_user_created_events(request):
                 if event.event_start_date
                 else None
             )
+            
+            # Get verification status for badge/display
+            verification_status = event.verification_status or "pending"
+            
             events_data.append({
                 "event_id": event.id,
                 "event_title": event.event_title,
@@ -2017,6 +2190,7 @@ def get_user_created_events(request):
                 "is_online": event.is_online,
                 "meeting_link": event.event_meeting_link,  
                 "status": status,
+                "verification_status": verification_status,  
                 "organizer": event.organizer.username if event.organizer else None,
                 "organizer_role": getattr(event.organizer, "role", "organizer") if event.organizer else "organizer",
                 "event_tags": event_tags,
@@ -2037,14 +2211,11 @@ def get_user_created_events(request):
 
 
 # exported into csv
-
-
-@api.post("/events/{event_id}/export", auth=django_auth)
+@api.get("/events/{event_id}/export", auth=django_auth)  
 def export_event_registrations(request, event_id: int):
     try:
         event = get_object_or_404(Event, id=event_id)
         
-        # Proper authorization check
         if event.organizer != request.user:
             return HttpResponse("Unauthorized", status=403)
         
@@ -2054,17 +2225,15 @@ def export_event_registrations(request, event_id: int):
         if not tickets.exists():
             return HttpResponse("No registrations found", status=404)
 
-        # Create CSV with better filename
         response = HttpResponse(content_type='text/csv')
         filename = f"{event.event_title}_registrations_{timezone.now().date()}.csv"
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
         writer = csv.writer(response)
         
-        # Enhanced headers
         writer.writerow([
-            'Ticket ID', 'Attendee Name', 'Attendee Email', 
-            'Phone', 'Registration Date', 'Status', 'QR Code'
+            'Ticket ID', 'Username', 'Attendee Name', 'Attendee Email', 
+            'Phone', 'Registration Date', 'Status', 'Checked In Dates'
         ])
         
         for ticket in tickets:
@@ -2072,17 +2241,32 @@ def export_event_registrations(request, event_id: int):
             attendee_name = f"{attendee.first_name} {attendee.last_name}".strip()
             if not attendee_name:
                 attendee_name = attendee.username
+
+            checked_in_dates = "Didn't check in yet"
+            if ticket.checked_in_dates:
+                # Format each timestamp 
+                formatted_dates = []
+                for date_str in ticket.checked_in_dates.values():
+                    try:
+                        bangkok_dt = convert_to_bangkok_time(datetime.fromisoformat(date_str.replace('Z', '+00:00')))
+                        formatted_dates.append(bangkok_dt.strftime('%Y-%m-%d %H:%M:%S'))
+                    except (ValueError, AttributeError) as e:
+                        print(f"Error parsing date {date_str}: {e}")
+                        formatted_dates.append(str(date_str))
                 
+                checked_in_dates = ", ".join(formatted_dates)
+
             writer.writerow([
-                ticket.id,
+                ticket.ticket_number,
+                attendee.username,
                 attendee_name,
                 attendee.email,
                 attendee.phone_number or 'N/A',
                 ticket.purchase_date.strftime('%Y-%m-%d %H:%M:%S') if ticket.purchase_date else 'N/A',
-                ticket.approval_status,  # Include approval status
-                ticket.qr_code
+                ticket.approval_status,
+                checked_in_dates
             ])
-        
+    
         return response
         
     except Event.DoesNotExist:
@@ -2091,8 +2275,6 @@ def export_event_registrations(request, event_id: int):
         print(f"Export error: {str(e)}")
         return HttpResponse("Export failed", status=500)
     
-
-
 # ============================================================================
 # EVENT VERIFICATION ENDPOINTS
 # ============================================================================
@@ -2223,6 +2405,7 @@ def get_admin_events(request):
                 "event_description": event.event_description,
                 "event_create_date": event.event_create_date.isoformat(),
                 "organizer_name": organizer_name,
+                "organizer_username": event.organizer.username,  
                 "organizer_id": event.organizer.id,
                 "status_registration": event.status_registration,
                 "verification_status": verification_status,
@@ -2313,3 +2496,509 @@ def clear_all_notifications(request):
     count = Notification.objects.filter(user=user).count()
     Notification.objects.filter(user=user).delete()
     return {"success": True, "message": f"{count} notifications cleared"}
+
+# ============================================================================
+# NEW: PUBLIC PROFILE ENDPOINT
+# ============================================================================
+
+@api.get("/user/{username}/event-history", response={200: dict, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def get_public_user_event_history(request, username: str):
+    """Get public event history for a specific user (only approved events)"""
+    try:
+        user = get_object_or_404(AttendeeUser, username=username)
+        
+        tickets = Ticket.objects.filter(
+            attendee=user,
+            approval_status='approved'
+        ).select_related('event').order_by('-purchase_date')
+        
+        events_data = []
+        for ticket in tickets:
+            event = ticket.event
+            
+            if event.verification_status != "approved":
+                continue
+                
+            event_date_str = event.event_start_date.isoformat() if event.event_start_date else None
+            if ticket.event_dates and isinstance(ticket.event_dates, list) and len(ticket.event_dates) > 0:
+                event_date_str = ticket.event_dates[0].get('date', event_date_str)
+            
+            event_tags = []
+            if event.tags:
+                try:
+                    event_tags = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    event_tags = [event.tags] if event.tags else []
+            
+            events_data.append({
+                "event_id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_date": event_date_str,
+                "location": ticket.location,
+                "organizer": event.organizer.username,
+                "status": ticket.status,
+                "approval_status": ticket.approval_status,
+                "purchase_date": ticket.purchase_date.isoformat(),
+                "event_tags": event_tags, 
+                "organizer_role": event.organizer.role if event.organizer else "organizer",
+                "is_online": event.is_online,
+                "location": event.event_address or ("Online" if event.is_online else "TBA"),
+                "qr_code": ticket.qr_code,
+                "is_online": ticket.is_online,
+                "meeting_link": ticket.meeting_link,
+                "user_name": f"{user.first_name} {user.last_name}".strip() or user.username,
+                "user_email": user.email,
+            })
+        
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data),
+        }
+        
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with username '{username}' not found"}
+    except Exception as e:
+        print(f"Error fetching public event history: {e}")
+        return 400, {"error": str(e)}
+
+    
+
+@api.get("/user/{username}/created-events", response={200: dict, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def get_public_user_created_events(request, username: str):
+    """Get public created events for a specific user (only approved events)"""
+    try:
+        user = get_object_or_404(AttendeeUser, username=username)
+        
+        # Only show approved events for public viewing
+        created_events = Event.objects.filter(
+            organizer=user,
+            verification_status="approved"
+        ).select_related("organizer").order_by("-event_start_date")
+        
+        events_data = []
+        for event in created_events:
+            status = "upcoming" if (
+                event.event_start_date and event.event_start_date > timezone.now()
+            ) else "past"
+
+            event_tags = []
+            if event.tags:
+                try:
+                    event_tags = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+                except:
+                    event_tags = [event.tags] if event.tags else []
+
+            event_date_str = (
+                event.event_start_date.isoformat()
+                if event.event_start_date
+                else None
+            )
+            
+            attendee_count = Ticket.objects.filter(
+                event=event, 
+                approval_status='approved'
+            ).count()
+            
+            events_data.append({
+                "event_id": event.id,
+                "event_title": event.event_title,
+                "event_description": event.event_description,
+                "event_date": event_date_str,
+                "location": event.event_address,
+                "is_online": event.is_online,
+                "meeting_link": event.event_meeting_link,
+                "status": status,
+                "organizer": event.organizer.username,
+                "organizer_role": getattr(event.organizer, "role", "organizer"),
+                "event_tags": event_tags,
+                "user_name": user.username, 
+                "user_email": "",  
+                "purchase_date": None,  
+                "qr_code": None,  
+            })
+        
+        return 200, {
+            "events": events_data,
+            "total_count": len(events_data),
+        }
+        
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with username '{username}' not found"}
+    except Exception as e:
+        import traceback
+        print("Error fetching public created events:")
+        traceback.print_exc()
+        return 400, {"error": str(e)}
+    
+
+@api.get("/user/{username}/statistics", response={200: dict, 404: schemas.ErrorSchema, 400: schemas.ErrorSchema})
+def get_public_user_statistics(request, username: str):
+    """Get public statistics for a specific user"""
+    try:
+        user = get_object_or_404(AttendeeUser, username=username)
+        
+        # Only count approved events and tickets for public viewing
+        approved_tickets = Ticket.objects.filter(attendee=user, approval_status='approved')
+        
+        # Only count events that are approved/verified
+        approved_events_ids = approved_tickets.filter(event__verification_status="approved").values_list('event_id', flat=True).distinct()
+        total_events = len(approved_events_ids)
+        
+        # Upcoming events (approved events with future dates)
+        upcoming_count = approved_tickets.filter(event__verification_status="approved",event__event_end_date__gt=timezone.now()).values('event').distinct().count()
+        
+        attended_count = approved_tickets.filter(event__verification_status="approved",event__event_end_date__lte=timezone.now()).values('event').distinct().count()
+        
+        created_events_count = Event.objects.filter(
+            organizer=user,
+            verification_status="approved"
+        ).count()
+        
+        return 200, {
+            "total_events": total_events,
+            "upcoming_events": upcoming_count,
+            "attended_events": attended_count,
+            "created_events": created_events_count,
+            "total_registrations": approved_tickets.count(),
+            "user_info": {
+                "username": user.username,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": user.role
+            }
+        }
+        
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with username '{username}' not found"}
+    except Exception as e:
+        print(f"Error calculating public statistics: {e}")
+        return 400, {"error": str(e)}
+    
+@api.get("/user/{username}/profile", response={200: schemas.PublicProfileSchema, 404: schemas.ErrorSchema})
+def get_public_profile(request, username: str):
+    """Get public profile of a user"""
+    try:
+        user = get_object_or_404(AttendeeUser, username=username)
+        
+        about_me_data = {}
+        if user.about_me:
+            if isinstance(user.about_me, dict):
+                about_me_data = user.about_me
+            elif isinstance(user.about_me, str):
+                try:
+                    about_me_str = user.about_me.strip()
+                    if about_me_str.startswith('"') and about_me_str.endswith('"'):
+                        about_me_str = about_me_str[1:-1]
+                    about_me_data = json.loads(about_me_str)
+                except json.JSONDecodeError:
+                    print(f"Failed to parse about_me for user {username}: {user.about_me}")
+                    about_me_data = {}
+        
+        # Calculate stats 
+        events_organized = Event.objects.filter(
+            organizer=user, 
+            verification_status="approved"
+        ).count()
+        
+        total_attendees = Ticket.objects.filter(
+            event__organizer=user,
+            event__verification_status="approved",
+            approval_status='approved'
+        ).count()
+        
+        avg_rating = Rating.objects.filter(
+            event_id__organizer=user,
+            event_id__verification_status="approved"
+        ).aggregate(Avg('rates'))['rates__avg']
+        
+        user_tickets = Ticket.objects.filter(
+            attendee=user, 
+            approval_status='approved',
+            event__verification_status="approved"
+        )
+        user_total_events = user_tickets.values('event').distinct().count()
+        
+        return 200, {
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "phone_number": user.phone_number, 
+            "role": user.role,
+            "about_me": about_me_data,  
+            "profile_pic": user.profile_picture.url if user.profile_picture else DEFAULT_PROFILE_PIC,
+            "events_organized": events_organized,
+            "total_attendees": total_attendees,
+            "user_total_events": user_total_events,
+            "avg_rating": round(avg_rating, 1) if avg_rating else None,
+        }
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with username '{username}' not found"}
+    except Exception as e:
+        print(f"Error in public profile: {e}")
+        import traceback
+        traceback.print_exc()
+        return 404, {"error": f"Error loading profile: {str(e)}"}
+    
+
+from datetime import timedelta
+import json
+
+@api.post("/events/{event_id}/duplicate", auth=django_auth, response={200: schemas.SuccessSchema, 400: schemas.ErrorSchema})
+def duplicate_event(request, event_id: int):
+    """
+    Duplicate an event with all its details and schedule.
+    
+    Fixes:
+    ✅ Proper date handling (end time after start time)
+    ✅ Location data properly copied
+    ✅ max_attendee defaults to 100, not 0
+    ✅ All EventSchedule entries duplicated with date offset
+    """
+    try:
+        original_event = get_object_or_404(Event, id=event_id)
+        
+        # Security check: Only organizer can duplicate their own events
+        if original_event.organizer != request.user:
+            return 403, {"error": "You can only duplicate your own events"}
+        
+        # ✅ FIX 1: Calculate proper date offset (add 7 days for review)
+        date_offset = timedelta(days=7)
+        
+        # Get original schedule entries
+        original_schedules = EventSchedule.objects.filter(event=original_event).order_by('event_date', 'start_time_event')
+        
+        if not original_schedules.exists():
+            return 400, {"error": "Event has no schedule to duplicate"}
+        
+        # ✅ FIX 2: Parse max_attendee with proper default
+        max_attendee_value = original_event.max_attendee
+        if not max_attendee_value or max_attendee_value == 0:
+            max_attendee_value = 100
+        
+        # Create duplicate event
+        duplicate = Event.objects.create(
+            organizer=request.user,
+            event_title=f"{original_event.event_title} (Copy)",
+            event_description=original_event.event_description,
+            
+            # ✅ FIX 3: Offset registration dates properly
+            start_date_register=original_event.start_date_register + date_offset if original_event.start_date_register else None,
+            end_date_register=original_event.end_date_register + date_offset if original_event.end_date_register else None,
+            
+            # ✅ FIX 4: Offset event dates properly
+            event_start_date=original_event.event_start_date + date_offset if original_event.event_start_date else None,
+            event_end_date=original_event.event_end_date + date_offset if original_event.event_end_date else None,
+            
+            # ✅ FIX 5: Set proper max_attendee (default 100 if missing)
+            max_attendee=max_attendee_value,
+            
+            # ✅ FIX 6: Copy location fields properly
+            event_address=original_event.event_address,  # Copy physical address
+            is_online=original_event.is_online,          # Copy online flag
+            event_meeting_link=original_event.event_meeting_link if original_event.is_online else None,  # Only copy if online
+            
+            # Copy other settings
+            tags=original_event.tags,
+            event_email=original_event.event_email,
+            event_phone_number=original_event.event_phone_number,
+            event_website_url=original_event.event_website_url,
+            terms_and_conditions=original_event.terms_and_conditions,
+            event_image=original_event.event_image,
+            
+            # Status - reset for new event
+            verification_status="pending",  # ✅ Requires admin approval
+            status_registration="OPEN",     # ✅ Open for registration
+            
+            # Empty attendees for new event
+            attendee=[],
+            
+            # Copy schedule JSON
+            schedule=original_event.schedule,
+        )
+        
+        # ✅ FIX 7: Create EventSchedule entries with proper date offset
+        created_schedules = []
+        for original_schedule in original_schedules:
+            # ✅ FIX 8: Add proper date offset to schedule entries
+            new_event_date = original_schedule.event_date + date_offset if original_schedule.event_date else None
+            
+            new_schedule = EventSchedule.objects.create(
+                event=duplicate,
+                event_date=new_event_date,
+                start_time_event=original_schedule.start_time_event,
+                end_time_event=original_schedule.end_time_event,
+            )
+            
+            created_schedules.append({
+                'date': new_event_date.isoformat() if new_event_date else None,
+                'start_time': new_schedule.start_time_event.isoformat(),
+                'end_time': new_schedule.end_time_event.isoformat(),
+            })
+            
+            print(f"DEBUG: Created EventSchedule {new_schedule.id} for date {new_event_date}")
+        
+        # Send notification to admins
+        send_event_creation_notification_to_admins(duplicate)
+        
+        print(f"DEBUG: Event {original_event.id} duplicated as {duplicate.id} with {len(created_schedules)} schedules")
+        
+        return 200, {
+            "success": True,
+            "message": f"Event '{duplicate.event_title}' created. Review and update dates as needed.",
+            "event_id": duplicate.id,
+            "original_event_id": original_event.id,
+            "max_attendee": duplicate.max_attendee,  # ✅ Verify this is correct
+            "location": duplicate.event_address or ("Online" if duplicate.is_online else "TBA"),  # ✅ Include location
+            "is_online": duplicate.is_online,
+            "schedule_count": len(created_schedules),
+            "created_schedules": created_schedules,
+            "verification_status": duplicate.verification_status,
+        }
+        
+    except Event.DoesNotExist:
+        return 400, {"error": "Original event not found"}
+    except Exception as e:
+        print(f"ERROR: Failed to duplicate event: {e}")
+        import traceback
+        traceback.print_exc()
+        return 400, {"error": str(e)}
+
+
+# ============================================================================
+# OPTIONAL: If you want the template-based approach (redirect to create page)
+# Instead of the endpoint above, use this simpler version:
+# ============================================================================
+
+@api.get("/events/{event_id}/duplicate", response=schemas.EventDetailSchema)
+def get_event_for_duplication(request, event_id: int):
+    """
+    Get event data for duplication template.
+    Frontend will redirect to /events/create?duplicate={event_id}
+    This endpoint is called by the create page to prefill the form.
+    
+    ✅ FIXES:
+    - Category extraction from tags
+    - Start time & end time for each schedule day
+    - Event address properly returned
+    - Terms & conditions included
+    - Contact info (email, phone, website) included
+    - Event image URL included
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+        
+        # Get full schedule with all details
+        schedules = EventSchedule.objects.filter(event=event).order_by('event_date', 'start_time_event')
+        
+        schedule_data = []
+        for sched in schedules:
+            schedule_data.append({
+                "date": sched.event_date.isoformat(),
+                "start_time": sched.start_time_event.isoformat(),  # ✅ FIX: Include start time
+                "end_time": sched.end_time_event.isoformat(),      # ✅ FIX: Include end time
+                "startTime": sched.start_time_event.isoformat(),   # Frontend expects camelCase
+                "endTime": sched.end_time_event.isoformat(),       # Frontend expects camelCase
+                "address": event.event_address or "",               # ✅ FIX: Include address
+                "location": event.event_address or "TBA",
+                "is_online": event.is_online,
+                "meeting_link": event.event_meeting_link or "",
+                "start_iso": f"{sched.event_date.isoformat()}T{sched.start_time_event.isoformat()}Z",
+                "end_iso": f"{sched.event_date.isoformat()}T{sched.end_time_event.isoformat()}Z",
+            })
+        
+        # Parse tags to extract category
+        tags_list = []
+        if event.tags:
+            try:
+                tags_list = json.loads(event.tags) if isinstance(event.tags, str) else event.tags
+            except:
+                tags_list = [event.tags] if event.tags else []
+        
+        # ✅ FIX: Extract category from tags (first tag is usually category)
+        category = ""
+        if tags_list and len(tags_list) > 0:
+            category = tags_list[0]
+        
+        # ✅ Return ALL fields needed for complete duplication
+        return {
+            "id": event.id,
+            "title": event.event_title,
+            "event_title": event.event_title,
+            "event_description": event.event_description,
+            "excerpt": event.event_description[:150] + "..." if len(event.event_description) > 150 else event.event_description,
+            
+            # ✅ FIX: Added category
+            "category": category,
+            
+            "organizer_username": event.organizer.username if event.organizer else "Unknown",
+            "organizer_role": event.organizer.role or "Organizer",
+            "host": [f"{event.organizer.first_name} {event.organizer.last_name}".strip() or event.organizer.username] if event.organizer else ["Unknown"],
+            
+            "start_date_register": event.start_date_register,
+            "end_date_register": event.end_date_register,
+            "event_start_date": event.event_start_date,
+            "event_end_date": event.event_end_date,
+            
+            "max_attendee": event.max_attendee or 100,
+            "capacity": event.max_attendee or 100,
+            "current_attendees": len(event.attendee) if event.attendee else 0,
+            "available": (event.max_attendee or 100) - (len(event.attendee) if event.attendee else 0),
+            
+            # ✅ FIX: Location/Address fields
+            "event_address": event.event_address or "",
+            "location": event.event_address or ("Online" if event.is_online else "TBA"),
+            "address2": getattr(event, 'address2', "") or "",
+            "is_online": event.is_online,
+            "event_meeting_link": event.event_meeting_link or "",
+            
+            # ✅ FIX: Contact information
+            "event_email": event.event_email or "",
+            "event_phone_number": event.event_phone_number or "",
+            "event_website_url": event.event_website_url or "",
+            
+            # ✅ FIX: Terms & conditions
+            "terms_and_conditions": event.terms_and_conditions or "",
+            
+            # Tags
+            "tags": tags_list,
+            
+            # ✅ FIX: Media/Image
+            "event_image": event.event_image.url if event.event_image else None,
+            "image": event.event_image.url if event.event_image else None,
+            
+            "is_registered": False,
+            
+            # ✅ FIX: Complete schedule with all details
+            "schedule": schedule_data,
+        }
+        
+    except Event.DoesNotExist:
+        return 404, {"error": "Event not found"}
+    except Exception as e:
+        print(f"Error fetching event for duplication: {e}")
+        import traceback
+        traceback.print_exc()
+        return 400, {"error": str(e)}
+@api.get("/user/{email}", response={200: schemas.UserByEmailSchema, 404: schemas.ErrorSchema})
+def get_user_by_email(request, email: str):
+    """
+    Get user information by email address
+    Useful for finding usernames when only emails are available
+    """
+    try:
+        user = get_object_or_404(AttendeeUser, email=email)
+        
+        return 200, {
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "role": user.role,
+        }
+    except AttendeeUser.DoesNotExist:
+        return 404, {"error": f"User with email '{email}' not found"}
+    except Exception as e:
+        print(f"Error fetching user by email: {e}")
+        return 400, {"error": str(e)}
+    

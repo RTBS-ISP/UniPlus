@@ -1,13 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Navbar from "../components/navbar";
-import EditPopup from "../components/profile/EditPopup";
-import Tabs from '../components/profile/Tabs';
-import EventCard from "../components/events/EventCard";
-import { useUser } from "../context/UserContext"; 
-import { Calendar, Copy } from 'lucide-react';
+import { useParams, useRouter } from "next/navigation";
+import Navbar from "../../components/navbar";
+import Tabs from '../../components/profile/Tabs';
+import EventCard from "../../components/events/EventCard";
+import { Calendar } from 'lucide-react';
 
 interface EventData {
   event_id?: number;
@@ -24,12 +22,31 @@ interface EventData {
   event_tags?: string[] | string;
   tags?: string[] | string;
   is_online: boolean;
+  user_name?: string;
+  user_email?: string;
+  purchase_date?: string | null;
+  qr_code?: string | null;
+}
+
+interface PublicUserData {
+  username: string;
+  first_name: string;
+  last_name: string;
+  phone_number: string;
+  role: string;
+  about_me: any;
+  profile_pic: string;
+  events_organized: number;
+  total_attendees: number;
+  user_total_events: number;
+  avg_rating: number | null;
 }
 
 interface StatisticsData {
   total_events: number;
   upcoming_events: number;
   attended_events: number;
+  created_events: number;
   total_registrations: number;
 }
 
@@ -50,6 +67,7 @@ function transformEventToItem(event: any, index: number) {
   
   let eventTags: string[] = [];
   
+  // Try event_tags first (from event-history API)
   if (event.event_tags) {
     if (Array.isArray(event.event_tags)) {
       eventTags = event.event_tags;
@@ -63,6 +81,7 @@ function transformEventToItem(event: any, index: number) {
     }
   }
   
+  // Also check for 'tags' field as fallback (used in EventsPage)
   if (eventTags.length === 0 && event.tags) {
     if (Array.isArray(event.tags)) {
       eventTags = event.tags;
@@ -76,14 +95,17 @@ function transformEventToItem(event: any, index: number) {
     }
   }
   
+  // Extract category from tags (first tag is usually the category)
   const category = eventTags.length > 0 ? eventTags[0] : undefined;
   
+  // Create excerpt from event description
   const excerpt = event.event_description 
     ? (event.event_description.length > 150 
         ? event.event_description.substring(0, 150) + '...' 
         : event.event_description)
     : 'No description available';
 
+  // Handle location
   const location = event.is_online 
     ? 'Online Event' 
     : (event.location || event.event_address || 'TBA');
@@ -104,134 +126,135 @@ function transformEventToItem(event: any, index: number) {
   };
 }
 
-function ProfilePage() {
-  const { user, setUser } = useUser(); 
-  const [editOpen, setEditOpen] = useState(false);
+function PublicProfilePage() {
+  const params = useParams();
+  const username = params.username as string;
+  const router = useRouter();
+  
+  const [userData, setUserData] = useState<PublicUserData | null>(null);
   const [eventHistory, setEventHistory] = useState<EventData[]>([]);
   const [statistics, setStatistics] = useState<StatisticsData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [loadingEvents, setLoadingEvents] = useState(false);
-  const [loadingStats, setLoadingStats] = useState(false);
   const [createdEvents, setCreatedEvents] = useState<EventData[]>([]);
   const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all");
-  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user === null) {
-      router.push('/login');
-    } else if (user) {
-      fetchEventHistory();
-      fetchCreatedEvents();
-      fetchStatistics();
-    }
-  }, [user, router]);
+    fetchPublicProfile();
+    fetchPublicEventHistory();
+    fetchPublicCreatedEvents();
+    fetchPublicStatistics();
+  }, [username]);
 
-  const fetchEventHistory = async () => {
+  const fetchPublicProfile = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`http://localhost:8000/api/user/${username}/profile`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUserData(data);
+      } else if (response.status === 404) {
+        setError("User not found");
+      } else {
+        setError("Failed to load profile");
+      }
+    } catch (error) {
+      console.error('Error fetching public profile:', error);
+      setError("Error loading profile");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPublicEventHistory = async () => {
     try {
       setLoadingEvents(true);
-      const response = await fetch('http://localhost:8000/api/user/event-history', {
-        credentials: 'include',
-      });
+      const response = await fetch(`http://localhost:8000/api/user/${username}/event-history`);
       
       if (response.ok) {
         const data = await response.json();
         setEventHistory(data.events || []);
       } else {
-        console.error('Failed to fetch event history');
+        console.error('Failed to fetch public event history');
       }
     } catch (error) {
-      console.error('Error fetching event history:', error);
+      console.error('Error fetching public event history:', error);
     } finally {
       setLoadingEvents(false);
     }
   };
 
-  const fetchCreatedEvents = async () => {
+  const fetchPublicCreatedEvents = async () => {
     try {
       setLoadingEvents(true);
-      const response = await fetch("http://localhost:8000/api/user/created-events", {
-        credentials: "include",
-      });
+      const response = await fetch(`http://localhost:8000/api/user/${username}/created-events`);
 
       if (response.ok) {
         const data = await response.json();
         setCreatedEvents(data.events || []);
       } else {
-        console.error("Failed to fetch created events");
+        console.error("Failed to fetch public created events");
       }
     } catch (error) {
-      console.error("Error fetching created events:", error);
+      console.error("Error fetching public created events:", error);
     } finally {
       setLoadingEvents(false);
     }
   };
 
-  const fetchStatistics = async () => {
+  const fetchPublicStatistics = async () => {
     try {
-      setLoadingStats(true);
-      const response = await fetch('http://localhost:8000/api/user/statistics', {
-        credentials: 'include',
-      });
+      const response = await fetch(`http://localhost:8000/api/user/${username}/statistics`);
       
       if (response.ok) {
         const data = await response.json();
         setStatistics(data);
       } else {
-        console.error('Failed to fetch statistics');
+        console.error('Failed to fetch public statistics');
       }
     } catch (error) {
-      console.error('Error fetching statistics:', error);
-    } finally {
-      setLoadingStats(false);
+      console.error('Error fetching public statistics:', error);
     }
   };
 
-  const handleDuplicate = (eventId: number) => {
-    // Simply redirect to create page with the event ID to duplicate
-    router.push(`/events/create?duplicate=${eventId}`);
-  };
-
-  function getCookie(name: string): string | undefined {
-    if (typeof document === "undefined") return undefined;
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(";").shift();
+  if (loading) {
+    return (
+      <main>
+        <Navbar />
+        <div className="flex items-center justify-center min-h-screen bg-indigo-100">
+          <div className="text-gray-600">Loading profile...</div>
+        </div>
+      </main>
+    );
   }
 
-  const handleEditSave = async (data: any) => {
-    const csrftoken = getCookie("csrftoken");
-    const formData = new FormData();
+  if (error || !userData) {
+    return (
+      <main>
+        <Navbar />
+        <div className="flex flex-col items-center justify-center min-h-screen bg-indigo-100">
+          <div className="text-red-600 text-xl font-semibold mb-4">
+            {error || "User not found"}
+          </div>
+          <button
+            onClick={() => router.push('/events')}
+            className="px-6 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg"
+          >
+            Back to Events
+          </button>
+        </div>
+      </main>
+    );
+  }
 
-    if (data.firstName) formData.append("firstName", data.firstName);
-    if (data.lastName) formData.append("lastName", data.lastName);
-    if (data.phone) formData.append("phone", data.phone);
-    if (data.aboutMe) formData.append("aboutMe", JSON.stringify(data.aboutMe));
-    if (data.file) formData.append("profilePic", data.file);
-
-    const res = await fetch("http://localhost:8000/api/user", {
-      method: "PATCH",
-      credentials: "include",
-      headers: {
-        "X-CSRFToken": csrftoken ?? "",
-      },
-      body: formData,
-    });
-
-    if (res.ok) {
-      const updatedUser = await res.json();
-      setUser(updatedUser);
-      setEditOpen(false);
-    } else {
-      console.error("Failed to update profile", await res.text());
-      alert("Failed to update profile.");
-    }
-  };
-
-  if (!user) return <p>Loading.....</p>
-
+  // Transform event history to EventCard format
   const eventItems = eventHistory.map((event, idx) => 
     transformEventToItem(event, idx)
   );
 
+  // Sort events: upcoming first, then past
   const sortedEventItems = [...eventItems].sort((a, b) => {
     const aDate = a.date ? new Date(a.date).getTime() : 0;
     const bDate = b.date ? new Date(b.date).getTime() : 0;
@@ -278,11 +301,12 @@ function ProfilePage() {
               <Calendar className="mb-2.5" size={52} />
               <p className="font-semibold text-xl">No registered events yet</p>
               <p className="text-sm text-gray-600 mt-2">
-                Register for events to see them here
+                This user hasn't registered for any events
               </p>
             </div>
           ) : (
             <div className="flex gap-6">
+              {/* Left Sidebar */}
               <div className="w-72 flex-shrink-0">
                 <div className="bg-white rounded-xl p-6 shadow-sm sticky top-6">
                   <h3 className="font-bold text-lg text-gray-800 mb-4">
@@ -292,26 +316,22 @@ function ProfilePage() {
                     <div className="flex items-center justify-between pb-3 border-b border-gray-200">
                       <span className="text-gray-600 text-sm">Total Events</span>
                       <span className="font-bold text-indigo-600">
-                        {sortedEventItems.length}
+                        {statistics?.total_events || sortedEventItems.length}
                       </span>
                     </div>
                     <div className="flex items-center justify-between pb-3 border-b border-gray-200">
                       <span className="text-gray-600 text-sm">Upcoming</span>
                       <span className="font-bold text-indigo-400">
-                        {
-                          sortedEventItems.filter(
-                            (e) => e.date && new Date(e.date) >= new Date()
-                          ).length
+                        {statistics?.upcoming_events || 
+                          sortedEventItems.filter(e => e.date && new Date(e.date) >= new Date()).length
                         }
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-gray-600 text-sm">Past Events</span>
                       <span className="font-bold text-indigo-400">
-                        {
-                          sortedEventItems.filter(
-                            (e) => e.date && new Date(e.date) < new Date()
-                          ).length
+                        {statistics?.attended_events || 
+                          sortedEventItems.filter(e => e.date && new Date(e.date) < new Date()).length
                         }
                       </span>
                     </div>
@@ -357,6 +377,7 @@ function ProfilePage() {
                 </div>
               </div>
 
+              {/* Event Cards */}
               <div className="flex-1 space-y-4">
                 {filteredEvents.map((eventItem, idx) => (
                   <EventCard 
@@ -364,7 +385,6 @@ function ProfilePage() {
                     item={eventItem} 
                     index={idx}
                     stagger={0.04}
-                    showStatus={true}
                   />
                 ))}
               </div>
@@ -374,23 +394,24 @@ function ProfilePage() {
       ),
     },
     {
-      title: "My Events",
+      title: "Created Events",
       content: (
         <div className="mt-4 rounded-xl">
           {loadingEvents ? (
             <div className="flex items-center justify-center h-64">
-              <div className="text-gray-500">Loading your events...</div>
+              <div className="text-gray-500">Loading events...</div>
             </div>
           ) : sortedCreatedEventItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-gray-800 bg-white rounded-xl">
               <Calendar className="mb-2.5" size={52} />
               <p className="font-semibold text-xl">No events created yet</p>
               <p className="text-sm text-gray-600 mt-2">
-                Create an event to see it here.
+                This user hasn't created any events
               </p>
             </div>
           ) : (
             <div className="flex gap-6">
+              {/* Left Sidebar */}
               <div className="w-72 flex-shrink-0">
                 <div className="bg-white rounded-xl p-6 shadow-sm sticky top-6">
                   <h3 className="font-bold text-lg text-gray-800 mb-4">
@@ -400,7 +421,7 @@ function ProfilePage() {
                     <div className="flex items-center justify-between pb-3 border-b border-gray-200">
                       <span className="text-gray-600 text-sm">Total Created</span>
                       <span className="font-bold text-indigo-600">
-                        {sortedCreatedEventItems.length}
+                        {statistics?.created_events || sortedCreatedEventItems.length}
                       </span>
                     </div>
                     <div className="flex items-center justify-between pb-3 border-b border-gray-200">
@@ -425,34 +446,23 @@ function ProfilePage() {
                     </div>
                   </div>
                   
-                  <div className="mt-6 pt-6 border-t border-gray-200">
-                    <h4 className="font-semibold text-medium text-gray-700 mb-3">
-                      Quick Actions
-                    </h4>
-                    <div className="flex flex-col w-full space-y-2">
-                      <a 
-                        href="/events/create" 
-                        className="w-full text-center px-3 py-2 rounded-lg text-sm bg-indigo-500 hover:bg-indigo-600 text-white transition-colors font-medium"
-                      >
-                        Create New Event
-                      </a>
-                      
-                      {/* Duplicate from last event */}
-                      {sortedCreatedEventItems.length > 0 && (
-                        <button
-                          onClick={() => handleDuplicate(sortedCreatedEventItems[0].id)}
-                          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm bg-purple-100 hover:bg-purple-200 text-purple-700 transition-colors font-medium"
-                        >
-                          <Copy size={16} />
-                          Duplicate Last Event
-                        </button>
-                      )}
+                  {userData.avg_rating && (
+                    <div className="mt-6 pt-6 border-t border-gray-200">
+                      <h4 className="font-semibold text-sm text-gray-700 mb-3">
+                        Organizer Rating
+                      </h4>
+                      <div className="flex items-center">
+                        <span className="text-2xl font-bold text-indigo-600">
+                          {userData.avg_rating}
+                        </span>
+                        <span className="text-gray-500 ml-2">/ 5.0</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
-              {/* Event Cards with Duplicate Buttons */}
+              {/* Event Cards */}
               <div className="flex-1 space-y-4">
                 {sortedCreatedEventItems.map((eventItem, idx) => (
                   <EventCard
@@ -460,7 +470,6 @@ function ProfilePage() {
                     item={eventItem}
                     index={idx}
                     stagger={0.04}
-                    showDuplicate={true}
                   />
                 ))}
               </div>
@@ -474,102 +483,98 @@ function ProfilePage() {
   return (
     <main>
       <Navbar />
-      <EditPopup
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        onSave={handleEditSave}
-        role={user.role}
-        initialData={{
-          firstName: user.firstName,
-          lastName: user.lastName,
-          phone: user.phone,
-          aboutMe: user.aboutMe,
-          profilePic: user.profilePic,
-        }}
-      />
-
+      
       <div className="flex flex-col min-h-screen bg-indigo-100">
         <div className="flex flex-col w-full px-20 py-10 mb-3">
           <div className="flex justify-between p-6">
             <div className="flex flex-row gap-x-6 items-stretch">
+              {/* Profile Picture */}
               <div className="w-64 h-64 overflow-hidden rounded-xl">
                 <img
                   src={
-                    user.profilePic.startsWith("/images")
-                      ? user.profilePic
-                      : `http://localhost:8000${user.profilePic}`
+                    userData.profile_pic.startsWith("/images")
+                      ? userData.profile_pic
+                      : `http://localhost:8000${userData.profile_pic}`
                   }
                   alt="Profile Picture"
                   className="w-full h-full object-cover"
                 />
               </div>
 
+              {/* Info */}
               <div className="flex flex-col justify-between h-64">
                 <div>
                   <div className="text-gray-800 font-extrabold text-5xl">
-                    {user.firstName.charAt(0).toUpperCase() + user.firstName.slice(1)}{" "}
-                    {user.lastName.charAt(0).toUpperCase() + user.lastName.slice(1)}
+                    {userData.first_name.charAt(0).toUpperCase() + userData.first_name.slice(1)}{" "}
+                    {userData.last_name.charAt(0).toUpperCase() + userData.last_name.slice(1)}
                   </div>
                   
-                  {user.role && (
-                    <div className="flex mt-3 mb-4">
-                      {user.role === "student" ? (
-                        <div className="bg-sky-100 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
-                          Student
-                        </div>
-                      ) : user.role === "professor" ? (
-                        <div className="bg-indigo-200 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
-                          Professor
-                        </div>
-                      ) : user.role === "organizer" ? (
-                        <div className="bg-purple-100 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
-                          Organizer
-                        </div>
-                      ) : user.role === "admin" && (
-                        <div className="bg-slate-200 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
-                          Admin
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex mt-3 mb-4">
+                    {userData.role === "student" ? (
+                      <div className="bg-sky-100 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
+                        Student
+                      </div>
+                    ) : userData.role === "professor" ? (
+                      <div className="bg-indigo-200 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
+                        Professor
+                      </div>
+                    ) : userData.role === "organizer" ? (
+                      <div className="bg-purple-100 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
+                        Organizer
+                      </div>
+                    ) : userData.role === "admin" && (
+                      <div className="bg-slate-200 text-gray-800 font-bold text-base px-5 py-1 rounded-lg text-center">
+                        Admin
+                      </div>
+                    )}
+                  </div>
 
-                  {user.role === "student" && user.aboutMe && (
+                  {/* Role-Specific Info */}
+                  {userData.role === "student" && userData.about_me && (
                     <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
-                      <div className="font-medium">Faculty: {user.aboutMe.faculty}</div>
-                      <div className="font-medium">Year: {user.aboutMe.year}</div>
-                      <div className="font-medium">Tel: {user.phone}</div>
+                      <div className="font-medium">Faculty: {userData.about_me.faculty}</div>
+                      <div className="font-medium">Year: {userData.about_me.year}</div>
+                      <div className="font-medium">Tel: {userData.phone_number}</div>
                     </div>
                   )}
 
-                  {user.role === "professor" && user.aboutMe && (
+                  {userData.role === "professor" && userData.about_me && (
                     <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
-                      <div className="font-medium">Faculty: {user.aboutMe.faculty}</div>
-                      <div className="font-medium">Tel: {user.phone}</div>
+                      <div className="font-medium">Faculty: {userData.about_me.faculty}</div>
+                      <div className="font-medium">Tel: {userData.phone_number}</div>
                     </div>
                   )}
 
-                  {user.role === "organizer" && user.aboutMe && (
+                  {userData.role === "organizer" && userData.about_me && (
                     <div className="text-gray-800 text-base mt-3.5 space-y-3.5">
-                      <div className="font-medium">Organizer: {user.aboutMe.organizerName}</div>
-                      <div className="font-medium">Tel: {user.phone}</div>
+                      <div className="font-medium">Organizer: {userData.about_me.organizerName}</div>
+                      <div className="font-medium">Tel: {userData.phone_number}</div>
                     </div>
                   )}
-                </div>
 
-                <div className="mt-4">
-                  <button
-                    onClick={() => setEditOpen(true)}
-                    className="px-5 py-2 font-bold bg-indigo-500 hover:bg-indigo-300 text-white rounded-lg text-sm"
-                  >
-                    Edit Profile
-                  </button>
+                  {/* Public Stats */}
+                  <div className="flex gap-6 mt-6">
+                    <div className="text-center">
+                    </div>
+                    <div className="text-center">
+                    </div>
+                    {userData.avg_rating && (
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-indigo-600">
+                          {userData.avg_rating}
+                        </div>
+                        <div className="text-sm text-gray-600">Avg Rating</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex-col w-full px-20">
+        {/* Event History & Created Events */}
+        <div className="flex flex-col w-full px-20">
           <Tabs items={items} />
         </div>
       </div>
@@ -577,4 +582,4 @@ function ProfilePage() {
   );
 }
 
-export default ProfilePage;
+export default PublicProfilePage;

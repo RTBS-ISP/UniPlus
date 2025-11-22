@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Menu, LogOut, User, Plus, Shield } from "lucide-react";
+import { Menu, LogOut, User, Plus, Shield, Tickets } from "lucide-react";
 import { useUser } from "@/app/context/UserContext";
 import NotificationBell from "./Notificationbell";
 
@@ -110,7 +110,7 @@ export default function Navbar() {
                   </Link>
                   <Link
                     href="/login"
-                    className="inline-flex items-center justify-center px-4 py-1 text-base font-bold text-white bg-indigo-400 rounded-full hover:bg-indigo-300"
+                    className="inline-flex items-center justify-center px-4 py-1 text-base font-bold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600"
                   >
                     Sign In
                   </Link>
@@ -118,31 +118,33 @@ export default function Navbar() {
               ) : (
                 <>
                   {/* Admin Button - Only visible for admin users */}
-                  {user.role === "admin" && (
+                  {user.role === "admin" ? (
                     <Link
                       href="/admin"
                       className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition"
                       title="Admin Dashboard"
                     >
                       <Shield className="w-4 h-4" />
-                      Admin
+                      Admin Dashboard
                     </Link>
-                  )}
-
-                  {/* Create Event Button */}
-                  <Link
-                    href="/events/create"
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create Event
-                  </Link>
+                  ) : (
+                    // Create Event Button - Only visible for normal users
+                    <Link
+                      href="/events/create"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create Event
+                    </Link>
+                    )
+                  }
 
                   {/* Profile Menu */}
                   <div ref={profileRef} className="relative flex items-center space-x-2">
                     <button
                       onClick={toggleProfileMenu}
                       className="flex items-center space-x-2 focus:outline-none"
+                      title={`${user.firstName} ${user.lastName}`}
                     >
                       <img
                         src={
@@ -153,7 +155,9 @@ export default function Navbar() {
                         alt="profile"
                         className="w-10 h-10 object-cover rounded-md border border-gray-300"
                       />
-                      <span className="font-semibold">{user.firstName} {user.lastName}</span>
+                      <span className="font-semibold max-w-[120px] truncate">
+                        {user.firstName} {user.lastName}
+                      </span>
                     </button>
                   </div>
 
@@ -167,52 +171,75 @@ export default function Navbar() {
 
         {/* Dropdown Menu (fixed position) */}
         {profileMenuOpen && (
-          <div
-            ref={menuRef}
-            role="menu"
-            className="fixed w-48 rounded-xl border border-black/10 bg-white shadow-xl z-[9999]"
-            style={{
-              top: `${menuPosition.top}px`,
-              right: `${menuPosition.right}px`,
-            }}
-          >
-            <Link
-              href="/profile"
-              className="block px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-              onClick={() => setProfileMenuOpen(false)}
-            >
-              <User className="w-4 h-4" /> Profile
-            </Link>
-            <Link
-              href="/my-ticket"
-              className="block px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2"
-              onClick={() => setProfileMenuOpen(false)}
-            >
-              🎟️ My Tickets
-            </Link>
+          <>
+            {/* Backdrop for better UX */}
+            <div 
+              className="fixed inset-0 z-40" 
+              onClick={() => setProfileMenuOpen(false)} 
+            />
             
-            {/* Admin Link in Dropdown */}
-            {user.role === "admin" && (
-              <>
-                <hr className="my-1 border-gray-200" />
+            <div
+              ref={menuRef}
+              role="menu"
+              className="fixed w-56 rounded-lg border border-gray-200 bg-white shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
+              style={{
+                top: `${menuPosition.top}px`,
+                right: `${menuPosition.right}px`,
+              }}
+            >
+              {/* User Info Header */}
+              <div className="px-4 py-3 bg-gradient-to-br from-indigo-50 to-purple-50 border-b border-gray-200">
+                <p className="text-sm font-semibold text-gray-900 truncate">
+                  {user.email}
+                </p>
+                <p className="text-xs text-gray-600 mt-0.5 capitalize">
+                  {user.role === "admin" && "Administrator"}
+                  {user.role === "student" && "Student"}
+                  {user.role === "professor" && "Professor"}
+                  {user.role === "organizer" && "Organizer"}
+                </p>
+              </div>
+
+              {/* Menu Items */}
+              <div className="py-1">
                 <Link
-                  href="/admin"
-                  className="block px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 text-indigo-600 font-semibold"
+                  href="/profile"
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors duration-150 group"
                   onClick={() => setProfileMenuOpen(false)}
                 >
-                  <Shield className="w-4 h-4" /> Admin Dashboard
+                  <div className="w-7 h-7 rounded bg-gray-100 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <span>My Profile</span>
                 </Link>
-              </>
-            )}
-            
-            <hr className="my-1 border-gray-200" />
-            <button
-              onClick={handleLogout}
-              className="block w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center gap-2 text-red-500"
-            >
-              <LogOut className="w-4 h-4" /> Logout
-            </button>
-          </div>
+                
+                <Link
+                  href="/my-ticket"
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors duration-150 group"
+                  onClick={() => setProfileMenuOpen(false)}
+                >
+                  <div className="w-7 h-7 rounded bg-gray-100 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
+                    <Tickets className="w-4 h-4" />
+                  </div>
+                  <span>My Tickets</span>
+                </Link>
+              </div>
+
+              {/* Logout Section */}
+              <hr className="border-gray-200" />
+              <div className="py-1">
+                <button
+                  onClick={handleLogout}
+                  className="flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors duration-150 font-medium group"
+                >
+                  <div className="w-7 h-7 rounded bg-red-50 flex items-center justify-center group-hover:bg-red-100 transition-colors">
+                    <LogOut className="w-4 h-4" />
+                  </div>
+                  <span>Logout</span>
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </nav>
     </header>

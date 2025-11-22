@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "../components/navbar";
-import { Calendar, Users, TrendingUp, Eye } from "lucide-react";
+import { Calendar, Users, TrendingUp, Eye, Copy } from "lucide-react";
 
 interface CreatedEvent {
   id: number;
@@ -55,6 +55,10 @@ export default function MyCreatedEventsPage() {
     }
   };
 
+  const handleDuplicate = (eventId: number) => {
+    router.push(`/events/create?duplicate=${eventId}`);
+  };
+
   if (loading) {
     return (
       <main>
@@ -71,7 +75,6 @@ export default function MyCreatedEventsPage() {
       <Navbar />
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50">
         <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-          {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">My Created Events</h1>
             <p className="text-gray-600">Manage and view all events you've created</p>
@@ -102,7 +105,6 @@ export default function MyCreatedEventsPage() {
                   key={event.id}
                   className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow overflow-hidden"
                 >
-                  {/* Event Image */}
                   {event.event_image ? (
                     <div className="h-48 w-full overflow-hidden">
                       <img
@@ -117,7 +119,6 @@ export default function MyCreatedEventsPage() {
                     </div>
                   )}
 
-                  {/* Event Content */}
                   <div className="p-6">
                     <div className="flex items-start justify-between mb-3">
                       <h3 className="text-xl font-bold text-gray-900 line-clamp-2">
@@ -134,12 +135,11 @@ export default function MyCreatedEventsPage() {
                       {event.event_description}
                     </p>
 
-                    {/* Event Stats */}
                     <div className="space-y-2 mb-4">
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Calendar size={16} />
                         <span>
-                          {new Date(event.event_start_date).toLocaleDateString()} -{" "}
+                          {new Date(event.event_start_date).toLocaleDateString()} - {" "}
                           {new Date(event.event_end_date).toLocaleDateString()}
                         </span>
                       </div>
@@ -153,9 +153,7 @@ export default function MyCreatedEventsPage() {
                         <div className="flex items-center gap-2 text-sm">
                           <span
                             className={`inline-block w-2 h-2 rounded-full ${
-                              event.status_registration === "open"
-                                ? "bg-green-500"
-                                : "bg-red-500"
+                              event.status_registration === "open" ? "bg-green-500" : "bg-red-500"
                             }`}
                           />
                           <span className="capitalize text-gray-600">
@@ -165,8 +163,7 @@ export default function MyCreatedEventsPage() {
                       )}
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mb-2">
                       <button
                         onClick={() => router.push(`/events/${event.id}`)}
                         className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 transition"
@@ -182,9 +179,16 @@ export default function MyCreatedEventsPage() {
                         Dashboard
                       </button>
                     </div>
+
+                    <button
+                      onClick={() => handleDuplicate(event.id)}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 font-medium rounded-lg hover:bg-purple-200 transition"
+                    >
+                      <Copy size={16} />
+                      Duplicate Event
+                    </button>
                   </div>
 
-                  {/* Footer with creation date */}
                   <div className="px-6 py-3 bg-gray-50 border-t border-gray-200">
                     <p className="text-xs text-gray-500">
                       Created {new Date(event.event_create_date).toLocaleDateString()}

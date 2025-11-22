@@ -18,6 +18,7 @@ import {
   fetchEventFeedback,
 } from "@/lib/dashboard/api";
 import { useAlert } from "@/app/components/ui/AlertProvider";
+import { s } from "framer-motion/client";
 
 type FilterType =
   | "all"
@@ -320,27 +321,36 @@ export function useDashboard(eventId: string | undefined) {
       return;
     }
 
-    const a = state.attendees.find((x) => x.ticketId === trimmed);
-    if (!a) {
-      alert({
-        text: `Ticket ${trimmed} not found for this event.`,
-        variant: "warning",
-      });
-      return;
-    }
+const a = state.attendees.find(
+  (x) =>
+    x.ticketId === trimmed ||
+    x.ticketId?.toLowerCase() === trimmed.toLowerCase()
+);
+
+// --- Missing ticket check (from event-feedback)
+if (!a) {
+  alert({
+    text: `Ticket ${trimmed} not found for this event.`,
+    variant: "warning",
+  });
+  return;
+}
+
+    // --- Approval check (merged logic)
     if (a.approvalStatus !== "approved") {
       alert({
-        text: `Ticket ${trimmed} isn’t approved — cannot check in.`,
+        text: `Ticket ${trimmed} is ${a.approvalStatus} — only approved tickets can be checked in.`,
         variant: "warning",
       });
       return;
     }
 
+    // --- Optimistic update (from main)
     const now = new Date().toISOString();
     setState((s) => ({
       ...s,
       attendees: s.attendees.map((attendee) =>
-        attendee.ticketId === trimmed
+        attendee.ticketId?.toLowerCase() === trimmed.toLowerCase()
           ? {
               ...attendee,
               checkedIn: now,
@@ -359,18 +369,78 @@ export function useDashboard(eventId: string | undefined) {
         trimmed,
         state.selectedDate
       );
-      const msg =
-        (res as any)?.message ||
-        `Checked in ${trimmed} for ${state.selectedDate}.`;
 
-      if (msg.toLowerCase().includes("already")) {
-        alert({ text: msg, variant: "info" });
+      const message = res.message || `Checked in for ${state.selectedDate}.`;
+      const success = res.success;
+      const alreadyCheckedIn =
+        (res as any).already_checked_in ||
+        message.toLowerCase().includes("already");
+
+      const attendeeName =
+        (res as any).attendee_name || a?.name || "Attendee";
+
+      if (success) {
+        if (alreadyCheckedIn) {
+          alert({
+            text: `${attendeeName} was already checked in for ${state.selectedDate}.`,
+            variant: "info",
+          });
+        } else {
+          alert({
+            text: `${attendeeName} checked in successfully for ${state.selectedDate}.`,
+            variant: "success",
+          });
+        }
+
+        // Refresh backend state
+        await load();
       } else {
-        alert({ text: msg, variant: "success" });
+        alert({ text: message, variant: "warning" });
       }
+    } catch (err) {
+      alert({
+        text: `Error checking in: ${err instanceof Error ? err.message : err}`,
+        variant: "danger",
+      });
+    }
+
     } catch (err: any) {
       alert({ text: err?.message || "Check-in failed.", variant: "error" });
-      await load();
+      const errorMessage = err?.message || err?.detail || "Check-in failed.";
+
+      if (errorMessage.toLowerCase().includes("not found")) {
+        alert({ 
+          text: `Ticket ${trimmed} not found in the system.`, 
+          variant: "error" 
+        });
+      } else if (errorMessage.toLowerCase().includes("not the current event") || errorMessage.toLowerCase().includes("is for '")) {
+        // Ticket belongs to a different event
+        alert({ 
+          text: errorMessage, 
+          variant: "error" 
+        });
+      } else if (errorMessage.toLowerCase().includes("not authorized") || errorMessage.toLowerCase().includes("permission")) {
+        alert({ 
+          text: "You don't have permission to check in attendees for this event.", 
+          variant: "error" 
+        });
+      } else if (errorMessage.toLowerCase().includes("not valid for") && errorMessage.toLowerCase().includes("valid dates")) {
+        // Ticket not valid for selected date
+        alert({ 
+          text: errorMessage, 
+          variant: "error" 
+        });
+      } else if (errorMessage.toLowerCase().includes("pending") || errorMessage.toLowerCase().includes("rejected")) {
+        // Ticket not approved
+        alert({ 
+          text: errorMessage, 
+          variant: "warning" 
+        });
+      } else {
+        alert({ text: errorMessage, variant: "error" });
+      }
+
+      await load(); 
     }
   };
 
