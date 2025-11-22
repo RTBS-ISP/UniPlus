@@ -2571,3 +2571,123 @@ def duplicate_event(request, event_id: int):
         traceback.print_exc()
         return 400, {"error": str(e)}
 
+@api.get(
+    "/events/{event_id}/feedback/all",
+    auth=django_auth,
+    response={200: List[dict], 403: schemas.ErrorSchema, 404: schemas.ErrorSchema},
+)
+def get_event_feedback_list(request, event_id: int):
+    """Get all feedback entries for an event (organizer/admin only)"""
+    try:
+        event = get_object_or_404(Event, id=event_id)
+
+        # Only organizer or admin can view feedback
+        if event.organizer != request.user and getattr(request.user, "role", None) != "admin":
+            return 403, {"error": "You are not authorized to view feedback for this event"}
+
+        feedback_qs = (
+            EventFeedback.objects.filter(event=event)
+            .select_related("user")
+            .order_by("-created_at")
+        )
+
+        result = []
+        for fb in feedback_qs:
+            user = fb.user
+
+            if fb.anonymous:
+                full_name = "Anonymous"
+                email = None
+            else:
+                full_name = f"{user.first_name} {user.last_name}".strip()
+                if not full_name:
+                    full_name = user.username or user.email
+                email = user.email
+
+            result.append({
+                "id": fb.id,
+                "rating": fb.rating,
+                "comment": fb.comment or "",
+                "created_at": fb.created_at.isoformat() if fb.created_at else None,
+                "updated_at": fb.updated_at.isoformat() if fb.updated_at else None,
+                "user_name": full_name,
+                "user_email": email,
+                "anonymous": fb.anonymous,
+            })
+
+        return 200, result
+    except Exception as e:
+        print(f"Error fetching feedback list: {e}")
+        return 400, {"error": str(e)}
+
+
+@api.get(
+    "/events/{event_id}/feedback/report",
+    auth=django_auth,
+    response={200: dict, 403: schemas.ErrorSchema, 400: schemas.ErrorSchema},
+)
+def get_event_feedback_report(request, event_id: int):
+    """
+    Full feedback report for an event (organizer/admin only).
+    Includes aggregates + all feedback + optional AI summary.
+    
+    IMPORTANT: Check response status BEFORE parsing JSON in frontend!
+    """
+    try:
+        event = get_object_or_404(Event, id=event_id)
+
+        # Only organizer or admin
+        if event.organizer != request.user and getattr(request.user, "role", None) != "admin":
+            return 403, {"error": "You are not authorized to view feedback for this event"}
+
+        qs = (
+            EventFeedback.objects.filter(event=event)
+            .select_related("user")
+            .order_by("-created_at")
+        )
+
+        total = qs.count()
+        rating_counts = {str(i): qs.filter(rating=i).count() for i in range(1, 6)}
+        avg_rating = float(qs.aggregate(avg=Avg("rating"))["avg"] or 0.0)
+        anonymous_count = qs.filter(anonymous=True).count()
+
+        # Build detailed feedback list respecting anonymity
+        feedback_list = []
+
+        for fb in qs:
+            user = fb.user
+
+            full_name = f"{user.first_name} {user.last_name}".strip()
+            if not full_name:
+                full_name = user.username or user.email
+
+            feedback_list.append({
+                "id": fb.id,
+                "rating": fb.rating,
+                "comment": fb.comment or "",
+                "created_at": fb.created_at.isoformat() if fb.created_at else None,
+                "updated_at": fb.updated_at.isoformat() if fb.updated_at else None,
+                "user_name": "Anonymous" if fb.anonymous else full_name,
+                "user_email": None if fb.anonymous else user.email,
+                "anonymous": fb.anonymous,
+            })
+
+        # AI Summary (optional - skip if using n8n but it's not configured)
+        ai_summary = ""
+
+        return 200, {
+            "aggregates": {
+                "total": total,
+                "average_rating": round(avg_rating, 2),
+                "rating_counts": rating_counts,
+                "anonymous_count": anonymous_count,
+            },
+            "ai_summary": ai_summary,
+            "feedback": feedback_list,
+        }
+
+    except Exception as e:
+        print(f"Error fetching dashboard feedback report: {e}")
+        import traceback
+        traceback.print_exc()
+        return 400, {"error": str(e)}

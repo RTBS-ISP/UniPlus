@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { RefreshCw, Download} from "lucide-react";
+import { RefreshCw, Download } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/app/components/navbar";
 
 import { useDashboard } from "@/lib/dashboard/useDashboard";
+
 import { Header } from "@/app/components/dashboard/Header";
 import { ViewToggle } from "@/app/components/dashboard/ViewToggle";
 import { DateSelector } from "@/app/components/dashboard/DateSelector";
@@ -120,6 +121,46 @@ export default function DashBoardPage() {
     feedbacks,
   } = useDashboard(eventId);
 
+  const [exporting, setExporting] = useState(false);
+
+  // AI summary / feedback report
+  const [report, setReport] = useState<FeedbackReportResponse | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  // ✅ FIXED: Check status BEFORE parsing JSON
+  const fetchFeedbackReport = async () => {
+    if (!eventId) return;
+    setReportLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/events/${eventId}/feedback/report`,
+        { credentials: "include" }
+      );
+
+      // ✅ CHECK STATUS FIRST - this is the key fix!
+      if (!res.ok) {
+        console.warn("Feedback report not available - Status:", res.status);
+        setReport(null);
+        setReportLoading(false);
+        return;
+      }
+
+      // ✅ Only parse JSON if response is OK
+      const data = await res.json();
+      console.log("Feedback report loaded:", data);
+      setReport(data);
+    } catch (err) {
+      console.error("Error loading feedback report", err);
+      setReport(null);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFeedbackReport();
+  }, [eventId]);
+
   const exportCSV = async () => {
     if (!eventId) {
       alert('No event ID found');
@@ -129,10 +170,9 @@ export default function DashBoardPage() {
     try {
       console.log('Starting CSV export for event:', eventId);
       
-      // Use absolute URL to your Django backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/events/${eventId}/export`, {
+      const response = await fetch(`${API_BASE}/events/${eventId}/export`, {
         method: 'GET',
-        credentials: 'include', // Important for session cookies
+        credentials: 'include',
       });
 
       console.log('Export response status:', response.status);
@@ -163,60 +203,66 @@ export default function DashBoardPage() {
         } else {
           const text = await response.text();
           console.error('Server returned non-CSV response:', text);
-          alert('Export failed: Server returned an error. Please check console for details.');
+          alert('Export failed: Server returned an error.');
         }
       } else {
         const errorText = await response.text();
-        console.error('Export failed with status:', response.status, 'Response:', errorText);
+        console.error('Export failed with status:', response.status);
         
         if (response.status === 403) {
-          alert('Export failed: You are not authorized to export this event.');
+          alert('Export failed: You are not authorized.');
         } else if (response.status === 404) {
-          alert('Export failed: Event not found or no registrations available.');
+          alert('Export failed: Event not found.');
         } else {
-          alert(`Export failed: Server returned error ${response.status}. Please try again.`);
+          alert(`Export failed with status ${response.status}.`);
         }
       }
     } catch (error) {
       console.error('Export error:', error);
-      alert('Error exporting CSV. Please check your connection and try again.');
+      alert('Error exporting CSV. Please check your connection.');
     }
   };
 
-  const [exporting, setExporting] = useState(false);
+  const handleExportFeedbackReport = async () => {
+    if (!eventId || !state.event) return;
+    if (exporting) return;
 
-  // AI summary / feedback report
-  const [report, setReport] = useState<FeedbackReportResponse | null>(null);
-  const [reportLoading, setReportLoading] = useState(false);
-
-  const fetchFeedbackReport = async () => {
-    if (!eventId) return;
-    setReportLoading(true);
+    setExporting(true);
     try {
       const res = await fetch(
         `${API_BASE}/events/${eventId}/feedback/report`,
         { credentials: "include" }
       );
 
-      const data = await res.json();
+      // ✅ Check status first
       if (!res.ok) {
-        console.error("Failed to load feedback report", data);
-        setReport(null);
+        console.error("Export error - Status:", res.status);
+        alert("Failed to export feedback report");
+        setExporting(false);
         return;
       }
 
-      setReport(data);
+      const data = await res.json();
+      const markdown = buildFeedbackReportMarkdown(state.event, data);
+
+      const blob = new Blob([markdown], {
+        type: "text/markdown;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `event-${eventId}-feedback-report.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("Error loading feedback report", err);
-      setReport(null);
+      console.error(err);
+      alert("Unexpected error while exporting report");
     } finally {
-      setReportLoading(false);
+      setExporting(false);
     }
   };
-
-  useEffect(() => {
-    fetchFeedbackReport();
-  }, [eventId]);
 
   if (state.loading) {
     return (
@@ -250,7 +296,7 @@ export default function DashBoardPage() {
 
   if (!state.event) return null;
 
-  // stat chip counts — always from attendanceStats / statistics (not from visibleAttendees)
+  // stat chip counts
   const countsForFilters =
     state.tableView === "attendance"
       ? {
@@ -269,46 +315,7 @@ export default function DashBoardPage() {
 
   const anySelected =
     state.selectedTickets.length > 0 &&
-    state.selectedTickets.length < visibleAttendees.length;
-
-  const handleExportFeedbackReport = async () => {
-    if (!eventId || !state.event) return;
-    if (exporting) return;
-
-    setExporting(true);
-    try {
-      const res = await fetch(
-        `${API_BASE}/events/${eventId}/feedback/report`,
-        { credentials: "include" }
-      );
-      const data = await res.json();
-
-      if (!res.ok) {
-        console.error("Export error", data);
-        alert(data.error || "Failed to export feedback report");
-        return;
-      }
-
-      const markdown = buildFeedbackReportMarkdown(state.event, data);
-
-      const blob = new Blob([markdown], {
-        type: "text/markdown;charset=utf-8",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `event-${eventId}-feedback-report.md`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-      alert("Unexpected error while exporting report");
-    } finally {
-      setExporting(false);
-    }
-  };
+    state.selectedTickets.length <= visibleAttendees.length;
 
   return (
     <main>
@@ -329,6 +336,7 @@ export default function DashBoardPage() {
               <RefreshCw className="w-4 h-4" />
               Refresh
             </button>
+
             <button
               type="button"
               onClick={exportCSV}

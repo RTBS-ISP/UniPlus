@@ -62,14 +62,26 @@ export function useDashboard(eventId: string | undefined) {
     feedbacks: [],
   });
 
+  // ✅ FIXED: Safe feedback fetching with fallback
   const load = useCallback(async () => {
     if (!eventId) return;
     setState((s) => ({ ...s, loading: true, error: "" }));
     try {
-      const [data, feedbacks] = await Promise.all([
-        fetchDashboard(eventId),
-        fetchEventFeedback(eventId),
-      ]);
+      // ✅ Fetch main dashboard data (required)
+      const data = await fetchDashboard(eventId);
+
+      // ✅ Optionally fetch feedback if endpoint exists
+      let feedbacks: EventFeedback[] = [];
+      try {
+        feedbacks = await fetchEventFeedback(eventId);
+      } catch (feedbackErr) {
+        console.warn(
+          "Feedback endpoint not available - continuing without feedback",
+          feedbackErr
+        );
+        // Continue without feedback - it's optional
+      }
+
       const schedule = data.schedule_days || [];
 
       setState((s) => {
