@@ -106,3 +106,70 @@ npm run dev
 ```
 
 ---
+
+# n8n Workflow Setup Guide
+
+This guide explains how to set up and run the **Gemini API** workflow in **n8n**.
+
+---
+
+## Step 1 — Generate Gemini API Key
+
+Go to [AI Studio API Keys](https://aistudio.google.com/api-keys) and generate or copy your API key.
+
+<img width="2877" height="1747" alt="n8n1" src="https://github.com/user-attachments/assets/70aeb0a5-0f43-4419-86d3-253d88519813" />
+
+---
+
+## Step 2 — Open n8n
+
+Sign up or log in at: [http://localhost:5678/](http://localhost:5678/)
+
+
+<img width="2877" height="1675" alt="n8n2" src="https://github.com/user-attachments/assets/7d64ac45-d8cd-41d4-9e57-79e45bc82174" />
+
+---
+
+## Step 3 — Import the Workflow
+
+1. Click the **… (three dots)** button in the top-right corner.  
+2. Select **Import File**.  
+3. Choose `workflow.json` from the repository.
+
+<img width="2879" height="1742" alt="b8b3" src="https://github.com/user-attachments/assets/7cb94606-59d1-41c3-bedb-ddc6597b564a" />
+
+<img width="2879" height="1740" alt="n8n4" src="https://github.com/user-attachments/assets/ba128b95-13f6-456d-ad08-08245d05c7c3" />
+
+---
+
+## Step 4 — Configure Gemini Credentials
+
+1. Double-click the **Gemini** node in the workflow.  
+2. Under **Credential to connect with**, click the dropdown.
+3. Click **Create New Credential**.  
+4. Paste the API key from Step 1.  
+5. Click **Save**.
+
+<img width="2879" height="1652" alt="n8n5" src="https://github.com/user-attachments/assets/7d6e61ab-cf5b-4cb1-b13b-e00643419ec9" />
+
+<img width="1799" height="1131" alt="n8n6" src="https://github.com/user-attachments/assets/943bd0e3-04f7-4b9e-b92a-27007c817631" />
+
+---
+
+## Step 6 — Activate the Workflow
+
+Click **Activate** in the top-right corner to start the workflow.
+
+<img width="2879" height="1742" alt="b8b3" src="https://github.com/user-attachments/assets/7cb94606-59d1-41c3-bedb-ddc6597b564a" />
+
+
+---
+
+## Notes
+
+- Make sure your **n8n server** is running locally at `http://localhost:5678/`.  
+- Your workflow will only run after activating it and connecting the credentials.
+
+---
+
+
