@@ -34,6 +34,7 @@ services:
       - DB_NAME=uniplus_db
       - DB_USER=postgres
       - DB_PASSWORD=Password
+      - N8N_FEEDBACK_SUMMARY_URL=http://n8n:5678/webhook/feedback-summary
     depends_on:
       db:
         condition: service_healthy
@@ -50,6 +51,21 @@ services:
       - "5050:80"
     depends_on:
       - db
+      
+  n8n:
+    image: n8nio/n8n
+    container_name: uniplus_n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=Asia/Bangkok
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - db
+
 
 volumes:
   db_data:
+  n8n_data:

@@ -1,4 +1,10 @@
-import type { Attendee, EventData, ScheduleDay, Statistics } from "@/lib/dashboard/types";
+import type {
+  Attendee,
+  EventData,
+  ScheduleDay,
+  Statistics,
+  EventFeedback,
+} from "@/lib/dashboard/types";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api").replace(
   /\/$/,
@@ -100,3 +106,10 @@ export async function checkInOne(eventId: string, ticketId: string, date: string
     }),
   });
 }
+
+export async function fetchEventFeedback(eventId: string) {
+  return await getJSON<EventFeedback[]>(
+    `${API_BASE}/events/${eventId}/feedback/all`
+  );
+}
+

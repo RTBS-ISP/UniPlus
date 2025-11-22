@@ -6,5 +6,6 @@ from .event import Event
 from .ticket import Ticket
 from .rating import Rating
 from .comment import Comment
+from .event_feedback import EventFeedback
 from .event_schedule import EventSchedule
 from .notification import Notification

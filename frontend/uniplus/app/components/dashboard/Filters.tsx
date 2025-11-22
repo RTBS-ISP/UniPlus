@@ -2,12 +2,10 @@
 
 import React from "react";
 
-export function Filters({
-  view,
-  counts,
-  active,
-  onChange,
-}: {
+type AttendanceFilter = "all" | "present" | "pending";
+type ApprovalFilter = "all" | "approved" | "pending_approval" | "rejected";
+
+type FiltersProps = {
   view: "attendance" | "approval";
   counts: {
     all: number;
@@ -17,9 +15,11 @@ export function Filters({
     pending_approval?: number;
     rejected?: number;
   };
-  active: string;
-  onChange: (v: string) => void;
-}) {
+  active: AttendanceFilter | ApprovalFilter;
+  onChange: (v: AttendanceFilter | ApprovalFilter) => void;
+};
+
+export function Filters({ view, counts, active, onChange }: FiltersProps) {
   if (view === "attendance") {
     return (
       <div className="flex flex-row gap-2 mb-4">
@@ -33,6 +33,7 @@ export function Filters({
         >
           All ({counts.all})
         </button>
+
         <button
           onClick={() => onChange("present")}
           className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
@@ -41,8 +42,9 @@ export function Filters({
               : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
           }`}
         >
-          Present ({counts.present || 0})
+          Present ({counts.present ?? 0})
         </button>
+
         <button
           onClick={() => onChange("pending")}
           className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
@@ -51,12 +53,13 @@ export function Filters({
               : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
           }`}
         >
-          Pending ({counts.pending || 0})
+          Pending ({counts.pending ?? 0})
         </button>
       </div>
     );
   }
 
+  // view === "approval"
   return (
     <div className="flex flex-row gap-2 mb-4">
       <button
@@ -69,6 +72,7 @@ export function Filters({
       >
         All ({counts.all})
       </button>
+
       <button
         onClick={() => onChange("approved")}
         className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
@@ -77,18 +81,20 @@ export function Filters({
             : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
         }`}
       >
-        Approved ({counts.approved || 0})
+        Approved ({counts.approved ?? 0})
       </button>
+
       <button
-        onClick={() => onChange("pending")}
+        onClick={() => onChange("pending_approval")}
         className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-          active === "pending"
+          active === "pending_approval"
             ? "bg-yellow-400 text-white"
             : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
         }`}
       >
-        Pending ({counts.pending_approval || 0})
+        Pending ({counts.pending_approval ?? 0})
       </button>
+
       <button
         onClick={() => onChange("rejected")}
         className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
@@ -97,7 +103,7 @@ export function Filters({
             : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
         }`}
       >
-        Rejected ({counts.rejected || 0})
+        Rejected ({counts.rejected ?? 0})
       </button>
     </div>
   );

@@ -24,6 +24,15 @@ export function ViewToggle({ view, onChange }: { view: TableView; onChange: (v: 
       >
         Attendance View
       </button>
+      <button
+        onClick={() => onChange("feedback")}
+        className={`px-6 py-2 rounded-lg font-bold text-sm transition-colors ${
+          view === "feedback" ? "bg-indigo-500 text-white shadow-md"
+                              : "bg-white text-gray-700 border-2 border-gray-300 hover:bg-gray-50"
+        }`}
+      >
+        Feedback View
+      </button>
     </div>
   );
 }

@@ -1,0 +1,133 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        48,
+        176
+      ],
+      "id": "5050b6fb-4d93-49a9-87a1-8131aa3e495b",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "vooBzHcDXuE8tZ31",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "feedback-summary",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -224,
+        -32
+      ],
+      "id": "8bf81c31-e343-4ca6-a0f6-4b312ff1b33a",
+      "name": "Webhook",
+      "webhookId": "5bb3819b-a8d0-4e9e-9227-6d70e71c7b71"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        528,
+        0
+      ],
+      "id": "2e292425-edd2-443c-a8f0-c22a3c120238",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const eventTitle = $json.body.event_title || 'Untitled Event';\nconst feedback = $json.body.feedback || [];\n\nlet lines = feedback.map((fb, i) => {\n  return `${i + 1}. Rating: ${fb.rating} - ${fb.comment || '(no comment)'}`;\n});\n\nreturn {\n  json: {\n    prompt: `\nYou are helping an event organizer understand attendee feedback.\nSummarize the key themes, strengths, and areas to improve, in 3–6 short bullet points.\nBe concise, neutral, and suitable for copy-pasting into an event report.\n\nEvent Title: ${eventTitle}\n\nFeedback:\n${lines.join('\\n')}\n    `.trim()\n  }\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -32
+      ],
+      "id": "0470c6b5-c6a3-4964-a000-32ef90eea6a5",
+      "name": "BuildPrompt"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=- **User message / Input:** set to expression:\n\n```text\n{{ $json.prompt }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "58aecd19-dfec-4a5b-a3d7-f3771e2ca97d",
+      "name": "AI Agent"
+    }
+  ],
+  "connections": {
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "BuildPrompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BuildPrompt": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "415d10509dd2b38d51d7df2f8b1f354370f4311392ec6fe3dae7d9151ff6d3f1"
+  }
+}
