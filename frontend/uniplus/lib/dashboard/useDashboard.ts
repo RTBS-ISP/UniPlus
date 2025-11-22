@@ -18,6 +18,7 @@ import {
   fetchEventFeedback,
 } from "@/lib/dashboard/api";
 import { useAlert } from "@/app/components/ui/AlertProvider";
+import { s } from "framer-motion/client";
 
 type FilterType =
   | "all"
@@ -62,26 +63,14 @@ export function useDashboard(eventId: string | undefined) {
     feedbacks: [],
   });
 
-  // ✅ FIXED: Safe feedback fetching with fallback
   const load = useCallback(async () => {
     if (!eventId) return;
     setState((s) => ({ ...s, loading: true, error: "" }));
     try {
-      // ✅ Fetch main dashboard data (required)
-      const data = await fetchDashboard(eventId);
-
-      // ✅ Optionally fetch feedback if endpoint exists
-      let feedbacks: EventFeedback[] = [];
-      try {
-        feedbacks = await fetchEventFeedback(eventId);
-      } catch (feedbackErr) {
-        console.warn(
-          "Feedback endpoint not available - continuing without feedback",
-          feedbackErr
-        );
-        // Continue without feedback - it's optional
-      }
-
+      const [data, feedbacks] = await Promise.all([
+        fetchDashboard(eventId),
+        fetchEventFeedback(eventId),
+      ]);
       const schedule = data.schedule_days || [];
 
       setState((s) => {
@@ -318,146 +307,130 @@ export function useDashboard(eventId: string | undefined) {
   };
 
   // -------- check-in for selected date --------
-  const checkIn = async (ticketId: string) => {
-    if (!state.event) return;
+const checkIn = async (ticketId: string) => {
+  if (!state.event) return;
 
-    const trimmed = ticketId.trim();
-    if (!trimmed) {
-      alert({ text: "Please provide a Ticket ID.", variant: "info" });
-      return;
-    }
+  const trimmed = ticketId.trim();
+  if (!trimmed) {
+    alert({ text: "Please provide a Ticket ID.", variant: "info" });
+    return;
+  }
 
-    if (!state.selectedDate) {
-      alert({ text: "Please select a schedule day first.", variant: "warning" });
-      return;
-    }
+  if (!state.selectedDate) {
+    alert({ text: "Please select a schedule day first.", variant: "warning" });
+    return;
+  }
 
-    const a = state.attendees.find(
-      (x) =>
-        x.ticketId === trimmed ||
-        x.ticketId?.toLowerCase() === trimmed.toLowerCase()
+  const a = state.attendees.find(
+    (x) =>
+      x.ticketId === trimmed ||
+      x.ticketId?.toLowerCase() === trimmed.toLowerCase()
+  );
+
+  if (!a) {
+    alert({
+      text: `Ticket ${trimmed} not found for this event.`,
+      variant: "warning",
+    });
+    return;
+  }
+
+  if (a.approvalStatus !== "approved") {
+    alert({
+      text: `Ticket ${trimmed} is ${a.approvalStatus} — only approved tickets can be checked in.`,
+      variant: "warning",
+    });
+    return;
+  }
+
+  // optimistic update
+  const now = new Date().toISOString();
+  setState((s) => ({
+    ...s,
+    attendees: s.attendees.map((attendee) =>
+      attendee.ticketId?.toLowerCase() === trimmed.toLowerCase()
+        ? {
+            ...attendee,
+            checkedIn: now,
+            checkedInDates: {
+              ...(attendee.checkedInDates || {}),
+              [s.selectedDate]: now,
+            },
+          }
+        : attendee
+    ),
+  }));
+
+  try {
+    const res = await checkInOne(
+      String(state.event.id),
+      trimmed,
+      state.selectedDate
     );
 
-    // --- Missing ticket check
-    if (!a) {
-      alert({
-        text: `Ticket ${trimmed} not found for this event.`,
-        variant: "warning",
-      });
-      return;
-    }
+    const message = res.message || `Checked in for ${state.selectedDate}.`;
+    const success = res.success;
+    const alreadyCheckedIn =
+      (res as any).already_checked_in ||
+      message.toLowerCase().includes("already");
 
-    // --- Approval check
-    if (a.approvalStatus !== "approved") {
-      alert({
-        text: `Ticket ${trimmed} is ${a.approvalStatus} — only approved tickets can be checked in.`,
-        variant: "warning",
-      });
-      return;
-    }
+    const attendeeName = (res as any).attendee_name || a?.name || "Attendee";
 
-    // --- Optimistic update
-    const now = new Date().toISOString();
-    setState((s) => ({
-      ...s,
-      attendees: s.attendees.map((attendee) =>
-        attendee.ticketId?.toLowerCase() === trimmed.toLowerCase()
-          ? {
-              ...attendee,
-              checkedIn: now,
-              checkedInDates: {
-                ...(attendee.checkedInDates || {}),
-                [s.selectedDate]: now,
-              },
-            }
-          : attendee
-      ),
-    }));
-
-    try {
-      const res = await checkInOne(
-        String(state.event.id),
-        trimmed,
-        state.selectedDate
-      );
-
-      const message = res.message || `Checked in for ${state.selectedDate}.`;
-      const success = res.success;
-      const alreadyCheckedIn =
-        (res as any).already_checked_in ||
-        message.toLowerCase().includes("already");
-
-      const attendeeName =
-        (res as any).attendee_name || a?.name || "Attendee";
-
-      if (success) {
-        if (alreadyCheckedIn) {
-          alert({
-            text: `${attendeeName} was already checked in for ${state.selectedDate}.`,
-            variant: "info",
-          });
-        } else {
-          alert({
-            text: `${attendeeName} checked in successfully for ${state.selectedDate}.`,
-            variant: "success",
-          });
-        }
-
-        // Refresh backend state
-        await load();
-      } else {
-        alert({ text: message, variant: "warning" });
-      }
-    } catch (err: any) {
-      const errorMessage = err?.message || err?.detail || "Check-in failed.";
-
-      if (errorMessage.toLowerCase().includes("not found")) {
+    if (success) {
+      if (alreadyCheckedIn) {
         alert({
-          text: `Ticket ${trimmed} not found in the system.`,
-          variant: "error",
-        });
-      } else if (
-        errorMessage.toLowerCase().includes("not the current event") ||
-        errorMessage.toLowerCase().includes("is for '")
-      ) {
-        // Ticket belongs to a different event
-        alert({
-          text: errorMessage,
-          variant: "error",
-        });
-      } else if (
-        errorMessage.toLowerCase().includes("not authorized") ||
-        errorMessage.toLowerCase().includes("permission")
-      ) {
-        alert({
-          text: "You don't have permission to check in attendees for this event.",
-          variant: "error",
-        });
-      } else if (
-        errorMessage.toLowerCase().includes("not valid for") &&
-        errorMessage.toLowerCase().includes("valid dates")
-      ) {
-        // Ticket not valid for selected date
-        alert({
-          text: errorMessage,
-          variant: "error",
-        });
-      } else if (
-        errorMessage.toLowerCase().includes("pending") ||
-        errorMessage.toLowerCase().includes("rejected")
-      ) {
-        // Ticket not approved
-        alert({
-          text: errorMessage,
-          variant: "warning",
+          text: `${attendeeName} was already checked in for ${state.selectedDate}.`,
+          variant: "info",
         });
       } else {
-        alert({ text: errorMessage, variant: "error" });
+        alert({
+          text: `${attendeeName} checked in successfully for ${state.selectedDate}.`,
+          variant: "success",
+        });
       }
 
       await load();
+    } else {
+      alert({ text: message, variant: "warning" });
     }
-  };
+  } catch (err: any) {
+    const errorMessage = err?.message || err?.detail || "Check-in failed.";
+
+    if (errorMessage.toLowerCase().includes("not found")) {
+      alert({
+        text: `Ticket ${trimmed} not found in the system.`,
+        variant: "error",
+      });
+    } else if (
+      errorMessage.toLowerCase().includes("not the current event") ||
+      errorMessage.toLowerCase().includes("is for '")
+    ) {
+      alert({ text: errorMessage, variant: "error" });
+    } else if (
+      errorMessage.toLowerCase().includes("not authorized") ||
+      errorMessage.toLowerCase().includes("permission")
+    ) {
+      alert({
+        text: "You don't have permission to check in attendees for this event.",
+        variant: "error",
+      });
+    } else if (
+      errorMessage.toLowerCase().includes("not valid for") &&
+      errorMessage.toLowerCase().includes("valid dates")
+    ) {
+      alert({ text: errorMessage, variant: "error" });
+    } else if (
+      errorMessage.toLowerCase().includes("pending") ||
+      errorMessage.toLowerCase().includes("rejected")
+    ) {
+      alert({ text: errorMessage, variant: "warning" });
+    } else {
+      alert({ text: errorMessage, variant: "error" });
+    }
+
+    await load();
+  }
+};
 
   return {
     state,

@@ -121,13 +121,90 @@ export default function DashBoardPage() {
     feedbacks,
   } = useDashboard(eventId);
 
+  const exportCSV = async () => {
+    if (!eventId) {
+      alert("No event ID found");
+      return;
+    }
+
+    try {
+      console.log("Starting CSV export for event:", eventId);
+
+      const response = await fetch(
+        `${API_BASE}/events/${eventId}/export`,
+        {
+          method: "GET",
+          credentials: "include",
+        }
+      );
+
+      console.log("Export response status:", response.status);
+
+      if (response.ok) {
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("text/csv")) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+
+          const contentDisposition = response.headers.get(
+            "Content-Disposition"
+          );
+          let filename = `event_${eventId}_registrations_${
+            new Date().toISOString().split("T")[0]
+          }.csv`;
+          if (contentDisposition) {
+            const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+            if (filenameMatch) {
+              filename = filenameMatch[1];
+            }
+          }
+
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          console.log("CSV export successful");
+        } else {
+          const text = await response.text();
+          console.error("Server returned non-CSV response:", text);
+          alert(
+            "Export failed: Server returned an error. Please check console for details."
+          );
+        }
+      } else {
+        const errorText = await response.text();
+        console.error(
+          "Export failed with status:",
+          response.status,
+          "Response:",
+          errorText
+        );
+
+        if (response.status === 403) {
+          alert("Export failed: You are not authorized to export this event.");
+        } else if (response.status === 404) {
+          alert("Export failed: Event not found or no registrations available.");
+        } else {
+          alert(
+            `Export failed: Server returned error ${response.status}. Please try again.`
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Error exporting CSV. Please check your connection and try again.");
+    }
+  };
+
   const [exporting, setExporting] = useState(false);
 
   // AI summary / feedback report
   const [report, setReport] = useState<FeedbackReportResponse | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
 
-  // ✅ FIXED: Check status BEFORE parsing JSON
   const fetchFeedbackReport = async () => {
     if (!eventId) return;
     setReportLoading(true);
@@ -137,17 +214,13 @@ export default function DashBoardPage() {
         { credentials: "include" }
       );
 
-      // ✅ CHECK STATUS FIRST - this is the key fix!
+      const data = await res.json();
       if (!res.ok) {
-        console.warn("Feedback report not available - Status:", res.status);
+        console.error("Failed to load feedback report", data);
         setReport(null);
-        setReportLoading(false);
         return;
       }
 
-      // ✅ Only parse JSON if response is OK
-      const data = await res.json();
-      console.log("Feedback report loaded:", data);
       setReport(data);
     } catch (err) {
       console.error("Error loading feedback report", err);
@@ -160,109 +233,6 @@ export default function DashBoardPage() {
   useEffect(() => {
     fetchFeedbackReport();
   }, [eventId]);
-
-  const exportCSV = async () => {
-    if (!eventId) {
-      alert('No event ID found');
-      return;
-    }
-
-    try {
-      console.log('Starting CSV export for event:', eventId);
-      
-      const response = await fetch(`${API_BASE}/events/${eventId}/export`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-
-      console.log('Export response status:', response.status);
-
-      if (response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('text/csv')) {
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          
-          const contentDisposition = response.headers.get('Content-Disposition');
-          let filename = `event_${eventId}_registrations_${new Date().toISOString().split('T')[0]}.csv`;
-          if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename="(.+)"/);
-            if (filenameMatch) {
-              filename = filenameMatch[1];
-            }
-          }
-          
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          console.log('CSV export successful');
-        } else {
-          const text = await response.text();
-          console.error('Server returned non-CSV response:', text);
-          alert('Export failed: Server returned an error.');
-        }
-      } else {
-        const errorText = await response.text();
-        console.error('Export failed with status:', response.status);
-        
-        if (response.status === 403) {
-          alert('Export failed: You are not authorized.');
-        } else if (response.status === 404) {
-          alert('Export failed: Event not found.');
-        } else {
-          alert(`Export failed with status ${response.status}.`);
-        }
-      }
-    } catch (error) {
-      console.error('Export error:', error);
-      alert('Error exporting CSV. Please check your connection.');
-    }
-  };
-
-  const handleExportFeedbackReport = async () => {
-    if (!eventId || !state.event) return;
-    if (exporting) return;
-
-    setExporting(true);
-    try {
-      const res = await fetch(
-        `${API_BASE}/events/${eventId}/feedback/report`,
-        { credentials: "include" }
-      );
-
-      // ✅ Check status first
-      if (!res.ok) {
-        console.error("Export error - Status:", res.status);
-        alert("Failed to export feedback report");
-        setExporting(false);
-        return;
-      }
-
-      const data = await res.json();
-      const markdown = buildFeedbackReportMarkdown(state.event, data);
-
-      const blob = new Blob([markdown], {
-        type: "text/markdown;charset=utf-8",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `event-${eventId}-feedback-report.md`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-      alert("Unexpected error while exporting report");
-    } finally {
-      setExporting(false);
-    }
-  };
 
   if (state.loading) {
     return (
@@ -296,7 +266,7 @@ export default function DashBoardPage() {
 
   if (!state.event) return null;
 
-  // stat chip counts
+  // stat chip counts — always from attendanceStats / statistics (not from visibleAttendees)
   const countsForFilters =
     state.tableView === "attendance"
       ? {
@@ -317,6 +287,45 @@ export default function DashBoardPage() {
     state.selectedTickets.length > 0 &&
     state.selectedTickets.length <= visibleAttendees.length;
 
+  const handleExportFeedbackReport = async () => {
+    if (!eventId || !state.event) return;
+    if (exporting) return;
+
+    setExporting(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/events/${eventId}/feedback/report`,
+        { credentials: "include" }
+      );
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Export error", data);
+        alert(data.error || "Failed to export feedback report");
+        return;
+      }
+
+      const markdown = buildFeedbackReportMarkdown(state.event, data);
+
+      const blob = new Blob([markdown], {
+        type: "text/markdown;charset=utf-8",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `event-${eventId}-feedback-report.md`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Unexpected error while exporting report");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <main>
       <Navbar />
@@ -336,7 +345,6 @@ export default function DashBoardPage() {
               <RefreshCw className="w-4 h-4" />
               Refresh
             </button>
-
             <button
               type="button"
               onClick={exportCSV}
