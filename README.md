@@ -42,7 +42,7 @@ UniPlus is a production-ready event management system designed for university co
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Frontend (Next.js)                    │
+│                    Frontend (Next.js)                   │
 │  (React, TypeScript, Tailwind CSS, Framer Motion)       │
 └──────────────────┬──────────────────────────────────────┘
                    │
