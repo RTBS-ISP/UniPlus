@@ -35,17 +35,25 @@ interface StatisticsData {
 
 function transformEventToItem(event: any, index: number) {
   
-  const startDateStr = 
+  let startDateStr = 
     event.event_start_date ||     
     event.start_date ||
     event.event_date ||           
     event.start_date_register || 
     '';
 
-  const endDateStr = 
+  if (startDateStr && startDateStr.includes('T')) {
+    startDateStr = startDateStr.split('T')[0];
+  }
+
+  let endDateStr = 
     event.event_end_date ||
     event.end_date ||
     startDateStr;
+
+  if (endDateStr && endDateStr.includes('T')) {
+    endDateStr = endDateStr.split('T')[0];
+  }
     
   const eventDate = startDateStr ? new Date(startDateStr) : null;
   const now = new Date();
