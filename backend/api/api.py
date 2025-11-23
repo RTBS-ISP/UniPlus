@@ -1650,6 +1650,7 @@ def approve_registration(request, event_id: int, ticket_id: str):
             ticket = Ticket.objects.select_related('attendee', 'event').get(qr_code=ticket_id, event=event)
         
         ticket.approval_status = 'approved'
+        ticket.approved_at = timezone.now()
         ticket.save()
         
         # 🔔 Send notification
