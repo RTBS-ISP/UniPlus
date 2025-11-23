@@ -224,6 +224,8 @@ export function useDashboard(eventId: string | undefined) {
   const approveReject = async (ticketId: string, action: ApprovalAction) => {
     if (!state.event) return;
 
+    const now = new Date().toISOString();
+
     setState((s) => ({
       ...s,
       attendees: s.attendees.map((a) =>
@@ -231,6 +233,8 @@ export function useDashboard(eventId: string | undefined) {
           ? {
               ...a,
               approvalStatus: action === "approve" ? "approved" : "rejected",
+              approvedAt: action === "approve" ? now : a.approvedAt,
+              rejectedAt: action === "reject" ? now : a.rejectedAt,
             }
           : a
       ),
