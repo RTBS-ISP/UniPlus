@@ -190,6 +190,8 @@ def get_user_event_history(request):
                     "event_title": event.event_title,
                     "event_description": event.event_description,
                     "event_date": event_date_str,
+                    "event_start_date": event.event_start_date.isoformat() if event.event_start_date else event_date_str,
+                    "event_end_date": event.event_end_date.isoformat() if event.event_end_date else event_date_str,
                     "location": ticket.location,
                     "organizer": event.organizer.username,
                     "status": ticket.status,
