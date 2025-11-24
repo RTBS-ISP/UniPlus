@@ -80,32 +80,33 @@ export async function bulkApproval(
 }
 
 // Check in for a specific date
-export async function checkInOne(eventId: string, ticketId: string, date: string) {
+export async function checkInOne(
+  eventId: string,
+  ticketId: string,
+  date: string
+) {
   const csrf = await getCsrf();
+
+  const url =
+    `${API_BASE}/events/${eventId}/check-in` +
+    `?ticket_id=${encodeURIComponent(ticketId)}` +
+    `&checkin_date=${encodeURIComponent(date)}`;
 
   return await getJSON<{
     success: boolean;
     message: string;
-    ticket_id: string;
-    attendee_name: string;
-    event_title: string;
-    event_date?: string;
-    already_checked_in: boolean;
-    checked_in_at?: string;
-    approval_status: string;
-  }>(`${API_BASE}/checkin`, {
+    ticket_id?: string;
+    status?: string;
+    checked_in_dates?: Record<string, string>;
+  }>(url, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
       "X-CSRFToken": csrf,
     },
-    body: JSON.stringify({
-      qr_code: ticketId,
-      event_date: date,
-      event_id: eventId,
-    }),
   });
 }
+
+
 
 export async function fetchEventFeedback(eventId: string) {
   return await getJSON<EventFeedback[]>(
