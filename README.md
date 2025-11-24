@@ -88,7 +88,7 @@ Before getting started, ensure you have the following installed:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_GITHUB_USERNAME/UniPlus.git
+git clone https://github.com/RTBS-ISP/UniPlus.git
 cd UniPlus
 ```
 
