@@ -39,7 +39,7 @@ export default function MyCreatedEventsPage() {
 
       if (!response.ok) {
         if (response.status === 401) {
-          router.push("/login");
+          router.replace("/login");
           return;
         }
         throw new Error("Failed to fetch created events");
