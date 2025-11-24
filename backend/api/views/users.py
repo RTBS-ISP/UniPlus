@@ -296,6 +296,8 @@ def get_my_created_events(request):
                     "event_title": event.event_title,
                     "event_description": event.event_description,
                     "event_date": event_date_str,
+                    "event_start_date": event.event_start_date.isoformat() if event.event_start_date else event_date_str,
+                    "event_end_date": event.event_end_date.isoformat() if event.event_end_date else event_date_str,
                     "location": event.event_address,
                     "is_online": event.is_online,
                     "meeting_link": event.event_meeting_link,

@@ -34,13 +34,28 @@ interface StatisticsData {
 }
 
 function transformEventToItem(event: any, index: number) {
-  const eventDateStr =
-    event.event_date ||
+  
+  let startDateStr = 
     event.event_start_date ||
+    event.start_date ||
+    event.event_date ||           
     event.start_date_register ||
-    "";
+    '';
 
-  const eventDate = eventDateStr ? new Date(eventDateStr) : null;
+  if (startDateStr && startDateStr.includes('T')) {
+    startDateStr = startDateStr.split('T')[0];
+  }
+
+  let endDateStr = 
+    event.event_end_date ||
+    event.end_date ||
+    startDateStr;
+
+  if (endDateStr && endDateStr.includes('T')) {
+    endDateStr = endDateStr.split('T')[0];
+  }
+    
+  const eventDate = startDateStr ? new Date(startDateStr) : null;
   const now = new Date();
   const isPast = eventDate ? eventDate < now : false;
 
@@ -94,15 +109,14 @@ function transformEventToItem(event: any, index: number) {
     title: event.event_title || "Untitled Event",
     host: [organizerRole],
     tags: eventTags,
-    category,
-    excerpt,
-    date: eventDateStr,
-    createdAt:
-      event.event_create_date || eventDateStr || new Date().toISOString(),
+    category: category,
+    excerpt: excerpt,
+    date: startDateStr,
+    createdAt: event.event_create_date || startDateStr || new Date().toISOString(),
     popularity: event.attendee_count || 0,
-    startDate: eventDateStr,
-    endDate: event.event_end_date || eventDateStr,
-    location,
+    startDate: startDateStr,
+    endDate: endDateStr,
+    location: location,
   };
 }
 
@@ -490,6 +504,7 @@ function ProfilePage() {
                     item={eventItem}
                     index={idx}
                     stagger={0.04}
+                    showStatus={true}
                     showDuplicate={true}
                   />
                 ))}
